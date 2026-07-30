@@ -4,8 +4,6 @@ import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime, date
 import json
-
-# Nuevas herramientas para la Nube
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
@@ -16,27 +14,18 @@ st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
-    
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
-    
-    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] {
-        background-color: #162032; border-radius: 12px; padding: 20px; border: 1px solid #334155;
-    }
-    
+    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { background-color: #162032; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
     [data-testid="baseButton-primary"] { background-color: #0ea5e9; border-color: #0ea5e9; color: white; border-radius: 8px; font-weight: bold; }
     [data-testid="baseButton-primary"]:hover { background-color: #0284c7; border-color: #0284c7; }
     [data-testid="baseButton-secondary"] { background-color: #334155; border-color: #334155; color: white; border-radius: 8px; }
     [data-testid="baseButton-secondary"]:hover { border-color: #94a3b8; }
-    
     [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 700; }
     [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
-    
     header {visibility: hidden;}
-    
     .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
-    
     .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
@@ -64,13 +53,11 @@ def guardar_datos():
         }
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
-        
-        # Usamos update_acell que es a prueba de fallos para una sola celda
         sheet.update_acell('A2', json.dumps(datos))
-        
+        return True # Retorna True si todo salió bien
     except Exception as e:
-        # Si falla algo con Google, te va a saltar este cartel rojo en la app
-        st.error(f"🚨 Error al guardar en la nube: {e}")
+        st.error(f"🚨 Error exacto de Google: {e}")
+        st.stop() # Frena la app acá nomás para que leas el error
 
 def cargar_datos():
     try:
@@ -91,7 +78,6 @@ if 'pause_start' not in st.session_state: st.session_state['pause_start'] = 0.0
 if 'pause_elapsed' not in st.session_state: st.session_state['pause_elapsed'] = 0.0
 if 'interruption_reason' not in st.session_state: st.session_state['interruption_reason'] = ""
 
-# Cargamos los datos desde Sheets solo la primera vez que arranca la app
 if 'datos_cargados' not in st.session_state:
     datos_guardados = cargar_datos()
     if datos_guardados:
@@ -108,8 +94,11 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['historial'] = []
         st.session_state['metas'] = [] 
         st.session_state['plan_carrera'] = []
-    
     st.session_state['datos_cargados'] = True
+
+# Parche de limpieza si quedó formato viejo en memoria
+if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materias'][0], str):
+    st.session_state['materias'] = []
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -161,14 +150,12 @@ def renderizar_analitica():
         st.markdown("### Tiempo por Materia")
         st.bar_chart(df_hist.groupby('MATERIA')['TIEMPO (min)'].sum(), color="#0ea5e9")
 
-
 # ==========================================
 # --- MODALES (DIALOGS) ---
 # ==========================================
 @st.dialog("Agregar Materia al Plan de Estudios")
 def dialog_nueva_materia_plan():
     nombre = st.text_input("Nombre de la materia")
-    
     col1, col2 = st.columns(2)
     anio = col1.selectbox("Año de cursado", [1, 2, 3, 4, 5, 6])
     estado = col2.selectbox("Estado actual", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
@@ -176,7 +163,6 @@ def dialog_nueva_materia_plan():
     st.divider()
     st.caption("CORRELATIVIDADES (Opcional)")
     opciones_materias = [m['nombre'] for m in st.session_state['plan_carrera']]
-    
     req_regulares = st.multiselect("Para cursar necesito REGULAR:", opciones_materias)
     req_aprobadas = st.multiselect("Para cursar necesito APROBADA:", opciones_materias)
     
@@ -187,8 +173,7 @@ def dialog_nueva_materia_plan():
                 "id": str(time.time()), "nombre": nombre, "año": anio,
                 "estado": estado, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas
             })
-            guardar_datos()
-            st.rerun()
+            if guardar_datos(): st.rerun()
         else:
             st.error("Falta el nombre de la materia.")
 
@@ -215,18 +200,14 @@ def dialog_nueva_meta():
                 "meta_horas": meta_horas, "fecha_examen": fecha_examen.isoformat(), "horas_acumuladas": 0.0
             }
             st.session_state['metas'].append(nueva)
-            guardar_datos()
-            st.rerun()
+            if guardar_datos(): st.rerun()
 
 @st.dialog("Editar Meta")
 def dialog_editar_meta(meta_idx):
     meta_actual = st.session_state['metas'][meta_idx]
     nombres_materias = [m["nombre"] for m in st.session_state['materias']]
-    
-    try:
-        fecha_obj = date.fromisoformat(meta_actual['fecha_examen'])
-    except:
-        fecha_obj = date.today()
+    try: fecha_obj = date.fromisoformat(meta_actual['fecha_examen'])
+    except: fecha_obj = date.today()
         
     idx_materia = nombres_materias.index(meta_actual['materia']) if meta_actual['materia'] in nombres_materias else 0
         
@@ -245,14 +226,12 @@ def dialog_editar_meta(meta_idx):
             st.session_state['metas'][meta_idx]['materia'] = materia
             st.session_state['metas'][meta_idx]['meta_horas'] = meta_horas
             st.session_state['metas'][meta_idx]['fecha_examen'] = fecha_examen.isoformat()
-            guardar_datos()
-            st.rerun()
+            if guardar_datos(): st.rerun()
 
 @st.dialog("Nueva Materia Activa (Cronómetro)")
 def dialog_nueva_materia_activa():
     materias_validas = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
     materias_ya_activas = [m['nombre'] for m in st.session_state['materias']]
-    
     opciones_disponibles = [m for m in materias_validas if m not in materias_ya_activas]
     
     if not opciones_disponibles:
@@ -264,8 +243,7 @@ def dialog_nueva_materia_activa():
     
     if st.button("Activar Materia", type="primary", use_container_width=True):
         st.session_state['materias'].append({"nombre": n, "color": c})
-        guardar_datos()
-        st.rerun()
+        if guardar_datos(): st.rerun()
 
 @st.dialog("Detalle de Sesión (Manual)", width="large")
 def dialog_agregar_sesion():
@@ -308,9 +286,7 @@ def dialog_agregar_sesion():
                 if m['id'] == id_meta:
                     m['horas_acumuladas'] += (tiempo_neto / 60)
                     break
-        guardar_datos()
-        st.rerun()
-
+        if guardar_datos(): st.rerun()
 
 # ==========================================
 # --- MENÚ LATERAL (SIDEBAR) ---
@@ -318,7 +294,6 @@ def dialog_agregar_sesion():
 with st.sidebar:
     st.markdown("## Menú")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Plan de Estudios", "Organización"], label_visibility="collapsed")
-
 
 # ==========================================
 # --- VISTA: PLAN DE ESTUDIOS ---
@@ -364,23 +339,19 @@ if menu_opcion == "Plan de Estudios":
                         
                         if st.button("🗑️", key=f"del_plan_{row['id']}", help="Eliminar del plan"):
                             st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != row['id']]
-                            guardar_datos()
-                            st.rerun()
-
+                            if guardar_datos(): st.rerun()
 
 # ==========================================
-# --- VISTA: RESUMEN (ANALÍTICA DIRECTA) ---
+# --- VISTA: RESUMEN ---
 # ==========================================
 elif menu_opcion == "Resumen":
     st.header("Tus Estadísticas")
     renderizar_analitica()
 
-
 # ==========================================
 # --- VISTA: ORGANIZACIÓN ---
 # ==========================================
 elif menu_opcion == "Organización":
-    
     with st.container(border=True):
         c_head1, c_head2 = st.columns([4, 1])
         with c_head1:
@@ -392,7 +363,6 @@ elif menu_opcion == "Organización":
                 
         cols_mat = st.columns(3)
         for i, mat in enumerate(st.session_state['materias']):
-            # --- Buscamos el estado en el Plan de Estudios ---
             estado_badge = ""
             for plan_mat in st.session_state['plan_carrera']:
                 if plan_mat['nombre'] == mat['nombre']:
@@ -401,7 +371,7 @@ elif menu_opcion == "Organización":
                     elif plan_mat['estado'] == "Regular":
                         estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
                     break
-                    
+
             with cols_mat[i % 3]:
                 st.markdown(f"""
                 <div style="border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; background-color: #1e293b; margin-bottom: 15px;">
@@ -412,22 +382,19 @@ elif menu_opcion == "Organización":
                 """, unsafe_allow_html=True)
                 if st.button("🗑️ Eliminar", key=f"del_mat_{i}", use_container_width=True):
                     st.session_state['materias'].pop(i)
-                    guardar_datos()
-                    st.rerun()
+                    if guardar_datos(): st.rerun()
                     
     st.write("<br>", unsafe_allow_html=True)
 
     with st.container(border=True):
         c_dist1, c_dist2 = st.columns([4, 1])
-        with c_dist1:
-            st.markdown("### Gestionar Distracciones")
+        with c_dist1: st.markdown("### Gestionar Distracciones")
         with c_dist2:
             nueva_dist = st.text_input("Nueva Distracción", label_visibility="collapsed", placeholder="Ej: Baño...")
             if st.button("➕ Añadir", type="secondary", key="btn_dist", use_container_width=True):
                 if nueva_dist and nueva_dist not in st.session_state['distracciones']:
                     st.session_state['distracciones'].append(nueva_dist)
-                    guardar_datos()
-                    st.rerun()
+                    if guardar_datos(): st.rerun()
 
         cols_dist = st.columns(4)
         for i, dist in enumerate(st.session_state['distracciones']):
@@ -440,22 +407,19 @@ elif menu_opcion == "Organización":
                 """, unsafe_allow_html=True)
                 if st.button("🗑️", key=f"del_dist_{i}", use_container_width=True):
                     st.session_state['distracciones'].pop(i)
-                    guardar_datos()
-                    st.rerun()
+                    if guardar_datos(): st.rerun()
 
     st.write("<br>", unsafe_allow_html=True)
 
     with st.container(border=True):
         c_met1, c_met2 = st.columns([4, 1])
-        with c_met1:
-            st.markdown("### Gestionar Métodos")
+        with c_met1: st.markdown("### Gestionar Métodos")
         with c_met2:
             nuevo_met = st.text_input("Nuevo Método", label_visibility="collapsed", placeholder="Ej: Mapa mental...")
             if st.button("➕ Añadir", type="secondary", key="btn_met", use_container_width=True):
                 if nuevo_met and nuevo_met not in st.session_state['metodos']:
                     st.session_state['metodos'].append(nuevo_met)
-                    guardar_datos()
-                    st.rerun()
+                    if guardar_datos(): st.rerun()
 
         cols_met = st.columns(4)
         for i, met in enumerate(st.session_state['metodos']):
@@ -468,8 +432,7 @@ elif menu_opcion == "Organización":
                 """, unsafe_allow_html=True)
                 if st.button("🗑️", key=f"del_met_{i}", use_container_width=True):
                     st.session_state['metodos'].pop(i)
-                    guardar_datos()
-                    st.rerun()
+                    if guardar_datos(): st.rerun()
 
 # ==========================================
 # --- VISTA: PÁGINA PRINCIPAL ---
@@ -477,7 +440,6 @@ elif menu_opcion == "Organización":
 elif menu_opcion == "Página Principal":
     tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
 
-    # --- CRONÓMETRO ---
     with tabs[0]:
         if st.session_state['timer_state'] == 'IDLE':
             col_izq, col_der = st.columns([1, 1.5], gap="large")
@@ -496,7 +458,6 @@ elif menu_opcion == "Página Principal":
             st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Cronómetro Libre</p>", unsafe_allow_html=True)
             current_elapsed = st.session_state['study_elapsed'] + (time.time() - st.session_state['study_start'])
             render_live_timer(current_elapsed, True)
-            
             c1, c2, c3 = st.columns([1, 2, 2])
             with c1:
                 if st.button("❌", use_container_width=True):
@@ -518,7 +479,6 @@ elif menu_opcion == "Página Principal":
             st.markdown("<h2 style='text-align: center;'>Interrupción</h2>", unsafe_allow_html=True)
             st.markdown("<p style='text-align: center; color: #94a3b8;'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
             st.write("<br>", unsafe_allow_html=True)
-            
             c1, c2 = st.columns(2)
             for i, motivo in enumerate(st.session_state['distracciones']):
                 col = c1 if i % 2 == 0 else c2
@@ -528,7 +488,6 @@ elif menu_opcion == "Página Principal":
                     st.session_state['pause_elapsed'] = 0.0
                     st.session_state['timer_state'] = 'PAUSED'
                     st.rerun()
-            
             st.divider()
             if st.button("CANCELAR", use_container_width=True):
                 st.session_state['timer_state'] = 'RUNNING'
@@ -540,7 +499,6 @@ elif menu_opcion == "Página Principal":
             st.markdown(f"<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Motivo: {st.session_state['interruption_reason']}</p>", unsafe_allow_html=True)
             current_pause = st.session_state['pause_elapsed'] + (time.time() - st.session_state['pause_start'])
             render_live_timer(current_pause, True)
-            
             c1, c2, c3 = st.columns([1, 2, 1])
             with c2:
                 if st.button("REANUDAR", type="primary", use_container_width=True):
@@ -558,7 +516,6 @@ elif menu_opcion == "Página Principal":
                 st.markdown("<h2 style='text-align: center; margin-top: -10px;'>Sesión Finalizada</h2>", unsafe_allow_html=True)
             
             nombres_materias = [m["nombre"] for m in st.session_state['materias']]
-            
             if not nombres_materias or not st.session_state['metodos']:
                 st.error("No hay materias o métodos cargados. Andá al menú 'Organización' para agregarlos.")
             else:
@@ -580,7 +537,6 @@ elif menu_opcion == "Página Principal":
                 st.write("")
                 if st.button("GUARDAR SESIÓN ➔", type="primary", use_container_width=True):
                     minutos_estudio = round(st.session_state['study_elapsed'] / 60)
-                    
                     nueva_sesion = {
                         "FECHA": datetime.now().strftime("%d/%m/%Y"),
                         "MATERIA": materia_sel, "MÉTODO": metodo_sel,
@@ -595,19 +551,17 @@ elif menu_opcion == "Página Principal":
                                 m['horas_acumuladas'] += (minutos_estudio / 60)
                                 break
                     
-                    guardar_datos()
-                    st.toast(f"¡{minutos_estudio} minutos guardados!")
-                    st.session_state['timer_state'] = 'IDLE'
-                    st.session_state['study_elapsed'] = 0.0
-                    st.session_state['pause_elapsed'] = 0.0
-                    time.sleep(1)
-                    st.rerun()
+                    if guardar_datos():
+                        st.toast(f"¡{minutos_estudio} minutos guardados!")
+                        st.session_state['timer_state'] = 'IDLE'
+                        st.session_state['study_elapsed'] = 0.0
+                        st.session_state['pause_elapsed'] = 0.0
+                        time.sleep(1)
+                        st.rerun()
 
-    # --- ANALÍTICA ---
     with tabs[1]:
         renderizar_analitica()
 
-    # --- METAS ---
     with tabs[2]:
         c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
         with c_btn3:
@@ -621,11 +575,8 @@ elif menu_opcion == "Página Principal":
             for i, meta in enumerate(st.session_state['metas']):
                 with cols[i % 3]:
                     with st.container(border=True):
-                        try:
-                            fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
-                        except:
-                            fecha_str = meta['fecha_examen']
-                            
+                        try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
+                        except: fecha_str = meta['fecha_examen']
                         st.caption(f"{meta['materia'].upper()} - Fecha: {fecha_str}")
                         st.markdown(f"### {meta['nombre']}")
                         
@@ -642,10 +593,8 @@ elif menu_opcion == "Página Principal":
                             dialog_editar_meta(i)
                         if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{i}", use_container_width=True):
                             st.session_state['metas'].pop(i)
-                            guardar_datos()
-                            st.rerun()
+                            if guardar_datos(): st.rerun()
 
-    # --- HISTORIAL ---
     with tabs[3]:
         c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
         with c_btn3:

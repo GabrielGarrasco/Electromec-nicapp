@@ -1,116 +1,211 @@
 import streamlit as st
 import time
+import streamlit.components.v1 as components
+import pandas as pd
 
-# --- CONFIGURACIÓN ---
-st.set_page_config(page_title="Study Meter", layout="centered", page_icon="📚")
+# --- CONFIGURACIÓN DE LA PÁGINA ---
+st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 
-# --- ESTADOS DE LA APP ---
-# Posibles estados: 'IDLE' (inicio), 'RUNNING' (corriendo), 'INTERRUPT' (preguntando motivo), 
-# 'PAUSED' (en pausa), 'FINISHED' (pantalla final)
-if 'timer_state' not in st.session_state:
-    st.session_state['timer_state'] = 'IDLE'
-if 'interruption_reason' not in st.session_state:
-    st.session_state['interruption_reason'] = ""
-if 'elapsed_time' not in st.session_state:
-    st.session_state['elapsed_time'] = "00:00:00" # Placeholder por ahora
-
-# --- ESTILOS CSS (Para acercarnos al Dark Mode de tus fotos) ---
+# --- CSS PARA DARK MODE Y ESTILOS ---
 st.markdown("""
     <style>
-    .big-timer { font-size: 80px; font-weight: bold; text-align: center; color: white; margin-bottom: 20px;}
-    .center-text { text-align: center; color: white; }
+    /* Forzamos un poco el estilo para acercarnos a las capturas */
+    .stApp { background-color: #0f1524; color: white; }
+    .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; }
+    .stTabs [data-baseweb="tab"] { color: #a1a1aa; font-weight: 600; }
+    .stTabs [aria-selected="true"] { color: #38bdf8 !important; border-bottom: 2px solid #38bdf8 !important; }
     </style>
 """, unsafe_allow_html=True)
 
+# --- INICIALIZACIÓN DE VARIABLES DE ESTADO ---
+if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
+if 'study_start' not in st.session_state: st.session_state['study_start'] = 0.0
+if 'study_elapsed' not in st.session_state: st.session_state['study_elapsed'] = 0.0
+if 'pause_start' not in st.session_state: st.session_state['pause_start'] = 0.0
+if 'pause_elapsed' not in st.session_state: st.session_state['pause_elapsed'] = 0.0
+if 'interruption_reason' not in st.session_state: st.session_state['interruption_reason'] = ""
+
+# --- FUNCIÓN: RELOJ EN VIVO (JavaScript Inyectado) ---
+def render_live_timer(elapsed_seconds, is_running):
+    html_code = f"""
+    <div id="clock" style="font-size: 80px; font-weight: bold; text-align: center; color: white; font-family: monospace; letter-spacing: 5px;">00:00:00</div>
+    <script>
+        var elapsedMs = {elapsed_seconds * 1000};
+        var isRunning = {'true' if is_running else 'false'};
+        var start = Date.now() - elapsedMs;
+        
+        function updateClock() {{
+            var delta = isRunning ? (Date.now() - start) : elapsedMs;
+            var hrs = Math.floor(delta / 3600000).toString().padStart(2, '0');
+            var mins = Math.floor((delta % 3600000) / 60000).toString().padStart(2, '0');
+            var secs = Math.floor((delta % 60000) / 1000).toString().padStart(2, '0');
+            document.getElementById("clock").innerHTML = hrs + ":" + mins + ":" + secs;
+        }}
+        
+        updateClock();
+        if (isRunning) {{ setInterval(updateClock, 1000); }}
+    </script>
+    """
+    components.html(html_code, height=130)
 
 # ==========================================
-# --- FLUJO DEL CRONÓMETRO ---
+# --- ESTRUCTURA DE PESTAÑAS (TABS) ---
 # ==========================================
+tabs = st.tabs(["Amigos", "Cronómetro", "Analítica", "Metas", "Historial"])
 
-# 1. ESTADO: INICIO (Botón Iniciar Estudio)
-if st.session_state['timer_state'] == 'IDLE':
-    st.markdown("<h3 class='center-text'>Tu Plan Para Hoy</h3>", unsafe_allow_html=True)
-    
-    with st.container(border=True):
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.radio("Modo", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
-            if st.button("▶ INICIAR ESTUDIO", type="primary", use_container_width=True):
+with tabs[0]:
+    st.info("Sección Amigos en construcción...")
+
+# ==========================================
+# --- PESTAÑA: CRONÓMETRO ---
+# ==========================================
+with tabs[1]:
+    if st.session_state['timer_state'] == 'IDLE':
+        with st.container(border=True):
+            st.markdown("<h4 style='text-align: center;'>TU PLAN PARA HOY</h4>", unsafe_allow_html=True)
+            st.write("**Final Álgebra**")
+            st.progress(0.0)
+            st.caption("Faltan 7h 04m / 7h 04m")
+            
+        with st.container(border=True):
+            c1, c2, c3 = st.columns([1,2,1])
+            with c2:
+                st.radio("Modo", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
+                if st.button("▶ INICIAR ESTUDIO", type="primary", use_container_width=True):
+                    st.session_state['study_start'] = time.time()
+                    st.session_state['timer_state'] = 'RUNNING'
+                    st.rerun()
+
+    elif st.session_state['timer_state'] == 'RUNNING':
+        st.markdown("<p style='text-align: center; color: #a1a1aa;'>Cronómetro</p>", unsafe_allow_html=True)
+        
+        current_elapsed = st.session_state['study_elapsed'] + (time.time() - st.session_state['study_start'])
+        render_live_timer(current_elapsed, True)
+        
+        c1, c2, c3 = st.columns([1,1,1])
+        with c1:
+            if st.button("❌", use_container_width=True):
+                st.session_state['timer_state'] = 'IDLE'
+                st.session_state['study_elapsed'] = 0.0
+                st.rerun()
+        with c2:
+            if st.button("⏸ Pausar", use_container_width=True):
+                st.session_state['study_elapsed'] += time.time() - st.session_state['study_start']
+                st.session_state['timer_state'] = 'INTERRUPT'
+                st.rerun()
+        with c3:
+            if st.button("⏹ Terminar", use_container_width=True):
+                st.session_state['study_elapsed'] += time.time() - st.session_state['study_start']
+                st.session_state['timer_state'] = 'FINISHED'
+                st.rerun()
+
+    elif st.session_state['timer_state'] == 'INTERRUPT':
+        with st.container(border=True):
+            st.markdown("<h2 style='text-align: center;'>Interrupción</h2>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #a1a1aa;'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
+            
+            motivos = ["Descanso", "Celular", "Llamada", "Comida", "Otro..."]
+            c1, c2 = st.columns(2)
+            for i, motivo in enumerate(motivos):
+                col = c1 if i % 2 == 0 else c2
+                if col.button(motivo, use_container_width=True):
+                    st.session_state['interruption_reason'] = motivo
+                    st.session_state['pause_start'] = time.time()
+                    st.session_state['pause_elapsed'] = 0.0
+                    st.session_state['timer_state'] = 'PAUSED'
+                    st.rerun()
+            
+            st.divider()
+            if st.button("CANCELAR", use_container_width=True):
+                st.session_state['timer_state'] = 'RUNNING'
+                st.session_state['study_start'] = time.time()
+                st.rerun()
+
+    elif st.session_state['timer_state'] == 'PAUSED':
+        st.markdown("<h1 style='text-align: center; color: #38bdf8;'>⏸ PAUSA</h1>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align: center; color: #a1a1aa;'>{st.session_state['interruption_reason']}</p>", unsafe_allow_html=True)
+        
+        current_pause = st.session_state['pause_elapsed'] + (time.time() - st.session_state['pause_start'])
+        render_live_timer(current_pause, True)
+        
+        c1, c2, c3 = st.columns([1,2,1])
+        with c2:
+            if st.button("REANUDAR", type="primary", use_container_width=True):
+                st.session_state['study_start'] = time.time()
                 st.session_state['timer_state'] = 'RUNNING'
                 st.rerun()
 
-# 2. ESTADO: CORRIENDO (Cronómetro activo)
-elif st.session_state['timer_state'] == 'RUNNING':
-    st.markdown("<p class='center-text'>Cronómetro</p>", unsafe_allow_html=True)
-    st.markdown("<div class='big-timer'>00:00:02</div>", unsafe_allow_html=True) # Acá luego meteremos lógica real de tiempo
-    
-    col1, col2, col3, col4 = st.columns([1, 1, 2, 2])
-    with col2:
-        if st.button("❌"):
+    elif st.session_state['timer_state'] == 'FINISHED':
+        st.markdown("<h2 style='text-align: center;'>Sesión Finalizada</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #a1a1aa;'>Completa los datos de tu sesión.</p>", unsafe_allow_html=True)
+        
+        with st.container(border=True):
+            st.subheader("MATERIA")
+            materia_sel = st.radio("Materia", ["Física 2", "Estabilidad", "Álgebra", "Física 1", "Programación", "Probabilidad"], horizontal=True, label_visibility="collapsed")
+            
+            st.divider()
+            
+            st.subheader("MÉTODO")
+            metodo_sel = st.radio("Método", ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"], horizontal=True, index=4, label_visibility="collapsed")
+            
+        st.write("")
+        if st.button("CONTINUAR ➔", type="primary", use_container_width=True):
+            st.toast("¡Sesión guardada!")
             st.session_state['timer_state'] = 'IDLE'
-            st.rerun()
-    with col3:
-        if st.button("⏸ Pausar", use_container_width=True):
-            st.session_state['timer_state'] = 'INTERRUPT'
-            st.rerun()
-    with col4:
-        if st.button("⏹ Terminar", use_container_width=True):
-            st.session_state['timer_state'] = 'FINISHED'
+            st.session_state['study_elapsed'] = 0.0
+            st.session_state['pause_elapsed'] = 0.0
+            time.sleep(1.5)
             st.rerun()
 
-# 3. ESTADO: INTERRUPCIÓN (Modal de motivo)
-elif st.session_state['timer_state'] == 'INTERRUPT':
-    with st.container(border=True):
-        st.markdown("<h2 class='center-text'>Interrupción</h2>", unsafe_allow_html=True)
-        st.markdown("<p class='center-text'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
-        
-        c1, c2 = st.columns(2)
-        motivos = ["Descanso", "Celular", "Llamada", "Comida", "Otro..."]
-        
-        for i, motivo in enumerate(motivos):
-            col = c1 if i % 2 == 0 else c2
-            if col.button(motivo, use_container_width=True):
-                st.session_state['interruption_reason'] = motivo
-                st.session_state['timer_state'] = 'PAUSED'
-                st.rerun()
-                
-        st.divider()
-        if st.button("CANCELAR", use_container_width=True):
-            st.session_state['timer_state'] = 'RUNNING'
-            st.rerun()
+# ==========================================
+# --- PESTAÑA: ANALÍTICA ---
+# ==========================================
+with tabs[2]:
+    c1, c2 = st.columns(2)
+    with c1:
+        with st.container(border=True):
+            st.caption("TOTAL DE HORAS ESTUDIADAS")
+            st.markdown("<h2>67h 49m</h2>", unsafe_allow_html=True)
+    with c2:
+        with st.container(border=True):
+            st.caption("MATERIA MÁS ESTUDIADA")
+            st.markdown("<h2>FÍSICA 2</h2>", unsafe_allow_html=True)
+            st.caption("67h 49m")
+            
+    st.info("Acá vamos a conectar los gráficos reales de eficiencia e interrupciones en los próximos pasos.")
 
-# 4. ESTADO: PAUSADO (Esperando reanudar)
-elif st.session_state['timer_state'] == 'PAUSED':
-    st.markdown("<h1 class='center-text'>⏸ PAUSA</h1>", unsafe_allow_html=True)
-    st.markdown(f"<p class='center-text' style='color: gray;'>{st.session_state['interruption_reason']}</p>", unsafe_allow_html=True)
-    st.markdown("<div class='big-timer'>00:00:25</div>", unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if st.button("REANUDAR", type="primary", use_container_width=True):
-            st.session_state['timer_state'] = 'RUNNING'
-            st.rerun()
+# ==========================================
+# --- PESTAÑA: METAS ---
+# ==========================================
+with tabs[3]:
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        with st.container(border=True):
+            st.caption("FÍSICA 2 - Examen pasado")
+            st.markdown("### Parcial 2")
+            st.progress(0.70)
+            st.caption("28h 02m / 40h 00m")
+    with c2:
+        with st.container(border=True):
+            st.caption("FÍSICA 2 - Examen pasado")
+            st.markdown("### Recuperatorio 1er parcial")
+            st.progress(0.30)
+            st.caption("3h 33m / 12h 00m")
+    with c3:
+        with st.container(border=True):
+            st.caption("ESTABILIDAD - Examen pasado")
+            st.markdown("### Global Estabilidad")
+            st.progress(0.0)
+            st.caption("0h 00m / 8h 00m")
 
-# 5. ESTADO: FINALIZADO (Clasificar la sesión)
-elif st.session_state['timer_state'] == 'FINISHED':
-    st.markdown("<h2 class='center-text'>Sesión Finalizada</h2>", unsafe_allow_html=True)
-    st.markdown("<p class='center-text'>Completa los datos de tu sesión.</p>", unsafe_allow_html=True)
-    
-    st.subheader("MATERIA")
-    materias = ["Física 2", "Estabilidad", "Álgebra", "Física 1", "Programación", "Probabilidad"]
-    materia_sel = st.radio("Selecciona", materias, horizontal=True, label_visibility="collapsed")
-    
-    st.divider()
-    
-    st.subheader("MÉTODO")
-    metodos = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
-    metodo_sel = st.radio("Método", metodos, horizontal=True, label_visibility="collapsed")
-    
-    st.divider()
-    
-    if st.button("CONTINUAR ➔", type="primary", use_container_width=True):
-        st.toast(f"Guardando sesión de {materia_sel} ({metodo_sel})...")
-        # Acá iría tu función para subir a Google Sheets
-        st.session_state['timer_state'] = 'IDLE'
-        time.sleep(1)
-        st.rerun()
+# ==========================================
+# --- PESTAÑA: HISTORIAL ---
+# ==========================================
+with tabs[4]:
+    historial_data = pd.DataFrame({
+        "FECHA": ["2/7/2026", "1/7/2026", "1/7/2026"],
+        "MATERIA": ["FÍSICA 2", "FÍSICA 2", "FÍSICA 2"],
+        "TIEMPO": ["11 min", "240 min", "103 min"],
+        "EFIC.": ["100%", "55%", "78%"]
+    })
+    st.dataframe(historial_data, hide_index=True, use_container_width=True)

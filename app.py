@@ -389,74 +389,28 @@ elif menu_opcion == "Organización":
                 
         cols_mat = st.columns(3)
         for i, mat in enumerate(st.session_state['materias']):
+            # --- ACÁ BUSCAMOS EL ESTADO EN EL PLAN DE CARRERA ---
+            estado_badge = ""
+            for plan_mat in st.session_state['plan_carrera']:
+                if plan_mat['nombre'] == mat['nombre']:
+                    if plan_mat['estado'] == "Cursando":
+                        estado_badge = "<div style='margin-top: 8px;'><span class='badge-cursando'>Cursando</span></div>"
+                    elif plan_mat['estado'] == "Regular":
+                        estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
+                    break # Si ya la encontró, frena la búsqueda
+
             with cols_mat[i % 3]:
                 st.markdown(f"""
                 <div style="border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; background-color: #1e293b; margin-bottom: 15px;">
                     <div class="color-circle" style="background-color: {mat['color']};"></div>
                     <div style="font-size: 16px; font-weight: 600;">{mat['nombre']}</div>
+                    {estado_badge}
                 </div>
                 """, unsafe_allow_html=True)
                 if st.button("🗑️ Eliminar", key=f"del_mat_{i}", use_container_width=True):
                     st.session_state['materias'].pop(i)
                     guardar_datos()
                     st.rerun()
-                    
-    st.write("<br>", unsafe_allow_html=True)
-
-    with st.container(border=True):
-        c_dist1, c_dist2 = st.columns([4, 1])
-        with c_dist1:
-            st.markdown("### Gestionar Distracciones")
-        with c_dist2:
-            nueva_dist = st.text_input("Nueva Distracción", label_visibility="collapsed", placeholder="Ej: Baño...")
-            if st.button("➕ Añadir", type="secondary", key="btn_dist", use_container_width=True):
-                if nueva_dist and nueva_dist not in st.session_state['distracciones']:
-                    st.session_state['distracciones'].append(nueva_dist)
-                    guardar_datos()
-                    st.rerun()
-
-        cols_dist = st.columns(4)
-        for i, dist in enumerate(st.session_state['distracciones']):
-            with cols_dist[i % 4]:
-                st.markdown(f"""
-                <div style="border: 1px solid #334155; border-radius: 12px; padding: 15px; text-align: center; background-color: #1e293b; margin-bottom: 10px;">
-                    <div style="color: #94a3b8; font-size: 14px;">⚫</div>
-                    <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{dist}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("🗑️", key=f"del_dist_{i}", use_container_width=True):
-                    st.session_state['distracciones'].pop(i)
-                    guardar_datos()
-                    st.rerun()
-
-    st.write("<br>", unsafe_allow_html=True)
-
-    with st.container(border=True):
-        c_met1, c_met2 = st.columns([4, 1])
-        with c_met1:
-            st.markdown("### Gestionar Métodos")
-        with c_met2:
-            nuevo_met = st.text_input("Nuevo Método", label_visibility="collapsed", placeholder="Ej: Mapa mental...")
-            if st.button("➕ Añadir", type="secondary", key="btn_met", use_container_width=True):
-                if nuevo_met and nuevo_met not in st.session_state['metodos']:
-                    st.session_state['metodos'].append(nuevo_met)
-                    guardar_datos()
-                    st.rerun()
-
-        cols_met = st.columns(4)
-        for i, met in enumerate(st.session_state['metodos']):
-            with cols_met[i % 4]:
-                st.markdown(f"""
-                <div style="border: 1px solid #334155; border-radius: 12px; padding: 15px; text-align: center; background-color: #1e293b; margin-bottom: 10px;">
-                    <div style="color: #94a3b8; font-size: 14px;">⚫</div>
-                    <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{met}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("🗑️", key=f"del_met_{i}", use_container_width=True):
-                    st.session_state['metodos'].pop(i)
-                    guardar_datos()
-                    st.rerun()
-
 
 # ==========================================
 # --- VISTA: PÁGINA PRINCIPAL ---

@@ -4,7 +4,10 @@ import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime, date
 import json
-import os
+
+# Nuevas herramientas para la Nube
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
@@ -42,29 +45,40 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- SISTEMA DE GUARDADO LOCAL (JSON) ---
-ARCHIVO_DATOS = "datos_guardados.json"
+# --- SISTEMA DE GUARDADO EN GOOGLE SHEETS ---
+def get_gspread_client():
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds_dict = json.loads(st.secrets["google_credentials"])
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    return gspread.authorize(creds)
 
 def guardar_datos():
-    datos = {
-        'materias': st.session_state['materias'],
-        'metodos': st.session_state['metodos'],
-        'distracciones': st.session_state['distracciones'],
-        'historial': st.session_state['historial'],
-        'metas': st.session_state['metas'],
-        'plan_carrera': st.session_state['plan_carrera']
-    }
-    with open(ARCHIVO_DATOS, "w") as f:
-        json.dump(datos, f)
+    try:
+        datos = {
+            'materias': st.session_state['materias'],
+            'metodos': st.session_state['metodos'],
+            'distracciones': st.session_state['distracciones'],
+            'historial': st.session_state['historial'],
+            'metas': st.session_state['metas'],
+            'plan_carrera': st.session_state['plan_carrera']
+        }
+        client = get_gspread_client()
+        sheet = client.open('StudyMeterDB').worksheet('database')
+        # Mandamos el bloque de datos a la celda A2
+        sheet.update(values=[[json.dumps(datos)]], range_name="A2")
+    except Exception as e:
+        st.error(f"Ocurrió un error al guardar en la nube: {e}")
 
 def cargar_datos():
-    if os.path.exists(ARCHIVO_DATOS):
-        with open(ARCHIVO_DATOS, "r") as f:
-            return json.load(f)
+    try:
+        client = get_gspread_client()
+        sheet = client.open('StudyMeterDB').worksheet('database')
+        valor = sheet.acell('A2').value
+        if valor:
+            return json.loads(valor)
+    except:
+        return None
     return None
-
-# Cargar datos si existen
-datos_guardados = cargar_datos()
 
 # --- INICIALIZACIÓN DE VARIABLES ---
 if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
@@ -74,20 +88,25 @@ if 'pause_start' not in st.session_state: st.session_state['pause_start'] = 0.0
 if 'pause_elapsed' not in st.session_state: st.session_state['pause_elapsed'] = 0.0
 if 'interruption_reason' not in st.session_state: st.session_state['interruption_reason'] = ""
 
-if datos_guardados:
-    if 'materias' not in st.session_state: st.session_state['materias'] = datos_guardados.get('materias', [])
-    if 'metodos' not in st.session_state: st.session_state['metodos'] = datos_guardados.get('metodos', [])
-    if 'distracciones' not in st.session_state: st.session_state['distracciones'] = datos_guardados.get('distracciones', [])
-    if 'historial' not in st.session_state: st.session_state['historial'] = datos_guardados.get('historial', [])
-    if 'metas' not in st.session_state: st.session_state['metas'] = datos_guardados.get('metas', [])
-    if 'plan_carrera' not in st.session_state: st.session_state['plan_carrera'] = datos_guardados.get('plan_carrera', [])
-else:
-    if 'materias' not in st.session_state: st.session_state['materias'] = []
-    if 'metodos' not in st.session_state: st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
-    if 'distracciones' not in st.session_state: st.session_state['distracciones'] = ["Descanso", "Celular", "Llamada", "Comida"]
-    if 'historial' not in st.session_state: st.session_state['historial'] = []
-    if 'metas' not in st.session_state: st.session_state['metas'] = [] 
-    if 'plan_carrera' not in st.session_state: st.session_state['plan_carrera'] = []
+# Cargamos los datos desde Sheets solo la primera vez que arranca la app
+if 'datos_cargados' not in st.session_state:
+    datos_guardados = cargar_datos()
+    if datos_guardados:
+        st.session_state['materias'] = datos_guardados.get('materias', [])
+        st.session_state['metodos'] = datos_guardados.get('metodos', [])
+        st.session_state['distracciones'] = datos_guardados.get('distracciones', [])
+        st.session_state['historial'] = datos_guardados.get('historial', [])
+        st.session_state['metas'] = datos_guardados.get('metas', [])
+        st.session_state['plan_carrera'] = datos_guardados.get('plan_carrera', [])
+    else:
+        st.session_state['materias'] = []
+        st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
+        st.session_state['distracciones'] = ["Descanso", "Celular", "Llamada", "Comida"]
+        st.session_state['historial'] = []
+        st.session_state['metas'] = [] 
+        st.session_state['plan_carrera'] = []
+    
+    st.session_state['datos_cargados'] = True
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -201,7 +220,6 @@ def dialog_editar_meta(meta_idx):
     meta_actual = st.session_state['metas'][meta_idx]
     nombres_materias = [m["nombre"] for m in st.session_state['materias']]
     
-    # Manejo de la fecha guardada (string a objeto date)
     try:
         fecha_obj = date.fromisoformat(meta_actual['fecha_examen'])
     except:
@@ -229,11 +247,9 @@ def dialog_editar_meta(meta_idx):
 
 @st.dialog("Nueva Materia Activa (Cronómetro)")
 def dialog_nueva_materia_activa():
-    # Filtro: Solo materias del plan que estén "Cursando" o "Regular"
     materias_validas = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
     materias_ya_activas = [m['nombre'] for m in st.session_state['materias']]
     
-    # Dejar solo las que aún no están en activas
     opciones_disponibles = [m for m in materias_validas if m not in materias_ya_activas]
     
     if not opciones_disponibles:
@@ -592,7 +608,6 @@ elif menu_opcion == "Página Principal":
             for i, meta in enumerate(st.session_state['metas']):
                 with cols[i % 3]:
                     with st.container(border=True):
-                        # Convertir string ISO a formato amigable
                         try:
                             fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
                         except:

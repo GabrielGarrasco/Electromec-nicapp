@@ -7,44 +7,41 @@ from datetime import datetime, date
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 
-# --- CSS MEJORADO (Azules oscuros, claros y tarjetas idénticas) ---
+# --- CSS MEJORADO ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
     
-    /* Pestañas */
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
     
-    /* Tarjetas base */
     [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] {
         background-color: #162032; border-radius: 12px; padding: 20px; border: 1px solid #334155;
     }
     
-    /* Botones primarios y secundarios */
     [data-testid="baseButton-primary"] { background-color: #0ea5e9; border-color: #0ea5e9; color: white; border-radius: 8px; font-weight: bold; }
     [data-testid="baseButton-primary"]:hover { background-color: #0284c7; border-color: #0284c7; }
     [data-testid="baseButton-secondary"] { background-color: #334155; border-color: #334155; color: white; border-radius: 8px; }
     [data-testid="baseButton-secondary"]:hover { border-color: #94a3b8; }
     
-    /* Tipografías y métricas */
     [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 700; }
     [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
     
-    /* Ocultar header de Streamlit */
     header {visibility: hidden;}
+    
+    /* Círculos de color para materias */
+    .color-circle {
+        width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155;
+    }
+    
+    /* Etiquetas de estado para el plan de estudios */
+    .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
-
-# --- LIMPIEZA DE CACHÉ (Solución al TypeError) ---
-# Si las materias están en el formato viejo (texto simple), las reseteamos al nuevo formato
-if 'materias' not in st.session_state or (len(st.session_state['materias']) > 0 and isinstance(st.session_state['materias'][0], str)):
-    st.session_state['materias'] = [
-        {"nombre": "Física 2", "color": "🔴"}, {"nombre": "Estabilidad", "color": "🔵"}, 
-        {"nombre": "Álgebra", "color": "🟣"}, {"nombre": "Física 1", "color": "🩷"}, 
-        {"nombre": "Programación", "color": "🟢"}, {"nombre": "Probabilidad", "color": "🔵"}
-    ]
 
 # --- INICIALIZACIÓN DE VARIABLES ---
 if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
@@ -54,6 +51,14 @@ if 'pause_start' not in st.session_state: st.session_state['pause_start'] = 0.0
 if 'pause_elapsed' not in st.session_state: st.session_state['pause_elapsed'] = 0.0
 if 'interruption_reason' not in st.session_state: st.session_state['interruption_reason'] = ""
 
+# Actualizado a colores HEX para el color picker
+if 'materias' not in st.session_state or (len(st.session_state['materias']) > 0 and '🔴' in st.session_state['materias'][0].values()):
+    st.session_state['materias'] = [
+        {"nombre": "Física 2", "color": "#ef4444"}, {"nombre": "Estabilidad", "color": "#3b82f6"}, 
+        {"nombre": "Álgebra", "color": "#a855f7"}, {"nombre": "Física 1", "color": "#ec4899"}, 
+        {"nombre": "Programación", "color": "#22c55e"}, {"nombre": "Probabilidad", "color": "#3b82f6"}
+    ]
+
 if 'metodos' not in st.session_state: 
     st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
 if 'distracciones' not in st.session_state:
@@ -61,6 +66,7 @@ if 'distracciones' not in st.session_state:
 
 if 'historial' not in st.session_state: st.session_state['historial'] = []
 if 'metas' not in st.session_state: st.session_state['metas'] = [] 
+if 'plan_carrera' not in st.session_state: st.session_state['plan_carrera'] = []
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -83,7 +89,6 @@ def render_live_timer(elapsed_seconds, is_running):
     """
     components.html(html_code, height=130)
 
-# --- FUNCIÓN: RENDERIZAR ANALÍTICA ---
 def renderizar_analitica():
     if not st.session_state['historial']:
         st.info("Todavía no hay datos para procesar. ¡Hacé tu primera sesión!")
@@ -105,11 +110,9 @@ def renderizar_analitica():
 
         c1, c2 = st.columns(2)
         with c1:
-            with st.container(border=True):
-                st.metric("TOTAL HORAS ESTUDIADAS", f"{horas}h {minutos}m")
+            with st.container(border=True): st.metric("TOTAL HORAS ESTUDIADAS", f"{horas}h {minutos}m")
         with c2:
-            with st.container(border=True):
-                st.metric("MATERIA TOP", f"{materia_top}", f"{top_h}h {top_m}m")
+            with st.container(border=True): st.metric("MATERIA TOP", f"{materia_top}", f"{top_h}h {top_m}m")
             
         st.divider()
         st.markdown("### Tiempo por Materia")
@@ -119,6 +122,36 @@ def renderizar_analitica():
 # ==========================================
 # --- MODALES (DIALOGS) ---
 # ==========================================
+@st.dialog("Agregar Materia al Plan de Estudios")
+def dialog_nueva_materia_plan():
+    nombre = st.text_input("Nombre de la materia")
+    
+    col1, col2 = st.columns(2)
+    anio = col1.selectbox("Año de cursado", [1, 2, 3, 4, 5, 6])
+    estado = col2.selectbox("Estado actual", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada"])
+    
+    st.divider()
+    st.caption("CORRELATIVIDADES (Opcional)")
+    opciones_materias = [m['nombre'] for m in st.session_state['plan_carrera']]
+    
+    req_regulares = st.multiselect("Para cursar necesito REGULAR:", opciones_materias)
+    req_aprobadas = st.multiselect("Para cursar necesito APROBADA:", opciones_materias)
+    
+    st.write("<br>", unsafe_allow_html=True)
+    if st.button("Guardar en el Plan", type="primary", use_container_width=True):
+        if nombre:
+            st.session_state['plan_carrera'].append({
+                "id": str(time.time()),
+                "nombre": nombre,
+                "año": anio,
+                "estado": estado,
+                "req_regulares": req_regulares,
+                "req_aprobadas": req_aprobadas
+            })
+            st.rerun()
+        else:
+            st.error("Falta el nombre de la materia.")
+
 @st.dialog("Nueva Meta de Examen")
 def dialog_nueva_meta():
     nombres_materias = [m["nombre"] for m in st.session_state['materias']]
@@ -127,13 +160,12 @@ def dialog_nueva_meta():
         return
         
     nombre = st.text_input("NOMBRE (EJ: PARCIAL 1)")
-    materia = st.selectbox("MATERIA", nombres_materias)
+    materia = st.selectbox("MATERIA (de tus materias activas)", nombres_materias)
     
     col1, col2 = st.columns(2)
     meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=20)
     fecha_examen = col2.date_input("FECHA EXAMEN", min_value=date.today())
     
-    st.write("<br>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
     if c1.button("Cancelar", use_container_width=True): st.rerun()
     if c2.button("Guardar", type="primary", use_container_width=True):
@@ -145,10 +177,10 @@ def dialog_nueva_meta():
             st.session_state['metas'].append(nueva)
             st.rerun()
 
-@st.dialog("Nueva Materia")
+@st.dialog("Nueva Materia Activa (Cronómetro)")
 def dialog_nueva_materia():
     n = st.text_input("Nombre de la Materia")
-    c = st.selectbox("Color Distintivo", ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠", "🩷", "⚪"])
+    c = st.color_picker("Color Distintivo", "#0ea5e9") # COLOR PICKER REAL AÑADIDO
     if st.button("Guardar Materia", type="primary", use_container_width=True):
         if n:
             st.session_state['materias'].append({"nombre": n, "color": c})
@@ -203,26 +235,75 @@ def dialog_agregar_sesion():
 # ==========================================
 with st.sidebar:
     st.markdown("## Menú")
-    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización"], label_visibility="collapsed")
+    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Plan de Estudios", "Organización"], label_visibility="collapsed")
+
+
+# ==========================================
+# --- VISTA: PLAN DE ESTUDIOS (NUEVO) ---
+# ==========================================
+if menu_opcion == "Plan de Estudios":
+    c_head1, c_head2 = st.columns([4, 1])
+    with c_head1:
+        st.header("Plan de Estudios")
+        st.caption("Gestioná las 41 materias de tu carrera y sus correlatividades.")
+    with c_head2:
+        if st.button("➕ Añadir Materia", type="primary", use_container_width=True):
+            dialog_nueva_materia_plan()
+            
+    st.divider()
+    
+    if not st.session_state['plan_carrera']:
+        st.info("Todavía no agregaste ninguna materia a tu plan de estudios.")
+    else:
+        # Agrupamos por año de cursado
+        df_plan = pd.DataFrame(st.session_state['plan_carrera'])
+        anios = sorted(df_plan['año'].unique())
+        
+        for anio in anios:
+            st.markdown(f"### Año {anio}")
+            materias_anio = df_plan[df_plan['año'] == anio]
+            
+            cols = st.columns(3)
+            for i, row in materias_anio.reset_index().iterrows():
+                with cols[i % 3]:
+                    with st.container(border=True):
+                        # Etiqueta de estado
+                        color_clase = "badge-pendiente"
+                        if row['estado'] == "Regular": color_clase = "badge-regular"
+                        elif row['estado'] == "Aprobada/Promocionada": color_clase = "badge-aprobada"
+                        elif row['estado'] == "Cursando": color_clase = "badge-cursando"
+                        
+                        st.markdown(f"<span class='{color_clase}'>{row['estado']}</span>", unsafe_allow_html=True)
+                        st.markdown(f"#### {row['nombre']}")
+                        
+                        if row['req_regulares']:
+                            st.caption(f"**Requiere Regular:** {', '.join(row['req_regulares'])}")
+                        if row['req_aprobadas']:
+                            st.caption(f"**Requiere Aprobada:** {', '.join(row['req_aprobadas'])}")
+                        
+                        if st.button("🗑️ Borrar", key=f"del_plan_{row['id']}", help="Eliminar del plan"):
+                            st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != row['id']]
+                            st.rerun()
+
 
 # ==========================================
 # --- VISTA: RESUMEN (ANALÍTICA DIRECTA) ---
 # ==========================================
-if menu_opcion == "Resumen":
+elif menu_opcion == "Resumen":
     st.header("Tus Estadísticas")
     renderizar_analitica()
+
 
 # ==========================================
 # --- VISTA: ORGANIZACIÓN ---
 # ==========================================
 elif menu_opcion == "Organización":
     
-    # SECCIÓN MATERIAS
     with st.container(border=True):
         c_head1, c_head2 = st.columns([4, 1])
         with c_head1:
-            st.markdown("### Gestionar Materias")
-            st.caption("Añade o personaliza el color de tus materias.")
+            st.markdown("### Materias Activas (Cronómetro)")
+            st.caption("Añadí acá solo las materias que estás cursando o rindiendo AHORA.")
         with c_head2:
             if st.button("➕ Nueva Materia", type="secondary", use_container_width=True):
                 dialog_nueva_materia()
@@ -230,9 +311,10 @@ elif menu_opcion == "Organización":
         cols_mat = st.columns(3)
         for i, mat in enumerate(st.session_state['materias']):
             with cols_mat[i % 3]:
+                # Actualizado para usar el color HEX
                 st.markdown(f"""
                 <div style="border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; background-color: #1e293b; margin-bottom: 15px;">
-                    <div style="font-size: 24px; margin-bottom: 10px;">{mat['color']}</div>
+                    <div class="color-circle" style="background-color: {mat['color']};"></div>
                     <div style="font-size: 16px; font-weight: 600;">{mat['nombre']}</div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -242,15 +324,13 @@ elif menu_opcion == "Organización":
                     
     st.write("<br>", unsafe_allow_html=True)
 
-    # SECCIÓN DISTRACCIONES
     with st.container(border=True):
         c_dist1, c_dist2 = st.columns([4, 1])
         with c_dist1:
             st.markdown("### Gestionar Distracciones")
-            st.caption("Motivos usuales de pausas.")
         with c_dist2:
             nueva_dist = st.text_input("Nueva Distracción", label_visibility="collapsed", placeholder="Ej: Baño...")
-            if st.button("➕ Añadir", type="secondary", use_container_width=True):
+            if st.button("➕ Añadir", type="secondary", key="btn_dist", use_container_width=True):
                 if nueva_dist and nueva_dist not in st.session_state['distracciones']:
                     st.session_state['distracciones'].append(nueva_dist)
                     st.rerun()
@@ -270,12 +350,10 @@ elif menu_opcion == "Organización":
 
     st.write("<br>", unsafe_allow_html=True)
 
-    # SECCIÓN MÉTODOS
     with st.container(border=True):
         c_met1, c_met2 = st.columns([4, 1])
         with c_met1:
             st.markdown("### Gestionar Métodos")
-            st.caption("Modos de estudio usados comúnmente.")
         with c_met2:
             nuevo_met = st.text_input("Nuevo Método", label_visibility="collapsed", placeholder="Ej: Mapa mental...")
             if st.button("➕ Añadir", type="secondary", key="btn_met", use_container_width=True):
@@ -301,7 +379,6 @@ elif menu_opcion == "Organización":
 # --- VISTA: PÁGINA PRINCIPAL ---
 # ==========================================
 elif menu_opcion == "Página Principal":
-    # Sacamos "Amigos", ahora solo quedan 4 pestañas
     tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
 
     # --- CRONÓMETRO ---
@@ -376,7 +453,6 @@ elif menu_opcion == "Página Principal":
                     st.rerun()
 
         elif st.session_state['timer_state'] == 'FINISHED':
-            # Botón de retroceso por si te equivocaste al tocar Terminar
             c_back, c_title, c_empty = st.columns([1, 10, 1])
             with c_back:
                 if st.button("⬅️ Volver", help="Regresar a Pausa"):
@@ -406,7 +482,6 @@ elif menu_opcion == "Página Principal":
                     metodo_sel = st.radio("MÉTODO", st.session_state['metodos'], horizontal=True, label_visibility="collapsed")
                     
                 st.write("")
-                # Botón idéntico al de tu captura
                 if st.button("GUARDAR SESIÓN ➔", type="primary", use_container_width=True):
                     minutos_estudio = round(st.session_state['study_elapsed'] / 60)
                     

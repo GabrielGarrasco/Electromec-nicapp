@@ -3,6 +3,8 @@ import time
 import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime, date
+import json
+import os
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
@@ -30,18 +32,39 @@ st.markdown("""
     
     header {visibility: hidden;}
     
-    /* Círculos de color para materias */
-    .color-circle {
-        width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155;
-    }
+    .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
     
-    /* Etiquetas de estado para el plan de estudios */
     .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
+
+# --- SISTEMA DE GUARDADO LOCAL (JSON) ---
+ARCHIVO_DATOS = "datos_guardados.json"
+
+def guardar_datos():
+    datos = {
+        'materias': st.session_state['materias'],
+        'metodos': st.session_state['metodos'],
+        'distracciones': st.session_state['distracciones'],
+        'historial': st.session_state['historial'],
+        'metas': st.session_state['metas'],
+        'plan_carrera': st.session_state['plan_carrera']
+    }
+    with open(ARCHIVO_DATOS, "w") as f:
+        json.dump(datos, f)
+
+def cargar_datos():
+    if os.path.exists(ARCHIVO_DATOS):
+        with open(ARCHIVO_DATOS, "r") as f:
+            return json.load(f)
+    return None
+
+# Cargar datos si existen
+datos_guardados = cargar_datos()
 
 # --- INICIALIZACIÓN DE VARIABLES ---
 if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
@@ -51,22 +74,20 @@ if 'pause_start' not in st.session_state: st.session_state['pause_start'] = 0.0
 if 'pause_elapsed' not in st.session_state: st.session_state['pause_elapsed'] = 0.0
 if 'interruption_reason' not in st.session_state: st.session_state['interruption_reason'] = ""
 
-# Actualizado a colores HEX para el color picker
-if 'materias' not in st.session_state or (len(st.session_state['materias']) > 0 and '🔴' in st.session_state['materias'][0].values()):
-    st.session_state['materias'] = [
-        {"nombre": "Física 2", "color": "#ef4444"}, {"nombre": "Estabilidad", "color": "#3b82f6"}, 
-        {"nombre": "Álgebra", "color": "#a855f7"}, {"nombre": "Física 1", "color": "#ec4899"}, 
-        {"nombre": "Programación", "color": "#22c55e"}, {"nombre": "Probabilidad", "color": "#3b82f6"}
-    ]
-
-if 'metodos' not in st.session_state: 
-    st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
-if 'distracciones' not in st.session_state:
-    st.session_state['distracciones'] = ["Descanso", "Celular", "Llamada", "Comida"]
-
-if 'historial' not in st.session_state: st.session_state['historial'] = []
-if 'metas' not in st.session_state: st.session_state['metas'] = [] 
-if 'plan_carrera' not in st.session_state: st.session_state['plan_carrera'] = []
+if datos_guardados:
+    if 'materias' not in st.session_state: st.session_state['materias'] = datos_guardados.get('materias', [])
+    if 'metodos' not in st.session_state: st.session_state['metodos'] = datos_guardados.get('metodos', [])
+    if 'distracciones' not in st.session_state: st.session_state['distracciones'] = datos_guardados.get('distracciones', [])
+    if 'historial' not in st.session_state: st.session_state['historial'] = datos_guardados.get('historial', [])
+    if 'metas' not in st.session_state: st.session_state['metas'] = datos_guardados.get('metas', [])
+    if 'plan_carrera' not in st.session_state: st.session_state['plan_carrera'] = datos_guardados.get('plan_carrera', [])
+else:
+    if 'materias' not in st.session_state: st.session_state['materias'] = []
+    if 'metodos' not in st.session_state: st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
+    if 'distracciones' not in st.session_state: st.session_state['distracciones'] = ["Descanso", "Celular", "Llamada", "Comida"]
+    if 'historial' not in st.session_state: st.session_state['historial'] = []
+    if 'metas' not in st.session_state: st.session_state['metas'] = [] 
+    if 'plan_carrera' not in st.session_state: st.session_state['plan_carrera'] = []
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -128,7 +149,7 @@ def dialog_nueva_materia_plan():
     
     col1, col2 = st.columns(2)
     anio = col1.selectbox("Año de cursado", [1, 2, 3, 4, 5, 6])
-    estado = col2.selectbox("Estado actual", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada"])
+    estado = col2.selectbox("Estado actual", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
     
     st.divider()
     st.caption("CORRELATIVIDADES (Opcional)")
@@ -141,13 +162,10 @@ def dialog_nueva_materia_plan():
     if st.button("Guardar en el Plan", type="primary", use_container_width=True):
         if nombre:
             st.session_state['plan_carrera'].append({
-                "id": str(time.time()),
-                "nombre": nombre,
-                "año": anio,
-                "estado": estado,
-                "req_regulares": req_regulares,
-                "req_aprobadas": req_aprobadas
+                "id": str(time.time()), "nombre": nombre, "año": anio,
+                "estado": estado, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas
             })
+            guardar_datos()
             st.rerun()
         else:
             st.error("Falta el nombre de la materia.")
@@ -156,7 +174,7 @@ def dialog_nueva_materia_plan():
 def dialog_nueva_meta():
     nombres_materias = [m["nombre"] for m in st.session_state['materias']]
     if not nombres_materias:
-        st.warning("Primero agregá materias desde el menú 'Organización'.")
+        st.warning("Primero agregá materias activas desde el menú 'Organización'.")
         return
         
     nombre = st.text_input("NOMBRE (EJ: PARCIAL 1)")
@@ -172,19 +190,63 @@ def dialog_nueva_meta():
         if nombre:
             nueva = {
                 "id": str(time.time()), "nombre": nombre, "materia": materia,
-                "meta_horas": meta_horas, "fecha_examen": fecha_examen, "horas_acumuladas": 0.0
+                "meta_horas": meta_horas, "fecha_examen": fecha_examen.isoformat(), "horas_acumuladas": 0.0
             }
             st.session_state['metas'].append(nueva)
+            guardar_datos()
+            st.rerun()
+
+@st.dialog("Editar Meta")
+def dialog_editar_meta(meta_idx):
+    meta_actual = st.session_state['metas'][meta_idx]
+    nombres_materias = [m["nombre"] for m in st.session_state['materias']]
+    
+    # Manejo de la fecha guardada (string a objeto date)
+    try:
+        fecha_obj = date.fromisoformat(meta_actual['fecha_examen'])
+    except:
+        fecha_obj = date.today()
+        
+    idx_materia = nombres_materias.index(meta_actual['materia']) if meta_actual['materia'] in nombres_materias else 0
+        
+    nombre = st.text_input("NOMBRE", value=meta_actual['nombre'])
+    materia = st.selectbox("MATERIA", nombres_materias, index=idx_materia)
+    
+    col1, col2 = st.columns(2)
+    meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=int(meta_actual['meta_horas']))
+    fecha_examen = col2.date_input("FECHA EXAMEN", value=fecha_obj)
+    
+    c1, c2 = st.columns(2)
+    if c1.button("Cancelar", use_container_width=True): st.rerun()
+    if c2.button("Actualizar", type="primary", use_container_width=True):
+        if nombre:
+            st.session_state['metas'][meta_idx]['nombre'] = nombre
+            st.session_state['metas'][meta_idx]['materia'] = materia
+            st.session_state['metas'][meta_idx]['meta_horas'] = meta_horas
+            st.session_state['metas'][meta_idx]['fecha_examen'] = fecha_examen.isoformat()
+            guardar_datos()
             st.rerun()
 
 @st.dialog("Nueva Materia Activa (Cronómetro)")
-def dialog_nueva_materia():
-    n = st.text_input("Nombre de la Materia")
-    c = st.color_picker("Color Distintivo", "#0ea5e9") # COLOR PICKER REAL AÑADIDO
-    if st.button("Guardar Materia", type="primary", use_container_width=True):
-        if n:
-            st.session_state['materias'].append({"nombre": n, "color": c})
-            st.rerun()
+def dialog_nueva_materia_activa():
+    # Filtro: Solo materias del plan que estén "Cursando" o "Regular"
+    materias_validas = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
+    materias_ya_activas = [m['nombre'] for m in st.session_state['materias']]
+    
+    # Dejar solo las que aún no están en activas
+    opciones_disponibles = [m for m in materias_validas if m not in materias_ya_activas]
+    
+    if not opciones_disponibles:
+        st.warning("No tenés materias en estado 'Cursando' o 'Regular' disponibles para agregar. Modificá tu Plan de Estudios primero.")
+        return
+        
+    n = st.selectbox("Seleccionar Materia", opciones_disponibles)
+    c = st.color_picker("Color Distintivo", "#0ea5e9")
+    
+    if st.button("Activar Materia", type="primary", use_container_width=True):
+        st.session_state['materias'].append({"nombre": n, "color": c})
+        guardar_datos()
+        st.rerun()
 
 @st.dialog("Detalle de Sesión (Manual)", width="large")
 def dialog_agregar_sesion():
@@ -227,6 +289,7 @@ def dialog_agregar_sesion():
                 if m['id'] == id_meta:
                     m['horas_acumuladas'] += (tiempo_neto / 60)
                     break
+        guardar_datos()
         st.rerun()
 
 
@@ -239,13 +302,13 @@ with st.sidebar:
 
 
 # ==========================================
-# --- VISTA: PLAN DE ESTUDIOS (NUEVO) ---
+# --- VISTA: PLAN DE ESTUDIOS ---
 # ==========================================
 if menu_opcion == "Plan de Estudios":
     c_head1, c_head2 = st.columns([4, 1])
     with c_head1:
         st.header("Plan de Estudios")
-        st.caption("Gestioná las 41 materias de tu carrera y sus correlatividades.")
+        st.caption("Gestioná todas las materias de tu carrera y sus correlatividades.")
     with c_head2:
         if st.button("➕ Añadir Materia", type="primary", use_container_width=True):
             dialog_nueva_materia_plan()
@@ -255,7 +318,6 @@ if menu_opcion == "Plan de Estudios":
     if not st.session_state['plan_carrera']:
         st.info("Todavía no agregaste ninguna materia a tu plan de estudios.")
     else:
-        # Agrupamos por año de cursado
         df_plan = pd.DataFrame(st.session_state['plan_carrera'])
         anios = sorted(df_plan['año'].unique())
         
@@ -267,22 +329,23 @@ if menu_opcion == "Plan de Estudios":
             for i, row in materias_anio.reset_index().iterrows():
                 with cols[i % 3]:
                     with st.container(border=True):
-                        # Etiqueta de estado
                         color_clase = "badge-pendiente"
                         if row['estado'] == "Regular": color_clase = "badge-regular"
                         elif row['estado'] == "Aprobada/Promocionada": color_clase = "badge-aprobada"
                         elif row['estado'] == "Cursando": color_clase = "badge-cursando"
+                        elif row['estado'] == "Libre/Recursado": color_clase = "badge-libre"
                         
                         st.markdown(f"<span class='{color_clase}'>{row['estado']}</span>", unsafe_allow_html=True)
                         st.markdown(f"#### {row['nombre']}")
                         
                         if row['req_regulares']:
-                            st.caption(f"**Requiere Regular:** {', '.join(row['req_regulares'])}")
+                            st.caption(f"**Req. Regular:** {', '.join(row['req_regulares'])}")
                         if row['req_aprobadas']:
-                            st.caption(f"**Requiere Aprobada:** {', '.join(row['req_aprobadas'])}")
+                            st.caption(f"**Req. Aprobada:** {', '.join(row['req_aprobadas'])}")
                         
-                        if st.button("🗑️ Borrar", key=f"del_plan_{row['id']}", help="Eliminar del plan"):
+                        if st.button("🗑️", key=f"del_plan_{row['id']}", help="Eliminar del plan"):
                             st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != row['id']]
+                            guardar_datos()
                             st.rerun()
 
 
@@ -303,15 +366,14 @@ elif menu_opcion == "Organización":
         c_head1, c_head2 = st.columns([4, 1])
         with c_head1:
             st.markdown("### Materias Activas (Cronómetro)")
-            st.caption("Añadí acá solo las materias que estás cursando o rindiendo AHORA.")
+            st.caption("Añadí acá solo las materias de tu plan que estás cursando o rindiendo AHORA.")
         with c_head2:
             if st.button("➕ Nueva Materia", type="secondary", use_container_width=True):
-                dialog_nueva_materia()
+                dialog_nueva_materia_activa()
                 
         cols_mat = st.columns(3)
         for i, mat in enumerate(st.session_state['materias']):
             with cols_mat[i % 3]:
-                # Actualizado para usar el color HEX
                 st.markdown(f"""
                 <div style="border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; background-color: #1e293b; margin-bottom: 15px;">
                     <div class="color-circle" style="background-color: {mat['color']};"></div>
@@ -320,6 +382,7 @@ elif menu_opcion == "Organización":
                 """, unsafe_allow_html=True)
                 if st.button("🗑️ Eliminar", key=f"del_mat_{i}", use_container_width=True):
                     st.session_state['materias'].pop(i)
+                    guardar_datos()
                     st.rerun()
                     
     st.write("<br>", unsafe_allow_html=True)
@@ -333,6 +396,7 @@ elif menu_opcion == "Organización":
             if st.button("➕ Añadir", type="secondary", key="btn_dist", use_container_width=True):
                 if nueva_dist and nueva_dist not in st.session_state['distracciones']:
                     st.session_state['distracciones'].append(nueva_dist)
+                    guardar_datos()
                     st.rerun()
 
         cols_dist = st.columns(4)
@@ -346,6 +410,7 @@ elif menu_opcion == "Organización":
                 """, unsafe_allow_html=True)
                 if st.button("🗑️", key=f"del_dist_{i}", use_container_width=True):
                     st.session_state['distracciones'].pop(i)
+                    guardar_datos()
                     st.rerun()
 
     st.write("<br>", unsafe_allow_html=True)
@@ -359,6 +424,7 @@ elif menu_opcion == "Organización":
             if st.button("➕ Añadir", type="secondary", key="btn_met", use_container_width=True):
                 if nuevo_met and nuevo_met not in st.session_state['metodos']:
                     st.session_state['metodos'].append(nuevo_met)
+                    guardar_datos()
                     st.rerun()
 
         cols_met = st.columns(4)
@@ -372,6 +438,7 @@ elif menu_opcion == "Organización":
                 """, unsafe_allow_html=True)
                 if st.button("🗑️", key=f"del_met_{i}", use_container_width=True):
                     st.session_state['metodos'].pop(i)
+                    guardar_datos()
                     st.rerun()
 
 
@@ -499,6 +566,7 @@ elif menu_opcion == "Página Principal":
                                 m['horas_acumuladas'] += (minutos_estudio / 60)
                                 break
                     
+                    guardar_datos()
                     st.toast(f"¡{minutos_estudio} minutos guardados!")
                     st.session_state['timer_state'] = 'IDLE'
                     st.session_state['study_elapsed'] = 0.0
@@ -524,7 +592,13 @@ elif menu_opcion == "Página Principal":
             for i, meta in enumerate(st.session_state['metas']):
                 with cols[i % 3]:
                     with st.container(border=True):
-                        st.caption(f"{meta['materia'].upper()} - Fecha: {meta['fecha_examen'].strftime('%d/%m/%Y')}")
+                        # Convertir string ISO a formato amigable
+                        try:
+                            fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
+                        except:
+                            fecha_str = meta['fecha_examen']
+                            
+                        st.caption(f"{meta['materia'].upper()} - Fecha: {fecha_str}")
                         st.markdown(f"### {meta['nombre']}")
                         
                         progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
@@ -533,6 +607,15 @@ elif menu_opcion == "Página Principal":
                         h_acum = int(meta['horas_acumuladas'])
                         m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
                         st.caption(f"{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m")
+                        
+                        st.write("")
+                        c_ed1, c_ed2 = st.columns(2)
+                        if c_ed1.button("✏️ Editar", key=f"edit_meta_{i}", use_container_width=True):
+                            dialog_editar_meta(i)
+                        if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{i}", use_container_width=True):
+                            st.session_state['metas'].pop(i)
+                            guardar_datos()
+                            st.rerun()
 
     # --- HISTORIAL ---
     with tabs[3]:

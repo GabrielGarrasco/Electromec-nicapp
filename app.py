@@ -7,7 +7,7 @@ from datetime import datetime, date
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 
-# --- CSS MEJORADO ---
+# --- CSS MEJORADO (Azules oscuros y claros) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
@@ -34,7 +34,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- INICIALIZACIÓN DE VARIABLES DINÁMICAS ---
+# --- INICIALIZACIÓN DE VARIABLES ---
 if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
 if 'study_start' not in st.session_state: st.session_state['study_start'] = 0.0
 if 'study_elapsed' not in st.session_state: st.session_state['study_elapsed'] = 0.0
@@ -42,19 +42,22 @@ if 'pause_start' not in st.session_state: st.session_state['pause_start'] = 0.0
 if 'pause_elapsed' not in st.session_state: st.session_state['pause_elapsed'] = 0.0
 if 'interruption_reason' not in st.session_state: st.session_state['interruption_reason'] = ""
 
-# Listas personalizables
+# Listas personalizables (ahora con diccionarios para guardar colores)
 if 'materias' not in st.session_state: 
-    st.session_state['materias'] = ["Física 2", "Estabilidad", "Álgebra", "Física 1", "Programación", "Probabilidad"]
+    st.session_state['materias'] = [
+        {"nombre": "Física 2", "color": "🔴"}, {"nombre": "Estabilidad", "color": "🔵"}, 
+        {"nombre": "Álgebra", "color": "🟣"}, {"nombre": "Física 1", "color": "🩷"}, 
+        {"nombre": "Programación", "color": "🟢"}, {"nombre": "Probabilidad", "color": "🔵"}
+    ]
 if 'metodos' not in st.session_state: 
     st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
 if 'distracciones' not in st.session_state:
     st.session_state['distracciones'] = ["Descanso", "Celular", "Llamada", "Comida", "Otro..."]
 
-# Base de datos local
 if 'historial' not in st.session_state: st.session_state['historial'] = []
 if 'metas' not in st.session_state: st.session_state['metas'] = [] 
 
-# --- RELOJ EN VIVO (JavaScript) ---
+# --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
     html_code = f"""
     <div id="clock" style="font-size: 85px; font-weight: 700; text-align: center; color: #f8fafc; font-family: 'Courier New', Courier, monospace; letter-spacing: 4px; margin: 20px 0;">00:00:00</div>
@@ -75,17 +78,51 @@ def render_live_timer(elapsed_seconds, is_running):
     """
     components.html(html_code, height=130)
 
+# --- FUNCIÓN: RENDERIZAR ANALÍTICA ---
+def renderizar_analitica():
+    if not st.session_state['historial']:
+        st.info("Todavía no hay datos para procesar. ¡Hacé tu primera sesión!")
+        c1, c2 = st.columns(2)
+        with c1:
+            with st.container(border=True): st.metric("TOTAL HORAS ESTUDIADAS", "0h 0m")
+        with c2:
+            with st.container(border=True): st.metric("MATERIA TOP", "-")
+    else:
+        df_hist = pd.DataFrame(st.session_state['historial'])
+        total_minutos = df_hist['TIEMPO (min)'].sum()
+        horas = total_minutos // 60
+        minutos = total_minutos % 60
+        
+        materia_top = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().idxmax()
+        materia_top_min = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().max()
+        top_h = materia_top_min // 60
+        top_m = materia_top_min % 60
+
+        c1, c2 = st.columns(2)
+        with c1:
+            with st.container(border=True):
+                st.metric("TOTAL HORAS ESTUDIADAS", f"{horas}h {minutos}m")
+        with c2:
+            with st.container(border=True):
+                st.metric("MATERIA TOP", f"{materia_top}", f"{top_h}h {top_m}m")
+            
+        st.divider()
+        st.markdown("### Tiempo por Materia")
+        st.bar_chart(df_hist.groupby('MATERIA')['TIEMPO (min)'].sum(), color="#0ea5e9")
+
+
 # ==========================================
 # --- MODALES (DIALOGS) ---
 # ==========================================
 @st.dialog("Nueva Meta de Examen")
 def dialog_nueva_meta():
-    if not st.session_state['materias']:
+    nombres_materias = [m["nombre"] for m in st.session_state['materias']]
+    if not nombres_materias:
         st.warning("Primero agregá materias desde el menú 'Organización'.")
         return
         
     nombre = st.text_input("NOMBRE (EJ: PARCIAL 1)")
-    materia = st.selectbox("MATERIA", st.session_state['materias'])
+    materia = st.selectbox("MATERIA", nombres_materias)
     
     col1, col2 = st.columns(2)
     meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=20)
@@ -93,8 +130,7 @@ def dialog_nueva_meta():
     
     st.write("<br>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-    if c1.button("Cancelar", use_container_width=True):
-        st.rerun()
+    if c1.button("Cancelar", use_container_width=True): st.rerun()
     if c2.button("Guardar", type="primary", use_container_width=True):
         if nombre:
             nueva = {
@@ -104,9 +140,19 @@ def dialog_nueva_meta():
             st.session_state['metas'].append(nueva)
             st.rerun()
 
+@st.dialog("Nueva Materia")
+def dialog_nueva_materia():
+    n = st.text_input("Nombre de la Materia")
+    c = st.selectbox("Color Distintivo", ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠", "🩷", "⚪"])
+    if st.button("Guardar Materia", type="primary", use_container_width=True):
+        if n:
+            st.session_state['materias'].append({"nombre": n, "color": c})
+            st.rerun()
+
 @st.dialog("Detalle de Sesión (Manual)", width="large")
 def dialog_agregar_sesion():
-    if not st.session_state['materias']:
+    nombres_materias = [m["nombre"] for m in st.session_state['materias']]
+    if not nombres_materias:
         st.warning("Agregá materias en 'Organización' para poder registrar sesiones.")
         return
 
@@ -123,8 +169,8 @@ def dialog_agregar_sesion():
     st.divider()
     c1, c2, c3 = st.columns(3)
     fecha = c1.date_input("FECHA")
-    materia = c2.selectbox("MATERIA", st.session_state['materias'], key="mat_manual")
-    metodo = c3.selectbox("MÉTODO", st.session_state['metodos'], key="met_manual")
+    materia = c2.selectbox("MATERIA", nombres_materias)
+    metodo = c3.selectbox("MÉTODO", st.session_state['metodos'])
     
     metas_disponibles = [m for m in st.session_state['metas'] if m['materia'] == materia]
     opciones_obj = {"-- Sin vincular --": None}
@@ -154,64 +200,97 @@ with st.sidebar:
     st.markdown("### Menú")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización"], label_visibility="collapsed")
 
+# ==========================================
+# --- VISTA: RESUMEN (ANALÍTICA DIRECTA) ---
+# ==========================================
+if menu_opcion == "Resumen":
+    st.header("Tus Estadísticas")
+    st.caption("Resumen global de todo tu progreso.")
+    renderizar_analitica()
 
 # ==========================================
 # --- VISTA: ORGANIZACIÓN ---
 # ==========================================
-if menu_opcion == "Organización":
-    st.header("Organización")
-    st.caption("Añadí o personalizá tus listas. Lo que agregues acá se reflejará en el cronómetro y los historiales.")
+elif menu_opcion == "Organización":
     
-    # MATERIAS
-    with st.container(border=True):
-        st.subheader("Gestionar Materias")
-        c1, c2 = st.columns([3, 1])
-        nueva_mat = c1.text_input("Nombre de la materia", key="nueva_mat")
-        if c2.button("+ Nueva Materia", use_container_width=True):
-            if nueva_mat and nueva_mat not in st.session_state['materias']:
-                st.session_state['materias'].append(nueva_mat)
-                st.rerun()
-        if st.session_state['materias']:
-            st.write("**Actuales:** " + " | ".join([f"`{m}`" for m in st.session_state['materias']]))
+    # SECCIÓN MATERIAS (Diseño de Tarjetas)
+    st.write("<br>", unsafe_allow_html=True)
+    c_head1, c_head2 = st.columns([3, 1])
+    with c_head1:
+        st.markdown("### Gestionar Materias")
+        st.caption("Añade o personaliza el color de tus materias.")
+    with c_head2:
+        if st.button("➕ Nueva Materia", type="secondary", use_container_width=True):
+            dialog_nueva_materia()
+            
+    cols_mat = st.columns(3)
+    for i, mat in enumerate(st.session_state['materias']):
+        with cols_mat[i % 3]:
+            with st.container(border=True):
+                st.markdown(f"<div style='text-align:center; font-size:24px;'>{mat['color']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center; font-weight:bold; margin-bottom: 10px;'>{mat['nombre']}</div>", unsafe_allow_html=True)
+                c_del1, c_del2, c_del3 = st.columns([1,1,1])
+                if c_del2.button("🗑️", key=f"del_mat_{i}", help="Eliminar materia"):
+                    st.session_state['materias'].pop(i)
+                    st.rerun()
+                    
+    st.divider()
 
-    # DISTRACCIONES
-    with st.container(border=True):
-        st.subheader("Gestionar Distracciones")
+    # SECCIÓN DISTRACCIONES
+    c_dist1, c_dist2 = st.columns([3, 1])
+    with c_dist1:
+        st.markdown("### Gestionar Distracciones")
         st.caption("Motivos usuales de pausas.")
-        c1, c2 = st.columns([3, 1])
-        nueva_dist = c1.text_input("Nombre de la distracción", key="nueva_dist")
-        if c2.button("+ Nueva Distracción", use_container_width=True):
+    with c_dist2:
+        nueva_dist = st.text_input("Nueva Distracción", label_visibility="collapsed", placeholder="Ej: Baño...")
+        if st.button("➕ Agregar Distracción", type="secondary", use_container_width=True):
             if nueva_dist and nueva_dist not in st.session_state['distracciones']:
                 st.session_state['distracciones'].append(nueva_dist)
                 st.rerun()
-        if st.session_state['distracciones']:
-            st.write("**Actuales:** " + " | ".join([f"`{d}`" for d in st.session_state['distracciones']]))
 
-    # MÉTODOS
-    with st.container(border=True):
-        st.subheader("Gestionar Métodos")
+    cols_dist = st.columns(4)
+    for i, dist in enumerate(st.session_state['distracciones']):
+        with cols_dist[i % 4]:
+            with st.container(border=True):
+                st.markdown(f"<div style='text-align:center; color:#94a3b8;'>⚫</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center; font-weight:bold; margin-bottom: 5px; font-size:14px;'>{dist}</div>", unsafe_allow_html=True)
+                if st.button("🗑️", key=f"del_dist_{i}", use_container_width=True):
+                    st.session_state['distracciones'].pop(i)
+                    st.rerun()
+
+    st.divider()
+
+    # SECCIÓN MÉTODOS
+    c_met1, c_met2 = st.columns([3, 1])
+    with c_met1:
+        st.markdown("### Gestionar Métodos")
         st.caption("Modos de estudio usados comúnmente.")
-        c1, c2 = st.columns([3, 1])
-        nuevo_met = c1.text_input("Nombre del método", key="nuevo_met")
-        if c2.button("+ Nuevo Método", use_container_width=True):
+    with c_met2:
+        nuevo_met = st.text_input("Nuevo Método", label_visibility="collapsed", placeholder="Ej: Mapa mental...")
+        if st.button("➕ Agregar Método", type="secondary", use_container_width=True):
             if nuevo_met and nuevo_met not in st.session_state['metodos']:
                 st.session_state['metodos'].append(nuevo_met)
                 st.rerun()
-        if st.session_state['metodos']:
-            st.write("**Actuales:** " + " | ".join([f"`{m}`" for m in st.session_state['metodos']]))
+
+    cols_met = st.columns(4)
+    for i, met in enumerate(st.session_state['metodos']):
+        with cols_met[i % 4]:
+            with st.container(border=True):
+                st.markdown(f"<div style='text-align:center; color:#94a3b8;'>⚫</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:center; font-weight:bold; margin-bottom: 5px; font-size:14px;'>{met}</div>", unsafe_allow_html=True)
+                if st.button("🗑️", key=f"del_met_{i}", use_container_width=True):
+                    st.session_state['metodos'].pop(i)
+                    st.rerun()
 
 
 # ==========================================
-# --- VISTA: PÁGINA PRINCIPAL / RESUMEN ---
+# --- VISTA: PÁGINA PRINCIPAL ---
 # ==========================================
-elif menu_opcion in ["Página Principal", "Resumen"]:
-    tabs = st.tabs(["Amigos", "Cronómetro", "Analítica", "Metas", "Historial"])
-
-    with tabs[0]:
-        st.info("Sección Amigos en construcción...")
+elif menu_opcion == "Página Principal":
+    tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
 
     # --- CRONÓMETRO ---
-    with tabs[1]:
+    with tabs[0]:
         if st.session_state['timer_state'] == 'IDLE':
             col_izq, col_der = st.columns([1, 1.5], gap="large")
             with col_izq:
@@ -252,7 +331,6 @@ elif menu_opcion in ["Página Principal", "Resumen"]:
             st.markdown("<p style='text-align: center; color: #94a3b8;'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
             st.write("<br>", unsafe_allow_html=True)
             
-            # Ahora usa la lista dinámica de distracciones
             c1, c2 = st.columns(2)
             for i, motivo in enumerate(st.session_state['distracciones']):
                 col = c1 if i % 2 == 0 else c2
@@ -283,16 +361,21 @@ elif menu_opcion in ["Página Principal", "Resumen"]:
                     st.rerun()
 
         elif st.session_state['timer_state'] == 'FINISHED':
-            st.markdown("<h2 style='text-align: center;'>Sesión Finalizada</h2>", unsafe_allow_html=True)
-            
-            if not st.session_state['materias'] or not st.session_state['metodos']:
-                st.error("No hay materias o métodos cargados. Andá al menú 'Organización' para agregarlos.")
-                if st.button("Volver al Inicio"):
-                    st.session_state['timer_state'] = 'IDLE'
+            c_back, c_title, c_empty = st.columns([1, 10, 1])
+            with c_back:
+                if st.button("⬅️", help="Volver a Pausa"):
+                    st.session_state['timer_state'] = 'PAUSED'
                     st.rerun()
+            with c_title:
+                st.markdown("<h2 style='text-align: center; margin-top: -10px;'>Sesión Finalizada</h2>", unsafe_allow_html=True)
+            
+            nombres_materias = [m["nombre"] for m in st.session_state['materias']]
+            
+            if not nombres_materias or not st.session_state['metodos']:
+                st.error("No hay materias o métodos cargados. Andá al menú 'Organización' para agregarlos.")
             else:
                 with st.container(border=True):
-                    materia_sel = st.radio("MATERIA", st.session_state['materias'], horizontal=True)
+                    materia_sel = st.radio("MATERIA", nombres_materias, horizontal=True)
                     st.divider()
                     
                     metas_filtradas = [m for m in st.session_state['metas'] if m['materia'] == materia_sel]
@@ -330,40 +413,11 @@ elif menu_opcion in ["Página Principal", "Resumen"]:
                     st.rerun()
 
     # --- ANALÍTICA ---
-    with tabs[2]:
-        if not st.session_state['historial']:
-            st.info("Todavía no hay datos para procesar. ¡Hacé tu primera sesión!")
-            c1, c2 = st.columns(2)
-            with c1:
-                with st.container(border=True): st.metric("TOTAL HORAS ESTUDIADAS", "0h 0m")
-            with c2:
-                with st.container(border=True): st.metric("MATERIA TOP", "-")
-        else:
-            df_hist = pd.DataFrame(st.session_state['historial'])
-            total_minutos = df_hist['TIEMPO (min)'].sum()
-            horas = total_minutos // 60
-            minutos = total_minutos % 60
-            
-            materia_top = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().idxmax()
-            materia_top_min = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().max()
-            top_h = materia_top_min // 60
-            top_m = materia_top_min % 60
-
-            c1, c2 = st.columns(2)
-            with c1:
-                with st.container(border=True):
-                    st.metric("TOTAL HORAS ESTUDIADAS", f"{horas}h {minutos}m")
-            with c2:
-                with st.container(border=True):
-                    # Acá arreglé el texto fijo para que sea dinámico y limpio
-                    st.metric("MATERIA TOP", f"{materia_top}", f"{top_h}h {top_m}m")
-                
-            st.divider()
-            st.markdown("### Tiempo por Materia")
-            st.bar_chart(df_hist.groupby('MATERIA')['TIEMPO (min)'].sum(), color="#0ea5e9")
+    with tabs[1]:
+        renderizar_analitica()
 
     # --- METAS ---
-    with tabs[3]:
+    with tabs[2]:
         c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
         with c_btn3:
             if st.button("➕ Nueva Meta", type="primary", use_container_width=True):
@@ -387,7 +441,7 @@ elif menu_opcion in ["Página Principal", "Resumen"]:
                         st.caption(f"{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m")
 
     # --- HISTORIAL ---
-    with tabs[4]:
+    with tabs[3]:
         c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
         with c_btn3:
             if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):

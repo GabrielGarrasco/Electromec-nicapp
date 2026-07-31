@@ -824,14 +824,7 @@ with col_contenido:
                         val = parse_float_nota(last_val)
                         if val is not None: notas_validas.append(val)
             
-            promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
             
-            st.markdown(f"""
-            <div style="background-color: #1e293b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #334155;">
-                <div style="color: #94a3b8; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
-                <div style="color: #0ea5e9; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
-            </div>
-            """, unsafe_allow_html=True)
             promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
             
             st.markdown(f"""

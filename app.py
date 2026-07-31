@@ -1111,7 +1111,7 @@ with col_contenido:
                     if m['estado'] == "Cursando" and 'horarios_clase' in m:
                         for hc in m['horarios_clase']:
                             if hc.get('dia') != "---" and hc.get('inicio'):
-                                # Arreglo mágico: si ponés "19", lo transforma en "19:00" para que no se rompa
+                                # Magia para leer la hora aunque pongas "19" o "9" sin los ceros
                                 ini_c = hc['inicio'].strip()
                                 if ":" not in ini_c: ini_c += ":00"
                                 if len(ini_c.split(":")[0]) == 1: ini_c = "0" + ini_c
@@ -1134,7 +1134,7 @@ with col_contenido:
                     try: return datetime.strptime(t_str, "%H:%M").time()
                     except: return datetime.strptime("23:59", "%H:%M").time()
 
-                # Extraer todos los horarios únicos (inicios y fines)
+                # Extraer todos los horarios únicos (tanto de inicio como de fin) para armar las filas
                 time_points = set()
                 for hc in horarios_completos:
                     time_points.add(hc['inicio'])
@@ -1148,7 +1148,7 @@ with col_contenido:
                 else:
                     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
                     
-                    # El último horario es solo de "cierre", no arranca ninguna clase ahí
+                    # La última hora del día marca el fin de la cuadrícula, no empieza ninguna clase ahí
                     filas_horario = sorted_times[:-1] if len(sorted_times) > 1 else sorted_times
                     
                     matriz = {t: {d: [] for d in dias_semana} for t in filas_horario}
@@ -1156,8 +1156,13 @@ with col_contenido:
                     for hc in horarios_completos:
                         if hc['dia'] in dias_semana:
                             t_ini = get_sortable_time(hc['inicio'])
-                            t_fin = get_sortable_time(hc['fin']) if hc['fin'] else get_sortable_time("23:59")
+                            if hc['fin']:
+                                t_fin = get_sortable_time(hc['fin'])
+                            else:
+                                idx = sorted_times.index(hc['inicio'])
+                                t_fin = get_sortable_time(sorted_times[idx+1]) if idx+1 < len(sorted_times) else get_sortable_time("23:59")
                             
+                            # Cargar la materia en todos los bloques que ocupa
                             for t_row in filas_horario:
                                 t_actual = get_sortable_time(t_row)
                                 if t_ini <= t_actual < t_fin:
@@ -1168,7 +1173,7 @@ with col_contenido:
                     for d in dias_semana: html_tabla += f"<th>{d.upper()}</th>"
                     html_tabla += "</tr>"
                     
-                    # Diccionario para saber si tenemos que "saltar" celdas fucionadas
+                    # Para saber si tenemos que saltear una celda porque ya está fusionada (rowspan)
                     skip_cells = {d: 0 for d in dias_semana}
                     
                     for i, t_row in enumerate(filas_horario):
@@ -1181,9 +1186,8 @@ with col_contenido:
                             items = matriz[t_row][d]
                             if items:
                                 mat = items[0]
-                                
-                                # Calcular cuántas filas abarca esta materia (Fusión)
                                 span = 1
+                                # Ver cuántos bloques más abajo sigue estando la misma materia
                                 for j in range(i + 1, len(filas_horario)):
                                     next_t = filas_horario[j]
                                     next_items = matriz[next_t][d]
@@ -1194,7 +1198,7 @@ with col_contenido:
                                 
                                 skip_cells[d] = span - 1
                                 
-                                # Diseño del bloque: hora arriba, nombre en el medio, hora abajo
+                                # Diseño del bloque
                                 texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
                                 texto += f"{mat['materia']}"
                                 if mat['fin_orig']: 

@@ -601,6 +601,31 @@ def dialog_asignar_nota(meta_idx):
         if nota:
             st.session_state['metas'][meta_idx]['nota'] = nota
             if guardar_datos(): st.rerun()
+                
+@st.dialog("Histórico de Notas", width="large")
+def dialog_historico_notas():
+    notas_guardadas = [m for m in st.session_state['metas'] if m.get('nota') is not None and str(m['nota']).strip() != ""]
+    
+    if not notas_guardadas:
+        st.info("Todavía no tenés notas registradas en tus exámenes pasados.")
+        return
+        
+    # Ordenamos por fecha (de más reciente a más antigua)
+    def get_date(m):
+        try: return date.fromisoformat(m['fecha_examen'])
+        except: return date.min
+    notas_guardadas.sort(key=get_date, reverse=True)
+    
+    html_notas = "<table class='tabla-historial'>"
+    html_notas += "<tr><th>FECHA</th><th>MATERIA</th><th>EXAMEN</th><th>NOTA</th></tr>"
+    for m in notas_guardadas:
+        try: fecha_str = date.fromisoformat(m['fecha_examen']).strftime('%d/%m/%Y')
+        except: fecha_str = "---"
+        
+        html_notas += f"<tr><td>{fecha_str}</td><td>{m['materia']}</td><td>{m['nombre']}</td><td style='color: #0ea5e9; font-weight: bold; font-size: 16px;'>{m['nota']}</td></tr>"
+    html_notas += "</table>"
+    
+    st.markdown(html_notas, unsafe_allow_html=True)             
 
 @st.dialog("Nueva Materia Activa")
 def dialog_nueva_materia_activa():
@@ -807,6 +832,19 @@ with col_contenido:
                 <div style="color: #0ea5e9; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
+            promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
+            
+            st.markdown(f"""
+            <div style="background-color: #1e293b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #334155;">
+                <div style="color: #94a3b8; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
+                <div style="color: #0ea5e9; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # --- ESTO ES LO QUE AGREGÁS AHORA ---
+            st.write("<br>", unsafe_allow_html=True)
+            if st.button("📊 Histórico de Notas", use_container_width=True):
+                dialog_historico_notas()
 
     elif menu_opcion == "Plan de Estudios":
         c_head1, c_head2 = st.columns([4, 1])

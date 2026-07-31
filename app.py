@@ -16,6 +16,8 @@ st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
     
+    [data-testid="collapsedControl"] { display: none; }
+    
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
@@ -63,7 +65,8 @@ def guardar_datos():
         datos = {
             'materias': st.session_state['materias'], 'metodos': st.session_state['metodos'],
             'distracciones': st.session_state['distracciones'], 'historial': st.session_state['historial'],
-            'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera']
+            'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera'],
+            'horarios': st.session_state['horarios']
         }
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
@@ -100,6 +103,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['historial'] = datos_guardados.get('historial', [])
         st.session_state['metas'] = datos_guardados.get('metas', [])
         st.session_state['plan_carrera'] = datos_guardados.get('plan_carrera', [])
+        st.session_state['horarios'] = datos_guardados.get('horarios', [])
         for m in st.session_state['metas']:
             if 'nota' not in m: m['nota'] = None
     else:
@@ -109,10 +113,24 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['historial'] = []
         st.session_state['metas'] = [] 
         st.session_state['plan_carrera'] = []
+        st.session_state['horarios'] = []
     st.session_state['datos_cargados'] = True
+
+if not st.session_state['horarios']:
+    st.session_state['horarios'] = [
+        {"Hora": "08:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None},
+        {"Hora": "10:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None},
+        {"Hora": "14:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None},
+        {"Hora": "16:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None},
+        {"Hora": "18:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None}
+    ]
 
 if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materias'][0], str):
     st.session_state['materias'] = []
+
+def parse_float_nota(val_str):
+    try: return float(str(val_str).replace(',', '.'))
+    except: return None
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -213,32 +231,28 @@ def renderizar_analitica():
         df_g = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
         color_map = {m['nombre']: m['color'] for m in st.session_state['materias']}
         
-        # Parche antibug de Altair: Si no hay materias en color_map, evitamos pasar el scale que rompe la librería
-        if color_map:
+        # Parche de Altair para que no tire error si el color_map está vacío
+        if df_g.empty:
+            st.info("No hay datos suficientes para graficar.")
+        elif color_map:
             bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4).encode(
                 x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
                 y=alt.Y("TIEMPO (min):Q", title=""),
                 color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
                 tooltip=['MATERIA', 'TIEMPO (min)']
             ).properties(height=250)
+            st.altair_chart(bars, use_container_width=True)
         else:
             bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4, color="#0ea5e9").encode(
                 x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
                 y=alt.Y("TIEMPO (min):Q", title=""),
                 tooltip=['MATERIA', 'TIEMPO (min)']
             ).properties(height=250)
-            
-        st.altair_chart(bars, use_container_width=True)
+            st.altair_chart(bars, use_container_width=True)
 
 # ==========================================
 # --- MODALES (DIALOGS) ---
 # ==========================================
-def parse_float_nota(val_str):
-    try:
-        return float(val_str.replace(',', '.'))
-    except:
-        return None
-
 @st.dialog("Detalle de la Materia")
 def dialog_detalle_materia(mat_id):
     mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
@@ -298,7 +312,6 @@ def dialog_detalle_materia(mat_id):
                 estado_final = nuevo_estado
                 nota_definitiva = nueva_nota
                 
-                # Lógica automática para los intentos en Regular
                 if nuevo_estado == "Regular":
                     last_val = None
                     cant_intentos = 0
@@ -576,7 +589,6 @@ def dialog_agregar_sesion():
                     break
         if guardar_datos(): st.rerun()
 
-
 # ==========================================
 # --- LAYOUT PRINCIPAL (MENÚ FIJO) ---
 # ==========================================
@@ -588,13 +600,13 @@ with col_menu:
 
 with col_contenido:
     if menu_opcion == "Carrera":
-        st.header("Progreso de la Carrera")
+        total_materias = len(st.session_state['plan_carrera'])
+        st.header(f"Progreso de la Carrera ({total_materias})")
         
         if not st.session_state['plan_carrera']:
             st.info("Agregá materias en el 'Plan de Estudios' para ver tu progreso general.")
         else:
             df_plan = pd.DataFrame(st.session_state['plan_carrera'])
-            total_materias = len(df_plan)
             
             counts = df_plan['estado'].value_counts().to_dict()
             aprobadas = counts.get("Aprobada/Promocionada", 0)
@@ -603,11 +615,11 @@ with col_contenido:
             libres = counts.get("Libre/Recursado", 0)
             pendientes = counts.get("Pendiente", 0)
             
-            p_apr = (aprobadas / total_materias) * 100
-            p_reg = (regulares / total_materias) * 100
-            p_curs = (cursando / total_materias) * 100
-            p_lib = (libres / total_materias) * 100
-            p_pend = (pendientes / total_materias) * 100
+            p_apr = (aprobadas / total_materias) * 100 if total_materias > 0 else 0
+            p_reg = (regulares / total_materias) * 100 if total_materias > 0 else 0
+            p_curs = (cursando / total_materias) * 100 if total_materias > 0 else 0
+            p_lib = (libres / total_materias) * 100 if total_materias > 0 else 0
+            p_pend = (pendientes / total_materias) * 100 if total_materias > 0 else 0
             
             st.markdown(f"""
             <div style="width: 100%; height: 30px; border-radius: 15px; display: flex; overflow: hidden; margin-bottom: 25px; border: 1px solid #334155;">
@@ -633,12 +645,13 @@ with col_contenido:
             with col_izq:
                 st.markdown("### 📘 Cursando")
                 st.caption("Materias que estás cursando actualmente.")
-                mat_cursando = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] == "Cursando"]
+                mat_cursando = [m for m in st.session_state['plan_carrera'] if m['estado'] == "Cursando"]
                 if not mat_cursando:
                     st.info("No tenés materias en estado 'Cursando'.")
                 else:
                     for m in mat_cursando:
-                        st.markdown(f"<div style='background-color: #1e293b; padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #3b82f6; color:#f8fafc;'>{m}</div>", unsafe_allow_html=True)
+                        if st.button(m['nombre'], key=f"btn_carr_curs_{m['id']}", use_container_width=True):
+                            dialog_detalle_materia(m['id'])
             
             with col_der:
                 st.markdown("### 🔓 Puedo Cursar")
@@ -656,14 +669,38 @@ with col_contenido:
                         req_reg_ok = all(is_met(r, 'reg') for r in m.get('req_regulares', []))
                         req_apr_ok = all(is_met(r, 'apr') for r in m.get('req_aprobadas', []))
                         if req_reg_ok and req_apr_ok:
-                            puedo_cursar.append((m['nombre'], m['estado']))
+                            puedo_cursar.append(m)
                             
                 if not puedo_cursar:
                     st.info("No hay materias nuevas habilitadas para cursar en este momento.")
                 else:
-                    for m_nombre, m_estado in puedo_cursar:
-                        color_border = "#94a3b8" if m_estado == "Pendiente" else "#ef4444"
-                        st.markdown(f"<div style='background-color: #1e293b; padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid {color_border}; color:#f8fafc;'>{m_nombre}</div>", unsafe_allow_html=True)
+                    for m in puedo_cursar:
+                        if st.button(m['nombre'], key=f"btn_carr_puedo_{m['id']}", use_container_width=True):
+                            dialog_detalle_materia(m['id'])
+
+            # --- PROMEDIO GENERAL ---
+            notas_validas = []
+            for m in st.session_state['plan_carrera']:
+                if m['estado'] == 'Aprobada/Promocionada':
+                    val = parse_float_nota(m.get('nota', ''))
+                    if val is not None: notas_validas.append(val)
+                elif m['estado'] == 'Regular':
+                    intentos = m.get('intentos', [])
+                    last_val = None
+                    for i in intentos:
+                        if i.strip(): last_val = i.strip()
+                    if last_val:
+                        val = parse_float_nota(last_val)
+                        if val is not None: notas_validas.append(val)
+            
+            promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
+            
+            st.markdown(f"""
+            <div style="background-color: #1e293b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 30px; border: 1px solid #334155;">
+                <div style="color: #94a3b8; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
+                <div style="color: #0ea5e9; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
     elif menu_opcion == "Plan de Estudios":
         c_head1, c_head2 = st.columns([4, 1])
@@ -817,7 +854,9 @@ with col_contenido:
         with tabs[0]:
             if st.session_state['timer_state'] == 'IDLE':
                 col_izq, col_der = st.columns([1, 1.5], gap="large")
+                
                 with col_izq:
+                    # --- SECCIÓN: METAS ACTUALES ---
                     st.markdown("### Metas actuales")
                     st.caption("Progreso de tus metas vigentes.")
                     
@@ -846,6 +885,37 @@ with col_contenido:
                                 h_acum = int(meta['horas_acumuladas'])
                                 m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
                                 st.markdown(f"<div style='font-size: 12px; color: #94a3b8; margin-top: 5px;'>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
+                    
+                    st.divider()
+                    
+                    # --- SECCIÓN: HORARIO DE CURSADO ---
+                    st.markdown("### Mi Horario de Cursado")
+                    st.caption("Completá tu semana. Los datos se guardan solos.")
+                    
+                    materias_cursando = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
+                    opciones_materias = [""] + materias_cursando
+                    
+                    col_config = {
+                        "Hora": st.column_config.TextColumn("Hora"),
+                        "Lunes": st.column_config.SelectboxColumn("Lunes", options=opciones_materias),
+                        "Martes": st.column_config.SelectboxColumn("Martes", options=opciones_materias),
+                        "Miércoles": st.column_config.SelectboxColumn("Miércoles", options=opciones_materias),
+                        "Jueves": st.column_config.SelectboxColumn("Jueves", options=opciones_materias),
+                        "Viernes": st.column_config.SelectboxColumn("Viernes", options=opciones_materias),
+                        "Sábado": st.column_config.SelectboxColumn("Sábado", options=opciones_materias),
+                    }
+                    
+                    edited_horarios = st.data_editor(
+                        st.session_state['horarios'],
+                        column_config=col_config,
+                        use_container_width=True,
+                        hide_index=True,
+                        num_rows="dynamic"
+                    )
+                    
+                    if edited_horarios != st.session_state['horarios']:
+                        st.session_state['horarios'] = edited_horarios
+                        guardar_datos()
 
                 with col_der:
                     st.write("<br>", unsafe_allow_html=True)

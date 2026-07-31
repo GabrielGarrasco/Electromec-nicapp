@@ -55,7 +55,7 @@ st.markdown("""
     .tabla-horario th:first-child { color: #94a3b8; width: 10%; }
     .tabla-horario td { padding: 0; border: 1px solid #2a3441; vertical-align: top; height: 75px; }
     .tabla-horario td:first-child { font-weight: 700; color: #94a3b8; background-color: #121b29; padding-top: 15px; text-align: center; }
-    .materia-bloque { background-color: #3b82f6; color: #ffffff; padding: 5px; font-weight: 800; line-height: 1.2; width: 100%; height: 100%; min-height: 75px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; box-sizing: border-box; border: 1px solid #2563eb; border-radius: 4px; }
+    .materia-bloque { padding: 5px; line-height: 1.2; width: 100%; box-sizing: border-box; border-radius: 4px; }
     
     /* CSS para el Historial (Clean Dark) */
     .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; font-size: 14px; background-color: #0f172a; border: 1px solid #334155; }
@@ -106,7 +106,6 @@ def obtener_datos_micros():
     try:
         client = get_gspread_client()
         wb = client.open('StudyMeterDB')
-        # Buscamos las dos hojas dentro de tu DB
         sheet_721 = wb.worksheet('Recorrido 721').get_all_values()
         sheet_722 = wb.worksheet('Recorrido 722').get_all_values()
         return {"721": sheet_721, "722": sheet_722}
@@ -122,8 +121,9 @@ def calcular_mejor_micro(hora_clase_str, dict_micros, origen, destino):
         hora_clase = datetime.strptime(hc, "%H:%M")
     except: return None
     
-    lim_inf = hora_clase - pd.Timedelta(minutes=20)
-    lim_sup = hora_clase - pd.Timedelta(minutes=5)
+    # Margen amplio: desde 1 hora antes hasta la hora exacta de cursado
+    lim_inf = hora_clase - pd.Timedelta(minutes=60)
+    lim_sup = hora_clase
     
     mejor_opcion = None
     menor_diferencia = pd.Timedelta(minutes=1000)
@@ -132,12 +132,15 @@ def calcular_mejor_micro(hora_clase_str, dict_micros, origen, destino):
         idx_origen, idx_destino = -1, -1
         for i, fila in enumerate(datos):
             if fila:
-                if str(fila[0]).strip() == origen: idx_origen = i
-                if str(fila[0]).strip() == destino: idx_destino = i
+                val_est = str(fila[0]).strip().lower()
+                if val_est == origen.lower(): idx_origen = i
+                if val_est == destino.lower(): idx_destino = i
                 
         if idx_origen == -1 or idx_destino == -1: continue
         
         for col in range(1, len(datos[idx_destino])):
+            if col >= len(datos[idx_origen]): continue
+            
             val_llegada = str(datos[idx_destino][col]).strip().replace('.', ':')
             val_salida = str(datos[idx_origen][col]).strip().replace('.', ':')
             
@@ -146,8 +149,8 @@ def calcular_mejor_micro(hora_clase_str, dict_micros, origen, destino):
                     h_llegada = datetime.strptime(val_llegada, "%H:%M")
                     h_salida = datetime.strptime(val_salida, "%H:%M")
                     
-                    if h_salida >= h_llegada: continue # Evita que te mande a viajar al pasado
-                        
+                    if h_salida >= h_llegada: continue # Ignorar cruces
+                    
                     if lim_inf.time() <= h_llegada.time() <= lim_sup.time():
                         dt_clase = datetime.combine(date.today(), hora_clase.time())
                         dt_llegada = datetime.combine(date.today(), h_llegada.time())
@@ -158,8 +161,8 @@ def calcular_mejor_micro(hora_clase_str, dict_micros, origen, destino):
                             mejor_opcion = {"linea": linea, "subida": h_salida.strftime("%H:%M"), "bajada": h_llegada.strftime("%H:%M")}
                 except:
                     pass
-                    
     return mejor_opcion
+
 # --- INICIALIZACIÓN DE VARIABLES ---
 if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
 if 'study_start' not in st.session_state: st.session_state['study_start'] = 0.0
@@ -661,7 +664,7 @@ def dialog_asignar_nota(meta_idx):
         if nota:
             st.session_state['metas'][meta_idx]['nota'] = nota
             if guardar_datos(): st.rerun()
-                
+
 @st.dialog("Histórico de Notas", width="large")
 def dialog_historico_notas():
     notas_guardadas = [m for m in st.session_state['metas'] if m.get('nota') is not None and str(m['nota']).strip() != ""]
@@ -670,7 +673,6 @@ def dialog_historico_notas():
         st.info("Todavía no tenés notas registradas en tus exámenes pasados.")
         return
         
-    # Ordenamos por fecha (de más reciente a más antigua)
     def get_date(m):
         try: return date.fromisoformat(m['fecha_examen'])
         except: return date.min
@@ -685,7 +687,7 @@ def dialog_historico_notas():
         html_notas += f"<tr><td>{fecha_str}</td><td>{m['materia']}</td><td>{m['nombre']}</td><td style='color: #0ea5e9; font-weight: bold; font-size: 16px;'>{m['nota']}</td></tr>"
     html_notas += "</table>"
     
-    st.markdown(html_notas, unsafe_allow_html=True)             
+    st.markdown(html_notas, unsafe_allow_html=True)
 
 @st.dialog("Nueva Materia Activa")
 def dialog_nueva_materia_activa():
@@ -884,7 +886,6 @@ with col_contenido:
                         val = parse_float_nota(last_val)
                         if val is not None: notas_validas.append(val)
             
-            
             promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
             
             st.markdown(f"""
@@ -893,8 +894,7 @@ with col_contenido:
                 <div style="color: #0ea5e9; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
-
-            # --- ESTO ES LO QUE AGREGÁS AHORA ---
+            
             st.write("<br>", unsafe_allow_html=True)
             if st.button("📊 Histórico de Notas", use_container_width=True):
                 dialog_historico_notas()
@@ -1048,7 +1048,6 @@ with col_contenido:
     elif menu_opcion == "Página Principal":
         tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
 
-        # Función auxiliar para renderizar la UI de una Meta (con prefijo para evitar el error de Streamlit)
         def render_meta_card(meta, original_idx, is_pasada, hoy, prefijo_key):
             try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
             except: fecha_str = ""
@@ -1072,7 +1071,6 @@ with col_contenido:
             st.caption(f"📅 {fecha_str}")
             st.write("<br>", unsafe_allow_html=True)
             
-            # --- RITMO SUGERIDO Y BARRA DE PROGRESO ---
             if not is_pasada:
                 horas_faltantes = max(0.0, meta['meta_horas'] - meta['horas_acumuladas'])
                 ritmo = horas_faltantes / dias_restantes if dias_restantes > 0 else 0.0
@@ -1289,7 +1287,8 @@ with col_contenido:
                                         "fin": baj_c,
                                         "inicio_orig": info_micro['subida'],
                                         "fin_orig": info_micro['bajada'],
-                                        "tipo": "micro"
+                                        "tipo": "micro",
+                                        "linea": info_micro['linea']
                                     })
                 
                 def get_sortable_time(t_str):
@@ -1351,7 +1350,7 @@ with col_contenido:
                                     bg_color = "#eab308"
                                     border_color = "#ca8a04"
                                     text_color = "#1e293b"
-                                    texto = f"<div style='font-size: 13px; font-weight: 800;'>🚌 {mat['materia']}</div>"
+                                    texto = f"<div style='font-size: 13px; font-weight: 800;'>🚌 {mat['linea']} - {mat['inicio_orig']}</div>"
                                 else:
                                     bg_color = "#3b82f6"
                                     border_color = "#2563eb"

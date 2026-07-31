@@ -11,7 +11,7 @@ import altair as alt
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 
-# --- CSS MEJORADO (Tarjetas más compactas) ---
+# --- CSS MEJORADO (Tarjetas ultra compactas) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
@@ -19,9 +19,8 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
     
-    /* Achicamos el padding de 20px a 14px para que todo sea más compacto */
     [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { 
-        background-color: #162032; border-radius: 12px; padding: 14px; border: 1px solid #334155; 
+        background-color: #162032; border-radius: 12px; padding: 12px; border: 1px solid #334155; 
     }
     
     [data-testid="baseButton-primary"] { background-color: #0ea5e9; border-color: #0ea5e9; color: white; border-radius: 8px; font-weight: bold; }
@@ -32,12 +31,18 @@ st.markdown("""
     [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
     header {visibility: hidden;}
     .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
+    
+    /* Etiquetas de estado */
     .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .nota-box { background-color: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
+    
+    /* Efecto hover para requisitos cumplidos */
+    .req-cumplido { background-color: rgba(255, 255, 255, 0.12); padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.05); }
+    .req-pendiente { padding: 6px 10px; margin-bottom: 4px; color: #94a3b8; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -129,15 +134,11 @@ def render_live_timer(elapsed_seconds, is_running):
 def renderizar_analitica():
     c_filt1, c_filt2, c_filt3, c_filt4 = st.columns([1, 2, 2, 2])
     with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
-    
     nombres_materias = list(set([h['MATERIA'] for h in st.session_state['historial']]))
     nombres_metodos = list(set([h['MÉTODO'] for h in st.session_state['historial']]))
-    
-    # Se agregaron Keys únicos a los filtros
     f_mat = c_filt2.selectbox("Materias", ["Todas las materias"] + nombres_materias, key="filtro_mat_analitica", label_visibility="collapsed")
     f_hist = c_filt3.selectbox("Historial", ["Todo el Historial", "Últimos 7 días", "Último Mes"], key="filtro_tiempo_analitica", label_visibility="collapsed")
     f_met = c_filt4.selectbox("Métodos", ["Todos los métodos"] + nombres_metodos, key="filtro_met_analitica", label_visibility="collapsed")
-    
     st.write("<br>", unsafe_allow_html=True)
 
     if not st.session_state['historial']:
@@ -145,7 +146,6 @@ def renderizar_analitica():
         return
 
     df_hist = pd.DataFrame(st.session_state['historial'])
-    
     if f_mat != "Todas las materias": df_hist = df_hist[df_hist['MATERIA'] == f_mat]
     if f_met != "Todos los métodos": df_hist = df_hist[df_hist['MÉTODO'] == f_met]
     if f_hist == "Últimos 7 días":
@@ -215,9 +215,63 @@ def renderizar_analitica():
         ).properties(height=250)
         st.altair_chart(bars, use_container_width=True)
 
+
 # ==========================================
 # --- MODALES (DIALOGS) ---
 # ==========================================
+@st.dialog("Detalle de la Materia")
+def dialog_detalle_materia(mat_id):
+    mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
+    if not mat: return
+    
+    st.markdown(f"### {mat['nombre']}")
+    st.markdown(f"**Año:** {mat['año']} | **Estado:** {mat['estado']}")
+    st.divider()
+    
+    # Función para chequear si el requisito está cumplido
+    def is_met(m_name, req_type):
+        target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
+        if not target: return False
+        if req_type == 'reg': return target['estado'] in ["Regular", "Aprobada/Promocionada"]
+        return target['estado'] == "Aprobada/Promocionada"
+
+    st.markdown("#### Correlatividades")
+    if not mat.get('req_regulares') and not mat.get('req_aprobadas'):
+        st.caption("No tiene correlatividades previas.")
+        
+    if mat.get('req_regulares'):
+        st.write("**Para cursar requiere REGULAR:**")
+        for r in mat['req_regulares']:
+            cumple = is_met(r, 'reg')
+            div_class = "req-cumplido" if cumple else "req-pendiente"
+            icon = "✅" if cumple else "⏳"
+            st.markdown(f"<div class='{div_class}'>{icon} {r}</div>", unsafe_allow_html=True)
+            
+    if mat.get('req_aprobadas'):
+        st.write("**Para cursar requiere APROBADA:**")
+        for r in mat['req_aprobadas']:
+            cumple = is_met(r, 'apr')
+            div_class = "req-cumplido" if cumple else "req-pendiente"
+            icon = "✅" if cumple else "⏳"
+            st.markdown(f"<div class='{div_class}'>{icon} {r}</div>", unsafe_allow_html=True)
+            
+    # Mostrar a qué materias destraba esta materia
+    destraba_reg = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_regulares', [])]
+    destraba_apr = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_aprobadas', [])]
+    
+    if destraba_reg or destraba_apr:
+        st.divider()
+        st.markdown("#### Destraba")
+        for d in destraba_reg:
+            st.markdown(f"<div class='req-pendiente'>🔓 {d} (Para cursar)</div>", unsafe_allow_html=True)
+        for d in destraba_apr:
+            st.markdown(f"<div class='req-pendiente'>🎓 {d} (Para rendir/cursar)</div>", unsafe_allow_html=True)
+
+    st.divider()
+    if st.button("🗑️ Eliminar Materia del Plan", type="secondary", use_container_width=True):
+        st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
+        if guardar_datos(): st.rerun()
+
 @st.dialog("Agregar Materia al Plan de Estudios")
 def dialog_nueva_materia_plan():
     nombre = st.text_input("Nombre de la materia")
@@ -375,9 +429,10 @@ if menu_opcion == "Plan de Estudios":
             st.markdown(f"### Año {anio}")
             materias_anio = df_plan[df_plan['año'] == anio]
             
-            cols = st.columns(3)
+            # Usamos 4 columnas para que queden cajas más chiquitas
+            cols = st.columns(4)
             for i, row in materias_anio.reset_index().iterrows():
-                with cols[i % 3]:
+                with cols[i % 4]:
                     with st.container(border=True):
                         color_clase = "badge-pendiente"
                         if row['estado'] == "Regular": color_clase = "badge-regular"
@@ -385,21 +440,12 @@ if menu_opcion == "Plan de Estudios":
                         elif row['estado'] == "Cursando": color_clase = "badge-cursando"
                         elif row['estado'] == "Libre/Recursado": color_clase = "badge-libre"
                         
-                        # --- ACÁ REARMÉ LA TARJETA PARA QUE SEA SÚPER COMPACTA ---
-                        html_content = f"""
-                        <div style="margin-bottom: 6px;">
-                            <span class='{color_clase}' style='font-size: 10px; padding: 2px 6px;'>{row['estado']}</span>
-                        </div>
-                        <div style="font-size: 15px; font-weight: 700; line-height: 1.2; margin-bottom: 6px;">{row['nombre']}</div>
-                        """
-                        if row['req_regulares']: html_content += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
-                        if row['req_aprobadas']: html_content += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
+                        # Renderizamos solo la etiqueta arriba
+                        st.markdown(f"<div style='margin-bottom: 8px;'><span class='{color_clase}'>{row['estado']}</span></div>", unsafe_allow_html=True)
                         
-                        st.markdown(html_content, unsafe_allow_html=True)
-                        st.write("") # Micro espacio
-                        if st.button("🗑️", key=f"del_plan_{row['id']}", help="Eliminar del plan"):
-                            st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != row['id']]
-                            if guardar_datos(): st.rerun()
+                        # El botón con el nombre de la materia que abre el detalle (Hipervínculo style)
+                        if st.button(row['nombre'], key=f"btn_info_{row['id']}", use_container_width=True):
+                            dialog_detalle_materia(row['id'])
 
 # ==========================================
 # --- VISTA: RESUMEN (ANALÍTICA DIRECTA) ---
@@ -426,10 +472,8 @@ elif menu_opcion == "Organización":
             estado_badge = ""
             for plan_mat in st.session_state['plan_carrera']:
                 if plan_mat['nombre'] == mat['nombre']:
-                    if plan_mat['estado'] == "Cursando":
-                        estado_badge = "<div style='margin-top: 8px;'><span class='badge-cursando'>Cursando</span></div>"
-                    elif plan_mat['estado'] == "Regular":
-                        estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
+                    if plan_mat['estado'] == "Cursando": estado_badge = "<div style='margin-top: 8px;'><span class='badge-cursando'>Cursando</span></div>"
+                    elif plan_mat['estado'] == "Regular": estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
                     break
 
             with cols_mat[i % 3]:
@@ -627,7 +671,6 @@ elif menu_opcion == "Página Principal":
         
         c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
         with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
-        # Se agregaron Keys únicos a los filtros
         f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, key="filtro_materias_metas", label_visibility="collapsed")
         f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], key="filtro_estado_metas", label_visibility="collapsed")
         

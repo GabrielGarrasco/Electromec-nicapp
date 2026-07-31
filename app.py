@@ -1125,22 +1125,21 @@ with col_contenido:
                                     "materia": m['nombre'],
                                     "dia": hc['dia'],
                                     "inicio": ini_c,
-                                    "fin": fin_c,
-                                    "inicio_orig": hc['inicio'],
-                                    "fin_orig": hc.get('fin', '')
+                                    "fin": fin_c
                                 })
                 
                 def get_sortable_time(t_str):
                     try: return datetime.strptime(t_str, "%H:%M").time()
                     except: return datetime.strptime("23:59", "%H:%M").time()
 
-                # Extraer todos los horarios únicos (tanto de inicio como de fin) para armar las filas
+                # Extraer todos los horarios únicos (tanto de inicio como de fin)
                 time_points = set()
                 for hc in horarios_completos:
                     time_points.add(hc['inicio'])
                     if hc['fin']:
                         time_points.add(hc['fin'])
 
+                # Ordenamos todos los horarios para crear las filas exactas del calendario
                 sorted_times = sorted(list(time_points), key=get_sortable_time)
                 
                 if not sorted_times:
@@ -1148,22 +1147,15 @@ with col_contenido:
                 else:
                     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
                     
-                    # La última hora del día marca el fin de la cuadrícula, no empieza ninguna clase ahí
-                    filas_horario = sorted_times[:-1] if len(sorted_times) > 1 else sorted_times
-                    
-                    matriz = {t: {d: [] for d in dias_semana} for t in filas_horario}
+                    matriz = {t: {d: [] for d in dias_semana} for t in sorted_times}
                     
                     for hc in horarios_completos:
                         if hc['dia'] in dias_semana:
                             t_ini = get_sortable_time(hc['inicio'])
-                            if hc['fin']:
-                                t_fin = get_sortable_time(hc['fin'])
-                            else:
-                                idx = sorted_times.index(hc['inicio'])
-                                t_fin = get_sortable_time(sorted_times[idx+1]) if idx+1 < len(sorted_times) else get_sortable_time("23:59")
+                            t_fin = get_sortable_time(hc['fin']) if hc['fin'] else get_sortable_time("23:59")
                             
-                            # Cargar la materia en todos los bloques que ocupa
-                            for t_row in filas_horario:
+                            # Cargar la materia en todos los bloques temporales que ocupa
+                            for t_row in sorted_times:
                                 t_actual = get_sortable_time(t_row)
                                 if t_ini <= t_actual < t_fin:
                                     matriz[t_row][hc['dia']].append(hc)
@@ -1173,10 +1165,10 @@ with col_contenido:
                     for d in dias_semana: html_tabla += f"<th>{d.upper()}</th>"
                     html_tabla += "</tr>"
                     
-                    # Para saber si tenemos que saltear una celda porque ya está fusionada (rowspan)
+                    # Diccionario para saber si tenemos que saltear una celda porque ya la fusionamos (rowspan)
                     skip_cells = {d: 0 for d in dias_semana}
                     
-                    for i, t_row in enumerate(filas_horario):
+                    for i, t_row in enumerate(sorted_times):
                         html_tabla += f"<tr><td>{t_row}</td>"
                         for d in dias_semana:
                             if skip_cells[d] > 0:
@@ -1187,9 +1179,9 @@ with col_contenido:
                             if items:
                                 mat = items[0]
                                 span = 1
-                                # Ver cuántos bloques más abajo sigue estando la misma materia
-                                for j in range(i + 1, len(filas_horario)):
-                                    next_t = filas_horario[j]
+                                # Mirar hacia abajo cuántas filas abarca esta misma clase para fusionarlas
+                                for j in range(i + 1, len(sorted_times)):
+                                    next_t = sorted_times[j]
                                     next_items = matriz[next_t][d]
                                     if next_items and next_items[0]['materia'] == mat['materia']:
                                         span += 1
@@ -1198,11 +1190,11 @@ with col_contenido:
                                 
                                 skip_cells[d] = span - 1
                                 
-                                # Diseño del bloque
-                                texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
+                                # Diseño del bloque: hora arriba, materia, hora abajo (bien limpio)
+                                texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio']}</span><br>"
                                 texto += f"{mat['materia']}"
-                                if mat['fin_orig']: 
-                                    texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
+                                if mat['fin']: 
+                                    texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin']}</span>"
                                 
                                 html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
                             else:
@@ -1211,7 +1203,6 @@ with col_contenido:
                     html_tabla += "</table>"
                     
                     st.markdown(html_tabla, unsafe_allow_html=True)
-
         with tabs[1]:
             renderizar_analitica()
 

@@ -9,12 +9,16 @@ from oauth2client.service_account import ServiceAccountCredentials
 import altair as alt
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
+st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚", initial_sidebar_state="expanded")
 
-# --- CSS MEJORADO (Tarjetas ultra compactas) ---
+# --- CSS MEJORADO ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
+    
+    /* Ocultar el botón para colapsar el menú lateral y hacerlo fijo */
+    [data-testid="collapsedControl"] { display: none; }
+    
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
@@ -30,6 +34,7 @@ st.markdown("""
     [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 700; }
     [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
     header {visibility: hidden;}
+    
     .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
     
     /* Etiquetas de estado */
@@ -40,7 +45,7 @@ st.markdown("""
     .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .nota-box { background-color: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
     
-    /* Efecto hover para requisitos cumplidos */
+    /* Efecto para requisitos cumplidos/pendientes */
     .req-cumplido { background-color: rgba(255, 255, 255, 0.12); padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.05); }
     .req-pendiente { padding: 6px 10px; margin-bottom: 4px; color: #94a3b8; }
     </style>
@@ -136,6 +141,7 @@ def renderizar_analitica():
     with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
     nombres_materias = list(set([h['MATERIA'] for h in st.session_state['historial']]))
     nombres_metodos = list(set([h['MÉTODO'] for h in st.session_state['historial']]))
+    
     f_mat = c_filt2.selectbox("Materias", ["Todas las materias"] + nombres_materias, key="filtro_mat_analitica", label_visibility="collapsed")
     f_hist = c_filt3.selectbox("Historial", ["Todo el Historial", "Últimos 7 días", "Último Mes"], key="filtro_tiempo_analitica", label_visibility="collapsed")
     f_met = c_filt4.selectbox("Métodos", ["Todos los métodos"] + nombres_metodos, key="filtro_met_analitica", label_visibility="collapsed")
@@ -225,65 +231,13 @@ def dialog_detalle_materia(mat_id):
     if not mat: return
     
     st.markdown(f"### {mat['nombre']}")
-    st.markdown(f"**Año:** {mat['año']} | **Estado:** {mat['estado']}")
-    st.divider()
     
-    # Función para chequear si el requisito está cumplido
-    def is_met(m_name, req_type):
-        target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
-        if not target: return False
-        if req_type == 'reg': return target['estado'] in ["Regular", "Aprobada/Promocionada"]
-        return target['estado'] == "Aprobada/Promocionada"
-
-    st.markdown("#### Correlatividades")
-    if not mat.get('req_regulares') and not mat.get('req_aprobadas'):
-        st.caption("No tiene correlatividades previas.")
-        
-    if mat.get('req_regulares'):
-        st.write("**Para cursar requiere REGULAR:**")
-        for r in mat['req_regulares']:
-            cumple = is_met(r, 'reg')
-            div_class = "req-cumplido" if cumple else "req-pendiente"
-            icon = "✅" if cumple else "⏳"
-            st.markdown(f"<div class='{div_class}'>{icon} {r}</div>", unsafe_allow_html=True)
-            
-    if mat.get('req_aprobadas'):
-        st.write("**Para cursar requiere APROBADA:**")
-        for r in mat['req_aprobadas']:
-            cumple = is_met(r, 'apr')
-            div_class = "req-cumplido" if cumple else "req-pendiente"
-            icon = "✅" if cumple else "⏳"
-            st.markdown(f"<div class='{div_class}'>{icon} {r}</div>", unsafe_allow_html=True)
-            
-    # Mostrar a qué materias destraba esta materia
-    destraba_reg = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_regulares', [])]
-    destraba_apr = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_aprobadas', [])]
+    cuatri = mat.get('cuatrimestre', 'No definido')
     
-    if destraba_reg or destraba_apr:
-        st.divider()
-        st.markdown("#### Destraba")
-        for d in destraba_reg:
-            st.markdown(f"<div class='req-pendiente'>🔓 {d} (Para cursar)</div>", unsafe_allow_html=True)
-        for d in destraba_apr:
-            st.markdown(f"<div class='req-pendiente'>🎓 {d} (Para rendir/cursar)</div>", unsafe_allow_html=True)
-
-    st.divider()
-    if st.button("🗑️ Eliminar Materia del Plan", type="secondary", use_container_width=True):
-        st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
-        if guardar_datos(): st.rerun()
-
-@st.dialog("Detalle de la Materia")
-def dialog_detalle_materia(mat_id):
-    mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
-    if not mat: return
-    
-    st.markdown(f"### {mat['nombre']}")
-    
-    # Muestra la nota si está aprobada/promocionada y tiene nota cargada
     if mat['estado'] == "Aprobada/Promocionada" and mat.get('nota'):
-        st.markdown(f"**Año:** {mat['año']} | **Estado:** {mat['estado']} | **Nota:** {mat['nota']}")
+        st.markdown(f"**Año:** {mat['año']} | **Cuatrimestre:** {cuatri} | **Estado:** {mat['estado']} | **Nota:** {mat['nota']}")
     else:
-        st.markdown(f"**Año:** {mat['año']} | **Estado:** {mat['estado']}")
+        st.markdown(f"**Año:** {mat['año']} | **Cuatrimestre:** {cuatri} | **Estado:** {mat['estado']}")
         
     st.divider()
     
@@ -332,28 +286,38 @@ def dialog_detalle_materia(mat_id):
 @st.dialog("Agregar Materia al Plan de Estudios")
 def dialog_nueva_materia_plan():
     nombre = st.text_input("Nombre de la materia")
-    col1, col2 = st.columns(2)
-    anio = col1.selectbox("Año de cursado", [1, 2, 3, 4, 5, 6])
-    estado = col2.selectbox("Estado actual", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
     
-    # Campo extra condicional para la nota
+    col1, col2, col3 = st.columns(3)
+    anio = col1.selectbox("Año", [1, 2, 3, 4, 5, 6])
+    cuatri = col2.selectbox("Cuatrimestre", ["1er Cuatrimestre", "2do Cuatrimestre", "Anual"])
+    estado = col3.selectbox("Estado", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
+    
     nota_final = ""
     if estado == "Aprobada/Promocionada":
         nota_final = st.text_input("Nota Final (Opcional)", placeholder="Ej: 8, 9, 10...")
         
     st.divider()
+    st.caption("CORRELATIVIDADES (Opcional)")
     opciones_materias = [m['nombre'] for m in st.session_state['plan_carrera']]
     req_regulares = st.multiselect("Para cursar necesito REGULAR:", opciones_materias)
     req_aprobadas = st.multiselect("Para cursar necesito APROBADA:", opciones_materias)
     
+    st.write("<br>", unsafe_allow_html=True)
     if st.button("Guardar en el Plan", type="primary", use_container_width=True):
         if nombre:
             st.session_state['plan_carrera'].append({
-                "id": str(time.time()), "nombre": nombre, "año": anio,
-                "estado": estado, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas,
+                "id": str(time.time()), 
+                "nombre": nombre, 
+                "año": anio,
+                "cuatrimestre": cuatri,
+                "estado": estado, 
+                "req_regulares": req_regulares, 
+                "req_aprobadas": req_aprobadas,
                 "nota": nota_final
             })
             if guardar_datos(): st.rerun()
+        else:
+            st.error("Falta el nombre de la materia.")
 
 @st.dialog("Nueva Meta de Examen")
 def dialog_nueva_meta():
@@ -467,13 +431,21 @@ def dialog_agregar_sesion():
 # --- MENÚ LATERAL (SIDEBAR) ---
 # ==========================================
 with st.sidebar:
-    st.markdown("## Menú")
-    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Plan de Estudios", "Organización"], label_visibility="collapsed")
+    st.markdown("### Menú")
+    # Agregamos "Carrera" y ordenamos según pedido
+    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios"], label_visibility="collapsed")
+
+# ==========================================
+# --- VISTA: CARRERA (Placeholder) ---
+# ==========================================
+if menu_opcion == "Carrera":
+    st.header("Carrera")
+    st.info("Espacio reservado. Acá vamos a agregar la información general de tu carrera más adelante.")
 
 # ==========================================
 # --- VISTA: PLAN DE ESTUDIOS ---
 # ==========================================
-if menu_opcion == "Plan de Estudios":
+elif menu_opcion == "Plan de Estudios":
     c_head1, c_head2 = st.columns([4, 1])
     with c_head1:
         st.header("Plan de Estudios")
@@ -494,7 +466,6 @@ if menu_opcion == "Plan de Estudios":
             st.markdown(f"### Año {anio}")
             materias_anio = df_plan[df_plan['año'] == anio]
             
-            # Usamos 4 columnas para que queden cajas más chiquitas
             cols = st.columns(4)
             for i, row in materias_anio.reset_index().iterrows():
                 with cols[i % 4]:
@@ -505,15 +476,36 @@ if menu_opcion == "Plan de Estudios":
                         elif row['estado'] == "Cursando": color_clase = "badge-cursando"
                         elif row['estado'] == "Libre/Recursado": color_clase = "badge-libre"
                         
-                        # Renderizamos solo la etiqueta arriba
-                        st.markdown(f"<div style='margin-bottom: 8px;'><span class='{color_clase}'>{row['estado']}</span></div>", unsafe_allow_html=True)
+                        cuatri_abrev = ""
+                        cuatri_val = row.get('cuatrimestre', '')
+                        if cuatri_val == "1er Cuatrimestre": cuatri_abrev = "1C"
+                        elif cuatri_val == "2do Cuatrimestre": cuatri_abrev = "2C"
+                        elif cuatri_val == "Anual": cuatri_abrev = "Anual"
                         
-                        # El botón con el nombre de la materia que abre el detalle (Hipervínculo style)
+                        cuatri_html = f"<span style='float:right; font-size: 11px; color: #94a3b8; font-weight: bold;'>{cuatri_abrev}</span>" if cuatri_abrev else ""
+
+                        html_badges = f"""
+                        <div style="margin-bottom: 8px;">
+                            <span class='{color_clase}'>{row['estado']}</span>
+                            {cuatri_html}
+                        </div>
+                        """
+                        st.markdown(html_badges, unsafe_allow_html=True)
+                        
                         if st.button(row['nombre'], key=f"btn_info_{row['id']}", use_container_width=True):
                             dialog_detalle_materia(row['id'])
+                            
+                        html_reqs = ""
+                        if isinstance(row.get('req_regulares'), list) and len(row['req_regulares']) > 0: 
+                            html_reqs += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
+                        if isinstance(row.get('req_aprobadas'), list) and len(row['req_aprobadas']) > 0: 
+                            html_reqs += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
+                        
+                        if html_reqs:
+                            st.markdown(html_reqs, unsafe_allow_html=True)
 
 # ==========================================
-# --- VISTA: RESUMEN (ANALÍTICA DIRECTA) ---
+# --- VISTA: RESUMEN ---
 # ==========================================
 elif menu_opcion == "Resumen":
     st.header("Tus Estadísticas")
@@ -537,8 +529,10 @@ elif menu_opcion == "Organización":
             estado_badge = ""
             for plan_mat in st.session_state['plan_carrera']:
                 if plan_mat['nombre'] == mat['nombre']:
-                    if plan_mat['estado'] == "Cursando": estado_badge = "<div style='margin-top: 8px;'><span class='badge-cursando'>Cursando</span></div>"
-                    elif plan_mat['estado'] == "Regular": estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
+                    if plan_mat['estado'] == "Cursando":
+                        estado_badge = "<div style='margin-top: 8px;'><span class='badge-cursando'>Cursando</span></div>"
+                    elif plan_mat['estado'] == "Regular":
+                        estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
                     break
 
             with cols_mat[i % 3]:

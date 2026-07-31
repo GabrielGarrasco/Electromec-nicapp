@@ -957,8 +957,8 @@ with col_contenido:
     elif menu_opcion == "Página Principal":
         tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
 
-        # Función auxiliar para renderizar la UI de una Meta
-        def render_meta_card(meta, original_idx, is_pasada, hoy):
+        # Función auxiliar para renderizar la UI de una Meta (con prefijo para evitar el error de Streamlit)
+        def render_meta_card(meta, original_idx, is_pasada, hoy, prefijo_key):
             try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
             except: fecha_str = ""
             
@@ -977,17 +977,18 @@ with col_contenido:
             etiqueta_estado = f"<span style='color: #3b82f6; float:right;'>{dias_restantes} días restantes</span>" if not is_pasada else "<span style='color: #ef4444; float:right;'>Examen pasado</span>"
             
             st.markdown(f"<div style='color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;'>{meta['materia']} {etiqueta_estado}</div>", unsafe_allow_html=True)
-            st.markdown(f"### {meta['nombre']}")
+            st.markdown(f"<h3 style='margin-bottom: 5px;'>{meta['nombre']}</h3>", unsafe_allow_html=True)
             st.caption(f"📅 {fecha_str}")
+            st.write("<br>", unsafe_allow_html=True)
             
-            html_dias = "<div style='margin-bottom: 15px;'>"
-            for d in ["L", "M", "X", "J", "V", "S", "D"]:
-                color = "#0ea5e9" if d in dias_sel else "#1e293b"
-                color_text = "white" if d in dias_sel else "#475569"
-                border = "1px solid #0ea5e9" if d in dias_sel else "1px solid #334155"
-                html_dias += f"<span style='display:inline-block; width:28px; height:28px; line-height:26px; text-align:center; color:{color_text}; background-color:{color}; border:{border}; border-radius:50%; margin-right:6px; font-size:12px; font-weight:bold;'>{d}</span>"
-            html_dias += "</div>"
-            st.markdown(html_dias, unsafe_allow_html=True)
+            # --- RITMO SUGERIDO Y BARRA DE PROGRESO ---
+            if not is_pasada:
+                horas_faltantes = max(0.0, meta['meta_horas'] - meta['horas_acumuladas'])
+                ritmo = horas_faltantes / dias_restantes if dias_restantes > 0 else 0.0
+                r_h = int(ritmo)
+                r_m = int((ritmo - r_h) * 60)
+                
+                st.markdown(f"<div style='color: #0ea5e9; font-size: 13px; font-weight: 700; margin-bottom: 5px;'>Ritmo sugerido: {r_h}h {r_m}m / día</div>", unsafe_allow_html=True)
             
             progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
             st.progress(progreso)
@@ -997,31 +998,18 @@ with col_contenido:
             pct = int(progreso * 100)
             st.markdown(f"<div style='display:flex; justify-content:space-between; font-size: 13px; color: #94a3b8; font-weight:bold;'><span>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</span><span>{pct}%</span></div>", unsafe_allow_html=True)
             
-            if not is_pasada:
-                horas_faltantes = max(0.0, meta['meta_horas'] - meta['horas_acumuladas'])
-                ritmo = horas_faltantes / dias_restantes if dias_restantes > 0 else 0.0
-                r_h = int(ritmo)
-                r_m = int((ritmo - r_h) * 60)
-                
-                st.markdown(f"""
-                <div style="background-color: #162032; border-radius: 8px; padding: 15px; text-align: center; margin-top: 20px; border: 1px solid #334155;">
-                    <div style="color: #94a3b8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">RITMO SUGERIDO</div>
-                    <div style="color: #f8fafc; font-size: 20px; font-weight: bold; margin-top: 2px;">{r_h}h {r_m}m <span style='font-size: 14px; color: #94a3b8;'>/ día</span></div>
-                </div>
-                """, unsafe_allow_html=True)
-            
             if is_pasada:
                 if meta.get('nota'):
                     st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 20px; font-weight: 800; color: white;'>{meta['nota']}</span></div>", unsafe_allow_html=True)
                 else:
                     st.write("<br>", unsafe_allow_html=True)
-                    if st.button("🎖️ Asignar Nota", key=f"nota_{original_idx}", use_container_width=True):
+                    if st.button("🎖️ Asignar Nota", key=f"nota_{prefijo_key}_{original_idx}", use_container_width=True):
                         dialog_asignar_nota(original_idx)
             
             st.write("<br>", unsafe_allow_html=True)
             c_ed1, c_ed2 = st.columns(2)
-            if c_ed1.button("✏️ Editar", key=f"edit_meta_{original_idx}", use_container_width=True): dialog_editar_meta(original_idx)
-            if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{original_idx}", use_container_width=True):
+            if c_ed1.button("✏️ Editar", key=f"edit_meta_{prefijo_key}_{original_idx}", use_container_width=True): dialog_editar_meta(original_idx)
+            if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{prefijo_key}_{original_idx}", use_container_width=True):
                 st.session_state['metas'].pop(original_idx)
                 if guardar_datos(): st.rerun()
 
@@ -1046,7 +1034,7 @@ with col_contenido:
                     else:
                         for idx, meta in metas_actuales:
                             with st.container(border=True):
-                                render_meta_card(meta, idx, False, hoy)
+                                render_meta_card(meta, idx, False, hoy, "tab0")
 
                 with col_der:
                     st.write("<br>", unsafe_allow_html=True)
@@ -1205,6 +1193,7 @@ with col_contenido:
                     if hc['fin']:
                         time_points.add(hc['fin'])
 
+                # AHORA SÍ dejamos TODAS las filas, incluida la de las 19:00 para que cierre el calendario perfecto
                 sorted_times = sorted(list(time_points), key=get_sortable_time)
                 
                 if not sorted_times:
@@ -1229,17 +1218,9 @@ with col_contenido:
                     for d in dias_semana: html_tabla += f"<th>{d.upper()}</th>"
                     html_tabla += "</tr>"
                     
-                    # Para saber si tenemos que saltear una celda porque ya la fusionamos (rowspan)
                     skip_cells = {d: 0 for d in dias_semana}
                     
                     for i, t_row in enumerate(sorted_times):
-                        # No dibujamos la última fila si está completamente vacía (solo sirve como límite visual)
-                        if i == len(sorted_times) - 1:
-                            es_vacia = all(len(matriz[t_row][d]) == 0 for d in dias_semana)
-                            if es_vacia:
-                                # Opcional: imprimir solo la hora para cerrar el bloque, sin celdas
-                                break
-
                         html_tabla += f"<tr><td>{t_row}</td>"
                         for d in dias_semana:
                             if skip_cells[d] > 0:
@@ -1250,7 +1231,7 @@ with col_contenido:
                             if items:
                                 mat = items[0]
                                 span = 1
-                                # Mirar hacia abajo cuántas filas abarca esta misma clase para fusionarlas
+                                # Sumar filas fusionadas
                                 for j in range(i + 1, len(sorted_times)):
                                     next_t = sorted_times[j]
                                     next_items = matriz[next_t][d]
@@ -1261,7 +1242,6 @@ with col_contenido:
                                 
                                 skip_cells[d] = span - 1
                                 
-                                # Diseño del bloque: hora arriba, materia, hora abajo
                                 texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
                                 texto += f"{mat['materia']}"
                                 if mat['fin_orig']: 
@@ -1319,7 +1299,7 @@ with col_contenido:
                         
                         with cols[i % 3]:
                             with st.container(border=True):
-                                render_meta_card(meta, original_idx, is_pasada, hoy)
+                                render_meta_card(meta, original_idx, is_pasada, hoy, "tab2")
 
         with tabs[3]:
             c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])

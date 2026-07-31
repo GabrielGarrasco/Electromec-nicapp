@@ -272,21 +272,86 @@ def dialog_detalle_materia(mat_id):
         st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
         if guardar_datos(): st.rerun()
 
+@st.dialog("Detalle de la Materia")
+def dialog_detalle_materia(mat_id):
+    mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
+    if not mat: return
+    
+    st.markdown(f"### {mat['nombre']}")
+    
+    # Muestra la nota si está aprobada/promocionada y tiene nota cargada
+    if mat['estado'] == "Aprobada/Promocionada" and mat.get('nota'):
+        st.markdown(f"**Año:** {mat['año']} | **Estado:** {mat['estado']} | **Nota:** {mat['nota']}")
+    else:
+        st.markdown(f"**Año:** {mat['año']} | **Estado:** {mat['estado']}")
+        
+    st.divider()
+    
+    def is_met(m_name, req_type):
+        target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
+        if not target: return False
+        if req_type == 'reg': return target['estado'] in ["Regular", "Aprobada/Promocionada"]
+        return target['estado'] == "Aprobada/Promocionada"
+
+    st.markdown("#### Correlatividades")
+    if not mat.get('req_regulares') and not mat.get('req_aprobadas'):
+        st.caption("No tiene correlatividades previas.")
+        
+    if mat.get('req_regulares'):
+        st.write("**Para cursar requiere REGULAR:**")
+        for r in mat['req_regulares']:
+            cumple = is_met(r, 'reg')
+            div_class = "req-cumplido" if cumple else "req-pendiente"
+            icon = "✅" if cumple else "⏳"
+            st.markdown(f"<div class='{div_class}'>{icon} {r}</div>", unsafe_allow_html=True)
+            
+    if mat.get('req_aprobadas'):
+        st.write("**Para cursar requiere APROBADA:**")
+        for r in mat['req_aprobadas']:
+            cumple = is_met(r, 'apr')
+            div_class = "req-cumplido" if cumple else "req-pendiente"
+            icon = "✅" if cumple else "⏳"
+            st.markdown(f"<div class='{div_class}'>{icon} {r}</div>", unsafe_allow_html=True)
+            
+    destraba_reg = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_regulares', [])]
+    destraba_apr = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_aprobadas', [])]
+    
+    if destraba_reg or destraba_apr:
+        st.divider()
+        st.markdown("#### Destraba")
+        for d in destraba_reg:
+            st.markdown(f"<div class='req-pendiente'>🔓 {d} (Para cursar)</div>", unsafe_allow_html=True)
+        for d in destraba_apr:
+            st.markdown(f"<div class='req-pendiente'>🎓 {d} (Para rendir/cursar)</div>", unsafe_allow_html=True)
+
+    st.divider()
+    if st.button("🗑️ Eliminar Materia del Plan", type="secondary", use_container_width=True):
+        st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
+        if guardar_datos(): st.rerun()
+
 @st.dialog("Agregar Materia al Plan de Estudios")
 def dialog_nueva_materia_plan():
     nombre = st.text_input("Nombre de la materia")
     col1, col2 = st.columns(2)
     anio = col1.selectbox("Año de cursado", [1, 2, 3, 4, 5, 6])
     estado = col2.selectbox("Estado actual", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
+    
+    # Campo extra condicional para la nota
+    nota_final = ""
+    if estado == "Aprobada/Promocionada":
+        nota_final = st.text_input("Nota Final (Opcional)", placeholder="Ej: 8, 9, 10...")
+        
     st.divider()
     opciones_materias = [m['nombre'] for m in st.session_state['plan_carrera']]
     req_regulares = st.multiselect("Para cursar necesito REGULAR:", opciones_materias)
     req_aprobadas = st.multiselect("Para cursar necesito APROBADA:", opciones_materias)
+    
     if st.button("Guardar en el Plan", type="primary", use_container_width=True):
         if nombre:
             st.session_state['plan_carrera'].append({
                 "id": str(time.time()), "nombre": nombre, "año": anio,
-                "estado": estado, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas
+                "estado": estado, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas,
+                "nota": nota_final
             })
             if guardar_datos(): st.rerun()
 

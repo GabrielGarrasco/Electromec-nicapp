@@ -52,10 +52,17 @@ st.markdown("""
     /* CSS para el horario automático (Estilo Bloques) */
     .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 15px; background-color: #0f172a; table-layout: fixed; }
     .tabla-horario th { background-color: #121b29; color: #0ea5e9; padding: 15px 5px; border: 1px solid #2a3441; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
-    .tabla-horario th:first-child { color: #94a3b8; width: 15%; }
+    .tabla-horario th:first-child { color: #94a3b8; width: 12%; }
     .tabla-horario td { padding: 10px; border: 1px solid #2a3441; vertical-align: middle; height: 100px; }
     .tabla-horario td:first-child { font-weight: 700; color: #94a3b8; background-color: #121b29; }
     .materia-bloque { background-color: #3b82f6; color: #ffffff; padding: 10px; border-radius: 6px; font-weight: 800; line-height: 1.3; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); margin: auto; word-wrap: break-word; width: 95%; }
+    
+    /* CSS para el Historial (Clean Dark) */
+    .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; font-size: 14px; background-color: #0f172a; border: 1px solid #334155; }
+    .tabla-historial th { background-color: #162032; color: #94a3b8; padding: 15px; border-bottom: 1px solid #334155; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    .tabla-historial td { padding: 15px; border-bottom: 1px solid #1e293b; vertical-align: middle; }
+    .tabla-historial tr:last-child td { border-bottom: none; }
+    .tabla-historial tr:hover td { background-color: #1e293b; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -1117,7 +1124,7 @@ with col_contenido:
 
                 time_slots = {}
                 for hc in horarios_completos:
-                    slot = f"{hc['inicio']} a {hc['fin']}" if hc['fin'] else hc['inicio']
+                    slot = hc['inicio']
                     if slot not in time_slots:
                         time_slots[slot] = get_sortable_time(hc['inicio'])
 
@@ -1127,15 +1134,12 @@ with col_contenido:
                     st.info("No tenés horarios cargados. Andá a Carrera o Plan de Estudios, tocá en 'Editar' en una materia Cursando y poné a qué hora la tenés.")
                 else:
                     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-                    matriz = {slot: {d: "" for d in dias_semana} for slot in sorted_slots}
+                    matriz = {slot: {d: [] for d in dias_semana} for slot in sorted_slots}
                     
                     for hc in horarios_completos:
-                        slot = f"{hc['inicio']} a {hc['fin']}" if hc['fin'] else hc['inicio']
+                        slot = hc['inicio']
                         if hc['dia'] in dias_semana:
-                            if matriz[slot][hc['dia']]:
-                                matriz[slot][hc['dia']] += "<br><br>" + hc['materia']
-                            else:
-                                matriz[slot][hc['dia']] = hc['materia']
+                            matriz[slot][hc['dia']].append((hc['materia'], hc['fin']))
                                 
                     html_tabla = "<table class='tabla-horario'>"
                     html_tabla += "<tr><th>HORARIO</th>"
@@ -1145,9 +1149,14 @@ with col_contenido:
                     for slot in sorted_slots:
                         html_tabla += f"<tr><td>{slot}</td>"
                         for d in dias_semana:
-                            materia_str = matriz[slot][d]
-                            if materia_str:
-                                html_tabla += f"<td><div class='materia-bloque'>{materia_str}</div></td>"
+                            items = matriz[slot][d]
+                            if items:
+                                bloques = []
+                                for m_nombre, m_fin in items:
+                                    texto = m_nombre
+                                    if m_fin: texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>hasta {m_fin}</span>"
+                                    bloques.append(f"<div class='materia-bloque' style='margin-bottom: 5px;'>{texto}</div>")
+                                html_tabla += f"<td>{''.join(bloques)}</td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"
@@ -1241,4 +1250,11 @@ with col_contenido:
                 st.write("Tu historial está vacío.")
             else:
                 df_mostrar = pd.DataFrame(st.session_state['historial']).iloc[::-1]
-                st.dataframe(df_mostrar, hide_index=True, use_container_width=True)
+                
+                html_hist = "<table class='tabla-historial'>"
+                html_hist += "<tr><th>FECHA</th><th>MATERIA</th><th>MÉTODO</th><th>TIEMPO (min)</th><th>EFIC.</th></tr>"
+                for _, row in df_mostrar.iterrows():
+                    html_hist += f"<tr><td>{row.get('FECHA', '')}</td><td>{row.get('MATERIA', '')}</td><td>{row.get('MÉTODO', '')}</td><td>{row.get('TIEMPO (min)', '')}</td><td>{row.get('EFIC.', '')}</td></tr>"
+                html_hist += "</table>"
+                
+                st.markdown(html_hist, unsafe_allow_html=True)

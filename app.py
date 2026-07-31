@@ -118,12 +118,18 @@ if 'datos_cargados' not in st.session_state:
 
 if not st.session_state['horarios']:
     st.session_state['horarios'] = [
-        {"Hora": "08:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None},
-        {"Hora": "10:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None},
-        {"Hora": "14:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None},
-        {"Hora": "16:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None},
-        {"Hora": "18:00", "Lunes": None, "Martes": None, "Miércoles": None, "Jueves": None, "Viernes": None, "Sábado": None}
+        {"Hora": "08:00", "Lunes": "", "Martes": "", "Miércoles": "", "Jueves": "", "Viernes": "", "Sábado": ""},
+        {"Hora": "10:00", "Lunes": "", "Martes": "", "Miércoles": "", "Jueves": "", "Viernes": "", "Sábado": ""},
+        {"Hora": "14:00", "Lunes": "", "Martes": "", "Miércoles": "", "Jueves": "", "Viernes": "", "Sábado": ""},
+        {"Hora": "16:00", "Lunes": "", "Martes": "", "Miércoles": "", "Jueves": "", "Viernes": "", "Sábado": ""},
+        {"Hora": "18:00", "Lunes": "", "Martes": "", "Miércoles": "", "Jueves": "", "Viernes": "", "Sábado": ""}
     ]
+else:
+    # Parche para limpiar los "None" viejos y poner strings vacíos
+    for row in st.session_state['horarios']:
+        for k in row.keys():
+            if row[k] is None:
+                row[k] = ""
 
 if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materias'][0], str):
     st.session_state['materias'] = []
@@ -220,7 +226,7 @@ def renderizar_analitica():
                 "Motivo": st.session_state['distracciones'][:5],
                 "Frecuencia": [22, 11, 6, 2, 1][:len(st.session_state['distracciones'][:5])]
             })
-            chart_dist = alt.Chart(distr_data).mark_bar(color="#f59e0b", cornerRadiusEnd=4, height=15).encode(
+            chart_dist = alt.Chart(distr_data).mark_bar(color="#f59e0b").encode(
                 x=alt.X("Frecuencia:Q", axis=alt.Axis(grid=True, tickMinStep=2, title="")),
                 y=alt.Y("Motivo:N", sort='-x', axis=alt.Axis(title="", labelColor="#f8fafc", labelFontWeight="bold"))
             ).properties(height=200)
@@ -231,11 +237,11 @@ def renderizar_analitica():
         df_g = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
         color_map = {m['nombre']: m['color'] for m in st.session_state['materias']}
         
-        # Parche de Altair para que no tire error si el color_map está vacío
+        # Parche Altair sin bordes redondeados para evitar crasheos
         if df_g.empty:
             st.info("No hay datos suficientes para graficar.")
         elif color_map:
-            bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4).encode(
+            bars = alt.Chart(df_g).mark_bar().encode(
                 x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
                 y=alt.Y("TIEMPO (min):Q", title=""),
                 color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
@@ -243,7 +249,7 @@ def renderizar_analitica():
             ).properties(height=250)
             st.altair_chart(bars, use_container_width=True)
         else:
-            bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4, color="#0ea5e9").encode(
+            bars = alt.Chart(df_g).mark_bar(color="#0ea5e9").encode(
                 x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
                 y=alt.Y("TIEMPO (min):Q", title=""),
                 tooltip=['MATERIA', 'TIEMPO (min)']
@@ -642,15 +648,25 @@ with col_contenido:
             
             col_izq, col_der = st.columns(2, gap="large")
             
+            def calcular_prioridad(nombre_mat):
+                count = 0
+                for m in st.session_state['plan_carrera']:
+                    if nombre_mat in m.get('req_regulares', []): count += 1
+                    if nombre_mat in m.get('req_aprobadas', []): count += 1
+                return count
+
             with col_izq:
-                st.markdown("### 📘 Cursando")
-                st.caption("Materias que estás cursando actualmente.")
-                mat_cursando = [m for m in st.session_state['plan_carrera'] if m['estado'] == "Cursando"]
+                st.markdown("### 📘 Cursando y Regulares")
+                st.caption("Ordenadas por prioridad (las que destraban más materias están arriba).")
+                mat_cursando = [m for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
+                mat_cursando.sort(key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
+                
                 if not mat_cursando:
-                    st.info("No tenés materias en estado 'Cursando'.")
+                    st.info("No tenés materias en estado 'Cursando' o 'Regular'.")
                 else:
                     for m in mat_cursando:
-                        if st.button(m['nombre'], key=f"btn_carr_curs_{m['id']}", use_container_width=True):
+                        color_border = "#eab308" if m['estado'] == "Regular" else "#3b82f6"
+                        if st.button(f"{m['nombre']} ({m['estado']})", key=f"btn_carr_curs_{m['id']}", use_container_width=True):
                             dialog_detalle_materia(m['id'])
             
             with col_der:
@@ -671,6 +687,8 @@ with col_contenido:
                         if req_reg_ok and req_apr_ok:
                             puedo_cursar.append(m)
                             
+                puedo_cursar.sort(key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
+                            
                 if not puedo_cursar:
                     st.info("No hay materias nuevas habilitadas para cursar en este momento.")
                 else:
@@ -678,6 +696,8 @@ with col_contenido:
                         if st.button(m['nombre'], key=f"btn_carr_puedo_{m['id']}", use_container_width=True):
                             dialog_detalle_materia(m['id'])
 
+            st.divider()
+            
             # --- PROMEDIO GENERAL ---
             notas_validas = []
             for m in st.session_state['plan_carrera']:
@@ -696,7 +716,7 @@ with col_contenido:
             promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
             
             st.markdown(f"""
-            <div style="background-color: #1e293b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 30px; border: 1px solid #334155;">
+            <div style="background-color: #1e293b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #334155;">
                 <div style="color: #94a3b8; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
                 <div style="color: #0ea5e9; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
             </div>

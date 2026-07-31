@@ -7,11 +7,12 @@ import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import altair as alt
+import plotly.express as px
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
+st.set_page_config(page_title="Study Meter", layout="wide")
 
-# --- CSS MEJORADO (Estética Dark Blue Palette) ---
+# --- CSS MEJORADO (Estética Dark Blue + Verde Menta Acento) ---
 st.markdown("""
     <style>
     /* Fondo general oscuro: #000a23 */
@@ -22,78 +23,77 @@ st.markdown("""
     /* Pestañas (Tabs) */
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 30px; border-bottom: 1px solid #153f59; }
     .stTabs [data-baseweb="tab"] { color: #7498b6; font-weight: 700; font-size: 16px; padding-bottom: 10px; }
-    .stTabs [aria-selected="true"] { color: #94b8d7 !important; border-bottom: 3px solid #94b8d7 !important; }
+    .stTabs [aria-selected="true"] { color: #94b8d7 !important; border-bottom: 3px solid #10b981 !important; }
     
-    /* Contenedores (Tarjetas): #02152b con borde #153f59 */
+    /* Contenedores (Tarjetas) - Más compactas */
     [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { 
-        background-color: #02152b; border-radius: 16px; padding: 20px; border: 1px solid #153f59; 
+        background-color: #02152b; border-radius: 12px; padding: 12px; border: 1px solid #153f59; 
     }
     
-    /* Botones primarios (Azules intermedios de la paleta) */
+    /* Botones primarios (Verde Menta - Acento vibrante) */
     [data-testid="baseButton-primary"] { 
-        background-color: #365b77; border-color: #365b77; color: white; border-radius: 12px; font-weight: bold; padding: 10px;
+        background-color: #10b981; border-color: #10b981; color: #000a23; border-radius: 8px; font-weight: bold; padding: 8px;
     }
-    [data-testid="baseButton-primary"]:hover { background-color: #557996; border-color: #557996; }
+    [data-testid="baseButton-primary"]:hover { background-color: #059669; border-color: #059669; color: white;}
     
     /* Botones secundarios (Azul más oscuro) */
     [data-testid="baseButton-secondary"] { 
-        background-color: #021d34; border-color: #153f59; color: #94b8d7; border-radius: 12px; font-weight: 600;
+        background-color: #021d34; border-color: #153f59; color: #94b8d7; border-radius: 8px; font-weight: 600; padding: 8px;
     }
     [data-testid="baseButton-secondary"]:hover { border-color: #365b77; color: white; }
     
     /* Botón Racha (Especial) */
     button[kind="secondary"] {
-        background-color: transparent; border: 1px solid #153f59; border-radius: 20px; color: #7498b6; font-weight: 800; font-size: 15px; padding: 5px 15px;
+        background-color: transparent; border: 1px solid #153f59; border-radius: 20px; color: #10b981; font-weight: 800; font-size: 15px; padding: 5px 15px;
     }
-    button[kind="secondary"]:hover { border-color: #557996; color: #94b8d7; }
+    button[kind="secondary"]:hover { border-color: #10b981; color: white; }
     
     /* Métricas */
-    [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 800; }
-    [data-testid="stMetricLabel"] { color: #7498b6; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2rem; font-weight: 800; }
+    [data-testid="stMetricLabel"] { color: #7498b6; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     header {visibility: hidden;}
     
     /* Badges */
-    .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #153f59; }
-    .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
-    .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
-    .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
-    .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
-    .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
-    .nota-box { background-color: #021d34; border: 1px solid #153f59; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
+    .color-circle { width: 16px; height: 16px; border-radius: 50%; margin: 0 auto 5px auto; border: 2px solid #153f59; display: inline-block; vertical-align: middle;}
+    .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
+    .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
+    .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
+    .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
+    .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
+    .nota-box { background-color: #021d34; border: 1px solid #153f59; border-radius: 8px; padding: 10px; text-align: center; margin-top: 10px; }
     
     /* Radio buttons tipo Pill para Libre/Pomodoro */
-    div[role="radiogroup"] { display: flex; justify-content: center; background-color: #021d34; border-radius: 20px; padding: 5px; width: max-content; margin: 0 auto; border: 1px solid #153f59;}
-    div[role="radiogroup"] > label { padding: 8px 20px; border-radius: 15px; transition: 0.3s; margin-bottom: 0px; border: none; font-weight: bold; color: #7498b6; }
-    div[role="radiogroup"] > label[data-checked="true"] { background-color: #365b77; color: white; }
+    div[role="radiogroup"] { display: flex; justify-content: center; background-color: #021d34; border-radius: 12px; padding: 4px; width: max-content; margin: 0 auto; border: 1px solid #153f59;}
+    div[role="radiogroup"] > label { padding: 6px 15px; border-radius: 8px; transition: 0.3s; margin-bottom: 0px; border: none; font-weight: bold; color: #7498b6; }
+    div[role="radiogroup"] > label[data-checked="true"] { background-color: #10b981; color: #000a23; }
     
     /* Horario Automático */
-    .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 15px; background-color: #000a23; table-layout: fixed; }
-    .tabla-horario th { background-color: #02152b; color: #94b8d7; padding: 15px 5px; border: 1px solid #153f59; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 13px; margin-top: 10px; background-color: #000a23; table-layout: fixed; }
+    .tabla-horario th { background-color: #02152b; color: #10b981; padding: 10px 5px; border: 1px solid #153f59; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
     .tabla-horario th:first-child { color: #7498b6; width: 10%; }
-    .tabla-horario td { padding: 0; border: 1px solid #153f59; vertical-align: top; height: 75px; }
-    .tabla-horario td:first-child { font-weight: 700; color: #7498b6; background-color: #02152b; padding-top: 15px; text-align: center; }
-    .materia-bloque { background-color: #365b77; color: #ffffff; padding: 5px; font-weight: 800; line-height: 1.2; width: 100%; height: 100%; min-height: 75px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; box-sizing: border-box; border: 1px solid #557996; border-radius: 4px; }
+    .tabla-horario td { padding: 0; border: 1px solid #153f59; vertical-align: top; height: 60px; }
+    .tabla-horario td:first-child { font-weight: 700; color: #7498b6; background-color: #02152b; padding-top: 10px; text-align: center; }
+    .materia-bloque { background-color: #365b77; color: #ffffff; padding: 4px; font-weight: 800; line-height: 1.1; width: 100%; height: 100%; min-height: 60px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; box-sizing: border-box; border: 1px solid #557996; border-radius: 4px; }
     
     /* Historial Mejorado */
     .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; background-color: transparent; }
-    .tabla-historial th { background-color: #02152b; color: #7498b6; padding: 15px 20px; border-bottom: 1px solid #153f59; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
-    .tabla-historial td { padding: 20px; border-bottom: 1px solid #021d34; vertical-align: middle; }
+    .tabla-historial th { background-color: #02152b; color: #7498b6; padding: 12px 15px; border-bottom: 1px solid #153f59; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+    .tabla-historial td { padding: 15px; border-bottom: 1px solid #021d34; vertical-align: middle; }
     .tabla-historial tr:last-child td { border-bottom: none; }
     .tabla-historial tr:hover td { background-color: #02152b; }
-    .materia-pill { background-color: #5753C9; color: white; padding: 6px 12px; border-radius: 6px; font-weight: 900; font-size: 12px; display: inline-block; text-transform: uppercase; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .efic-green { color: #2dd4bf; font-weight: 900; font-size: 22px; }
+    .materia-pill { background-color: #365b77; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block; text-transform: uppercase;}
+    .efic-green { color: #10b981; font-weight: 900; font-size: 18px; }
     
     /* Textos Analitica */
-    .analitica-title { font-size: 11px; font-weight: 800; color: #7498b6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
-    .analitica-big-number { font-size: 32px; font-weight: 900; color: #f8fafc; text-align: center; margin: 15px 0; }
-    .analitica-sub { text-align: center; color: #7498b6; font-size: 14px; font-weight: 600; }
+    .analitica-title { font-size: 11px; font-weight: 800; color: #7498b6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+    .analitica-big-number { font-size: 28px; font-weight: 900; color: #f8fafc; text-align: center; margin: 10px 0; }
     .historico-box { text-align: center; }
-    .historico-title { font-size: 10px; font-weight: 800; color: #7498b6; text-transform: uppercase; margin-bottom: 10px; }
-    .historico-val { font-size: 24px; font-weight: 900; color: #f8fafc; }
+    .historico-title { font-size: 10px; font-weight: 800; color: #7498b6; text-transform: uppercase; margin-bottom: 5px; }
+    .historico-val { font-size: 20px; font-weight: 900; color: #f8fafc; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- SISTEMA DE GUARDADO EN GOOGLE SHEETS ---
+# --- SISTEMA DE GUARDADO EN GOOGLE SHEETS (CON CACHÉ) ---
 def get_gspread_client():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     secret_str = st.secrets["google_credentials"]
@@ -101,6 +101,16 @@ def get_gspread_client():
     except: creds_dict = json.loads(secret_str, strict=False)
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
+
+@st.cache_data(ttl=600) # Cachea los datos por 10 min o hasta que se limpie manualmente
+def cargar_datos_sheet():
+    try:
+        client = get_gspread_client()
+        sheet = client.open('StudyMeterDB').worksheet('database')
+        valor = sheet.acell('A2').value
+        if valor: return json.loads(valor)
+    except: return None
+    return None
 
 def guardar_datos():
     try:
@@ -113,32 +123,39 @@ def guardar_datos():
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
         sheet.update_acell('A2', json.dumps(datos))
+        
+        # Limpiar caché para que la próxima lectura sea fresca
+        cargar_datos_sheet.clear()
+        st.toast("Datos guardados correctamente.")
         return True
     except Exception as e:
-        st.error(f"🚨 Error exacto de Google: {e}")
+        st.error(f"Error al guardar: {e}")
         st.stop()
 
-def cargar_datos():
-    try:
-        client = get_gspread_client()
-        sheet = client.open('StudyMeterDB').worksheet('database')
-        valor = sheet.acell('A2').value
-        if valor: return json.loads(valor)
+# --- FUNCIONES DE CÁLCULO SEGURAS ---
+def parse_float_nota(val_str):
+    try: return float(str(val_str).replace(',', '.'))
     except: return None
-    return None
 
 # --- INICIALIZACIÓN DE VARIABLES ---
-if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
-if 'study_start' not in st.session_state: st.session_state['study_start'] = 0.0
-if 'study_elapsed' not in st.session_state: st.session_state['study_elapsed'] = 0.0
-if 'pause_start' not in st.session_state: st.session_state['pause_start'] = 0.0
-if 'pause_elapsed' not in st.session_state: st.session_state['pause_elapsed'] = 0.0
-if 'interruption_reason' not in st.session_state: st.session_state['interruption_reason'] = ""
+if 'timer' not in st.session_state:
+    st.session_state['timer'] = {
+        'state': 'IDLE',
+        'start': 0.0,
+        'elapsed': 0.0,
+        'pause_start': 0.0,
+        'pause_elapsed': 0.0,
+        'interruption_reason': "",
+        'interruptions': [],
+        'mode': 'Libre',
+        'focus_time': 25,
+        'break_time': 5
+    }
+
 if 'editando_plan_mat_id' not in st.session_state: st.session_state['editando_plan_mat_id'] = None
-if 'current_interruptions' not in st.session_state: st.session_state['current_interruptions'] = []
 
 if 'datos_cargados' not in st.session_state:
-    datos_guardados = cargar_datos()
+    datos_guardados = cargar_datos_sheet()
     if datos_guardados:
         st.session_state['materias'] = datos_guardados.get('materias', [])
         st.session_state['metodos'] = datos_guardados.get('metodos', [])
@@ -162,34 +179,21 @@ if 'datos_cargados' not in st.session_state:
 if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materias'][0], str):
     st.session_state['materias'] = []
 
-def parse_float_nota(val_str):
-    try: return float(str(val_str).replace(',', '.'))
-    except: return None
-
 OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
 
-# --- FUNCIONES DE CÁLCULO ---
 def calcular_datos_racha(historial):
     if not historial: return 0, 0, 0, 5
-    
     fechas_str = set([h['FECHA'] for h in historial])
     fechas_obj = sorted([datetime.strptime(f, "%d/%m/%Y").date() for f in fechas_str])
-    
     if not fechas_obj: return 0, 0, 0, 5
     
     fecha_inicio = fechas_obj[0]
     hoy = date.today()
-    
-    racha_actual = 0
-    mejor_racha = 0
-    protectores = 0
-    dias_para_protector = 5
+    racha_actual, mejor_racha, protectores, dias_para_protector = 0, 0, 0, 5
     
     fecha_iter = fecha_inicio
     while fecha_iter <= hoy:
-        estudio_hoy = fecha_iter in fechas_obj
-        
-        if estudio_hoy:
+        if fecha_iter in fechas_obj:
             racha_actual += 1
             dias_para_protector -= 1
             if dias_para_protector <= 0:
@@ -202,10 +206,7 @@ def calcular_datos_racha(historial):
             else:
                 racha_actual = 0
                 dias_para_protector = 5
-        
-        if racha_actual > mejor_racha:
-            mejor_racha = racha_actual
-            
+        if racha_actual > mejor_racha: mejor_racha = racha_actual
         fecha_iter += pd.Timedelta(days=1)
         
     return racha_actual, mejor_racha, protectores, dias_para_protector
@@ -216,47 +217,37 @@ racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_rac
 col_hdr1, col_hdr2 = st.columns([3, 1])
 with col_hdr2:
     st.markdown("<div style='display: flex; justify-content: flex-end; gap: 15px; margin-top: 10px;'>", unsafe_allow_html=True)
-    if st.button(f"🔥 {racha_actual}", help="Ver detalles de tu racha"):
+    if st.button(f"Racha: {racha_actual} días", help="Ver detalles"):
         st.session_state['show_racha_modal'] = True
     st.markdown("</div>", unsafe_allow_html=True)
 
 # --- MODALES (DIALOGS) ---
-@st.dialog("Racha", width="small")
+@st.dialog("Racha de Estudio", width="small")
 def dialog_racha():
     st.markdown(f"""
     <div style='text-align: center;'>
-        <h1 style='font-size: 50px; margin-bottom: 0px; color: #f8fafc;'>🔥 {racha_actual} días</h1>
-        <p style='color: #7498b6; font-weight: bold; margin-top: 0px;'>¡Llevas una racha increíble!</p>
+        <h1 style='font-size: 40px; margin-bottom: 0px; color: #10b981;'>{racha_actual} días</h1>
+        <p style='color: #7498b6; font-weight: bold; margin-top: 0px;'>Racha actual</p>
     </div>
-    <h3 style='text-align: center; color: #f8fafc;'>Protectores de Racha</h3>
     """, unsafe_allow_html=True)
     
     shields_html = "<div style='display: flex; justify-content: center; gap: 10px; margin: 20px 0;'>"
     for i in range(3):
-        color = "#153f59" if i >= protectores else "#557996"
-        opacity = "0.4" if i >= protectores else "1"
-        shields_html += f"<div style='width: 45px; height: 45px; border-radius: 50%; background-color: {color}; opacity: {opacity}; display: flex; justify-content: center; align-items: center; font-size: 20px; border: 1px solid #02253d;'>🛡️</div>"
+        color = "#10b981" if i < protectores else "#153f59"
+        opacity = "1" if i < protectores else "0.3"
+        shields_html += f"<div style='width: 35px; height: 35px; border-radius: 50%; background-color: {color}; opacity: {opacity}; display: flex; justify-content: center; align-items: center; font-size: 16px; border: 1px solid #02253d;'></div>"
     shields_html += "</div>"
     
     st.markdown(f"""
-    <div style='background-color: #02152b; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #153f59;'>
-        <div style='color: #7498b6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;'>TUS PROTECTORES</div>
+    <div style='background-color: #02152b; border-radius: 12px; padding: 15px; text-align: center; border: 1px solid #153f59;'>
+        <div style='color: #7498b6; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;'>PROTECTORES</div>
         {shields_html}
-        <div style='font-weight: 800; font-size: 14px; color: #f8fafc;'>Te faltan {dias_para_protector} días continuos para ganar otro.</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown("""
-    <div style='border: 1px solid #153f59; border-radius: 12px; padding: 15px; margin-top: 15px; font-size: 13px; color: #f8fafc;'>
-        <div style='color: #7498b6; font-weight: 800; margin-bottom: 10px; font-size: 11px; text-transform: uppercase;'>ℹ️ CÓMO FUNCIONA</div>
-        <div style='margin-bottom: 5px;'>✔️ Ganas 1 protector por cada 5 días de racha consecutivos.</div>
-        <div style='margin-bottom: 5px;'>🛡️ Puedes almacenar un máximo de 3 protectores.</div>
-        <div>❤️ Si olvidas estudiar un día, se consumirá un protector automáticamente para salvar tu racha.</div>
+        <div style='font-weight: 800; font-size: 13px; color: #f8fafc;'>Faltan {dias_para_protector} días continuos para otro.</div>
     </div>
     """, unsafe_allow_html=True)
     
     st.write("<br>", unsafe_allow_html=True)
-    if st.button("Entendido", type="primary", use_container_width=True):
+    if st.button("Cerrar", type="primary", use_container_width=True):
         st.session_state['show_racha_modal'] = False
         st.rerun()
 
@@ -265,29 +256,47 @@ if st.session_state.get('show_racha_modal', False):
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
+    mode = st.session_state['timer']['mode']
+    target_ms = st.session_state['timer']['focus_time'] * 60000 if mode == 'Pomodoro' else 0
+    
     html_code = f"""
-    <div id="clock" style="font-size: 85px; font-weight: 700; text-align: center; color: #f8fafc; font-family: 'Courier New', Courier, monospace; letter-spacing: 4px; margin: 20px 0;">00:00:00</div>
+    <div id="clock" style="font-size: 75px; font-weight: 700; text-align: center; color: #f8fafc; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; margin: 15px 0;">00:00:00</div>
     <script>
         var elapsedMs = {elapsed_seconds * 1000};
         var isRunning = {'true' if is_running else 'false'};
+        var mode = "{mode}";
+        var targetMs = {target_ms};
         var start = Date.now() - elapsedMs;
+        
         function updateClock() {{
             var delta = isRunning ? (Date.now() - start) : elapsedMs;
-            var hrs = Math.floor(delta / 3600000).toString().padStart(2, '0');
-            var mins = Math.floor((delta % 3600000) / 60000).toString().padStart(2, '0');
-            var secs = Math.floor((delta % 60000) / 1000).toString().padStart(2, '0');
-            document.getElementById("clock").innerHTML = hrs + ":" + mins + ":" + secs;
+            
+            if (mode === 'Pomodoro') {{
+                var remaining = targetMs - delta;
+                if (remaining <= 0) {{
+                    document.getElementById("clock").innerHTML = "¡TIEMPO!";
+                    document.getElementById("clock").style.color = "#10b981";
+                    return;
+                }}
+                var hrs = Math.floor(remaining / 3600000).toString().padStart(2, '0');
+                var mins = Math.floor((remaining % 3600000) / 60000).toString().padStart(2, '0');
+                var secs = Math.floor((remaining % 60000) / 1000).toString().padStart(2, '0');
+                document.getElementById("clock").innerHTML = (hrs !== "00" ? hrs + ":" : "") + mins + ":" + secs;
+            }} else {{
+                var hrs = Math.floor(delta / 3600000).toString().padStart(2, '0');
+                var mins = Math.floor((delta % 3600000) / 60000).toString().padStart(2, '0');
+                var secs = Math.floor((delta % 60000) / 1000).toString().padStart(2, '0');
+                document.getElementById("clock").innerHTML = hrs + ":" + mins + ":" + secs;
+            }}
         }}
         updateClock();
         if (isRunning) {{ setInterval(updateClock, 1000); }}
     </script>
     """
-    components.html(html_code, height=130)
+    components.html(html_code, height=120)
 
 def renderizar_analitica():
-    st.markdown("### Tus Estadísticas")
-    st.write("<br>", unsafe_allow_html=True)
-    
+    st.markdown("### Estadísticas")
     df_hist = pd.DataFrame(st.session_state['historial'])
     
     if not df_hist.empty:
@@ -304,37 +313,30 @@ def renderizar_analitica():
         fechas_7d = [hoy - pd.Timedelta(days=i) for i in range(6, -1, -1)]
         df_7d = df_hist[df_hist['FECHA_OBJ'] >= fechas_7d[0]]
         mins_semana = df_7d['TIEMPO (min)'].sum() if not df_7d.empty else 0
-        h_sem = int(mins_semana // 60)
-        m_sem = int(mins_semana % 60)
+        h_sem, m_sem = int(mins_semana // 60), int(mins_semana % 60)
         
         df_hoy = df_hist[df_hist['FECHA_OBJ'] == hoy]
         mins_hoy = df_hoy['TIEMPO (min)'].sum() if not df_hoy.empty else 0
-        h_hoy = int(mins_hoy // 60)
-        m_hoy = int(mins_hoy % 60)
-        
+        h_hoy, m_hoy = int(mins_hoy // 60), int(mins_hoy % 60)
     else:
-        efic_promedio = 0
-        total_minutos = 0
+        efic_promedio = total_minutos = top_h = h_sem = m_sem = h_hoy = m_hoy = 0
         materia_top = "N/A"
-        top_h = 0
-        h_sem = m_sem = h_hoy = m_hoy = 0
         df_7d = pd.DataFrame()
+        fechas_7d = []
 
     c1, c2 = st.columns([1, 2])
     with c1:
         with st.container(border=True):
             st.markdown("<div class='analitica-title'>EFICIENCIA</div>", unsafe_allow_html=True)
             source_efic = pd.DataFrame({"Cat": ["Eficiencia", "Falta"], "Valor": [efic_promedio, max(0, 100-efic_promedio)]})
-            
-            donut_color = "#365b77" if efic_promedio > 0 else "#021d34"
-            chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=65).encode(
+            donut_color = "#10b981" if efic_promedio > 0 else "#021d34"
+            chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=50).encode(
                 theta=alt.Theta(field="Valor", type="quantitative"),
                 color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=[donut_color, "#021d34"]), legend=None),
                 tooltip=['Cat', 'Valor']
-            ).properties(height=220)
-            
+            ).properties(height=180)
             st.altair_chart(chart_efic, use_container_width=True)
-            st.markdown(f"<div style='text-align:center; margin-top:-155px; font-size:36px; font-weight:900; color:white;'>{efic_promedio}%</div><div style='height:105px;'></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; margin-top:-125px; font-size:28px; font-weight:900;'>{efic_promedio}%</div><div style='height:85px;'></div>", unsafe_allow_html=True)
             
     with c2:
         with st.container(border=True):
@@ -344,59 +346,65 @@ def renderizar_analitica():
             else:
                 df_barras = df_7d.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
                 df_barras['Horas'] = df_barras['TIEMPO (min)'] / 60
-                
-                bars = alt.Chart(df_barras).mark_bar(color="#557996").encode(
+                bars = alt.Chart(df_barras).mark_bar(color="#365b77").encode(
                     x=alt.X("Horas:Q", title="", axis=alt.Axis(grid=True, gridColor="#153f59", labelColor="#7498b6")),
                     y=alt.Y("MATERIA:N", title="", sort="-x", axis=alt.Axis(labelColor="#94b8d7", labelFontWeight="bold"))
-                ).properties(height=220)
+                ).properties(height=180)
                 st.altair_chart(bars, use_container_width=True)
                 
-    c3, c4 = st.columns([2, 1])
-    with c3:
-        with st.container(border=True):
-            st.markdown("<div class='analitica-title'>HORAS POR DÍA</div>", unsafe_allow_html=True)
-            nombres_dias = {0: 'lun', 1: 'mar', 2: 'mié', 3: 'jue', 4: 'vie', 5: 'sáb', 6: 'dom'}
-            df_dias = pd.DataFrame({'FECHA_OBJ': fechas_7d})
-            df_dias['Día'] = df_dias['FECHA_OBJ'].dt.dayofweek.map(nombres_dias)
+    # --- GRÁFICO DE RADAR ---
+    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>DESEMPEÑO POR AÑO (PROMEDIOS)</div>", unsafe_allow_html=True)
+    notas_por_anio = {1: [], 2: [], 3: [], 4: [], 5: [], 6: []}
+    
+    for mat in st.session_state['plan_carrera']:
+        anio = int(mat['año'])
+        notas_mat = []
+        nf = parse_float_nota(mat.get('nota', ''))
+        if nf is not None: notas_mat.append(nf)
             
-            if not df_hist.empty:
-                agrupado = df_7d.groupby('FECHA_OBJ')['TIEMPO (min)'].sum().reset_index()
-                agrupado['Horas'] = agrupado['TIEMPO (min)'] / 60
-                df_linea = pd.merge(df_dias, agrupado, on='FECHA_OBJ', how='left').fillna(0)
-            else:
-                df_linea = df_dias.copy()
-                df_linea['Horas'] = 0.0
-                
-            chart_linea = alt.Chart(df_linea).mark_line(point=alt.OverlayMarkDef(filled=False, fill="#02152b", strokeWidth=2, size=50), color="#557996", strokeWidth=3).encode(
-                x=alt.X('Día:N', sort=None, title="", axis=alt.Axis(labelColor="#7498b6", grid=False, domain=False, tickSize=0)),
-                y=alt.Y('Horas:Q', title="", axis=alt.Axis(labelColor="#7498b6", grid=True, gridColor="#153f59", domain=False))
-            ).properties(height=220)
-            st.altair_chart(chart_linea, use_container_width=True)
+        for meta in st.session_state['metas']:
+            if meta['materia'] == mat['nombre'] and meta.get('nota'):
+                nm = parse_float_nota(meta['nota'])
+                if nm is not None: notas_mat.append(nm)
+                    
+        if notas_mat:
+            promedio_mat = sum(notas_mat) / len(notas_mat)
+            if anio in notas_por_anio: notas_por_anio[anio].append(promedio_mat)
+            
+    data_radar = []
+    for a in range(1, 7):
+        if notas_por_anio[a]:
+            data_radar.append({'Año': f"Año {a}", 'Promedio': sum(notas_por_anio[a])/len(notas_por_anio[a])})
+        else:
+            data_radar.append({'Año': f"Año {a}", 'Promedio': 0})
+            
+    df_radar = pd.DataFrame(data_radar)
+    
+    fig = px.line_polar(df_radar, r='Promedio', theta='Año', line_close=True, range_r=[0,10])
+    fig.update_traces(fill='toself', line_color='#10b981')
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font_color='#7498b6',
+        margin=dict(l=20, r=20, t=20, b=20),
+        height=300,
+        polar=dict(
+            radialaxis=dict(visible=True, range=[0, 10], color='#7498b6', gridcolor='#153f59'),
+            angularaxis=dict(color='#f8fafc', gridcolor='#153f59')
+        )
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
-    with c4:
-        with st.container(border=True):
-            st.markdown("<div class='analitica-title' style='text-align:center;'>SEMANAL</div>", unsafe_allow_html=True)
-            txt_sem = f"{h_sem}h {m_sem}m" if h_sem > 0 else f"{m_sem}m"
-            st.markdown(f"<div class='analitica-big-number'>{txt_sem}</div>", unsafe_allow_html=True)
-            st.markdown("<hr style='border: 1px solid #153f59; margin: 20px 0;'>", unsafe_allow_html=True)
-            st.markdown("<div class='analitica-title' style='text-align:center;'>HOY</div>", unsafe_allow_html=True)
-            txt_hoy = f"{h_hoy:02d}:{m_hoy:02d}"
-            st.markdown(f"<div class='analitica-big-number'>{txt_hoy}</div>", unsafe_allow_html=True)
-            
-    st.markdown("<div class='analitica-title' style='margin-top: 25px;'>HISTÓRICO</div>", unsafe_allow_html=True)
+    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>HISTÓRICO</div>", unsafe_allow_html=True)
     ch1, ch2, ch3, ch4 = st.columns(4)
     with ch1:
         with st.container(border=True):
             st.markdown("<div class='historico-box'><div class='historico-title'>MEJOR RACHA</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='historico-val'>{mejor_racha} 🔥</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='historico-val'>{mejor_racha} d</div></div>", unsafe_allow_html=True)
     with ch2:
         with st.container(border=True):
             st.markdown("<div class='historico-box'><div class='historico-title'>MATERIA TOP</div>", unsafe_allow_html=True)
-            color_mat = "#557996" 
-            for m in st.session_state['materias']:
-                if m['nombre'] == materia_top: color_mat = m['color']
-            st.markdown(f"<div class='historico-val' style='font-size: 18px;'><span style='color:{color_mat};'>●</span> {materia_top}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='color:#7498b6; font-size: 12px; font-weight:bold; margin-top:5px;'>{top_h}h</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='historico-val' style='font-size: 16px;'>{materia_top}</div>", unsafe_allow_html=True)
     with ch3:
         with st.container(border=True):
             st.markdown("<div class='historico-box'><div class='historico-title'>% GLOBAL</div>", unsafe_allow_html=True)
@@ -467,10 +475,8 @@ def dialog_detalle_materia(mat_id):
         st.divider()
         st.caption("CORRELATIVIDADES")
         opciones_materias = [m['nombre'] for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
-        
         def_reg = [x for x in mat.get('req_regulares', []) if x in opciones_materias]
         def_apr = [x for x in mat.get('req_aprobadas', []) if x in opciones_materias]
-        
         nuevas_reg = st.multiselect("Para cursar necesito REGULAR:", opciones_materias, default=def_reg)
         nuevas_apr = st.multiselect("Para cursar necesito APROBADA:", opciones_materias, default=def_apr)
         
@@ -483,7 +489,6 @@ def dialog_detalle_materia(mat_id):
             if nuevo_nombre:
                 estado_final = nuevo_estado
                 nota_definitiva = nueva_nota
-                
                 if nuevo_estado == "Regular":
                     last_val = None
                     cant_intentos = 0
@@ -491,7 +496,6 @@ def dialog_detalle_materia(mat_id):
                         if val.strip():
                             last_val = val.strip()
                             cant_intentos += 1
-                    
                     if last_val:
                         val_num = parse_float_nota(last_val)
                         if val_num is not None:
@@ -528,16 +532,15 @@ def dialog_detalle_materia(mat_id):
         intentos_guardados = mat.get('intentos', [])
         intentos_validos = [i for i in intentos_guardados if i.strip()]
         if intentos_validos:
-            st.caption(f"📝 Intentos registrados: {', '.join(intentos_validos)}")
+            st.caption(f"Intentos registrados: {', '.join(intentos_validos)}")
             
         horarios = mat.get('horarios_clase', [])
         if mat['estado'] == "Cursando" and horarios:
             for hc in horarios:
                 rango = f"{hc['inicio']} a {hc['fin']}" if hc.get('fin') else hc['inicio']
-                st.caption(f"🕒 **{hc['dia']}:** {rango}")
+                st.caption(f"**{hc['dia']}:** {rango}")
             
         st.divider()
-        
         def is_met(m_name, req_type):
             target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
             if not target: return False
@@ -552,17 +555,13 @@ def dialog_detalle_materia(mat_id):
             st.write("**Para cursar requiere REGULAR:**")
             for r in mat['req_regulares']:
                 cumple = is_met(r, 'reg')
-                div_class = "req-cumplido" if cumple else "req-pendiente"
-                icon = "✅" if cumple else "⏳"
-                st.markdown(f"<div class='{div_class}'>{icon} {r}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size: 13px; color: {'#10b981' if cumple else '#7498b6'};'>{'[OK]' if cumple else '[ ]'} {r}</div>", unsafe_allow_html=True)
                 
         if mat.get('req_aprobadas'):
             st.write("**Para cursar requiere APROBADA:**")
             for r in mat['req_aprobadas']:
                 cumple = is_met(r, 'apr')
-                div_class = "req-cumplido" if cumple else "req-pendiente"
-                icon = "✅" if cumple else "⏳"
-                st.markdown(f"<div class='{div_class}'>{icon} {r}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='font-size: 13px; color: {'#10b981' if cumple else '#7498b6'};'>{'[OK]' if cumple else '[ ]'} {r}</div>", unsafe_allow_html=True)
                 
         destraba_reg = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_regulares', [])]
         destraba_apr = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_aprobadas', [])]
@@ -570,21 +569,19 @@ def dialog_detalle_materia(mat_id):
         if destraba_reg or destraba_apr:
             st.divider()
             st.markdown("#### Destraba")
-            for d in destraba_reg:
-                st.markdown(f"<div class='req-pendiente'>🔓 {d} (Para cursar)</div>", unsafe_allow_html=True)
-            for d in destraba_apr:
-                st.markdown(f"<div class='req-pendiente'>🎓 {d} (Para rendir/cursar)</div>", unsafe_allow_html=True)
+            for d in destraba_reg: st.markdown(f"<div style='font-size: 13px; color: #94b8d7;'>- {d} (Para cursar)</div>", unsafe_allow_html=True)
+            for d in destraba_apr: st.markdown(f"<div style='font-size: 13px; color: #94b8d7;'>- {d} (Para rendir/cursar)</div>", unsafe_allow_html=True)
 
         st.divider()
         c_del, c_edit = st.columns(2)
-        if c_del.button("🗑️ Eliminar", type="secondary", use_container_width=True):
+        if c_del.button("Eliminar", type="secondary", use_container_width=True):
             st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
             if guardar_datos(): st.rerun()
-        if c_edit.button("✏️ Editar", type="primary", use_container_width=True):
+        if c_edit.button("Editar", type="primary", use_container_width=True):
             st.session_state['editando_plan_mat_id'] = mat_id
             st.rerun()
 
-@st.dialog("Agregar Materia al Plan de Estudios")
+@st.dialog("Agregar Materia al Plan")
 def dialog_nueva_materia_plan():
     nombre = st.text_input("Nombre de la materia")
     col1, col2, col3 = st.columns(3)
@@ -677,37 +674,11 @@ def dialog_nueva_meta():
             st.session_state['metas'].append(nueva)
             if guardar_datos(): st.rerun()
 
-@st.dialog("Editar Meta")
-def dialog_editar_meta(meta_idx):
-    meta_actual = st.session_state['metas'][meta_idx]
-    nombres_materias = [m["nombre"] for m in st.session_state['materias']]
-    try: fecha_obj = date.fromisoformat(meta_actual['fecha_examen'])
-    except: fecha_obj = date.today()
-    idx_materia = nombres_materias.index(meta_actual['materia']) if meta_actual['materia'] in nombres_materias else 0
-    nombre = st.text_input("NOMBRE", value=meta_actual['nombre'])
-    materia = st.selectbox("MATERIA", nombres_materias, index=idx_materia)
-    col1, col2 = st.columns(2)
-    meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=int(meta_actual['meta_horas']))
-    fecha_examen = col2.date_input("FECHA EXAMEN", value=fecha_obj)
-    def_dias = meta_actual.get("dias_estudio", ["L", "M", "X", "J", "V", "S", "D"])
-    dias_sel = st.multiselect("DÍAS DE ESTUDIO", ["L", "M", "X", "J", "V", "S", "D"], default=def_dias)
-    
-    c1, c2 = st.columns(2)
-    if c1.button("Cancelar", use_container_width=True): st.rerun()
-    if c2.button("Actualizar", type="primary", use_container_width=True):
-        if nombre:
-            st.session_state['metas'][meta_idx]['nombre'] = nombre
-            st.session_state['metas'][meta_idx]['materia'] = materia
-            st.session_state['metas'][meta_idx]['meta_horas'] = meta_horas
-            st.session_state['metas'][meta_idx]['fecha_examen'] = fecha_examen.isoformat()
-            st.session_state['metas'][meta_idx]['dias_estudio'] = dias_sel
-            if guardar_datos(): st.rerun()
-
 @st.dialog("Asignar Nota Final")
 def dialog_asignar_nota(meta_idx):
     meta_actual = st.session_state['metas'][meta_idx]
     st.write(f"**Examen:** {meta_actual['nombre']} ({meta_actual['materia']})")
-    nota = st.text_input("NOTA FINAL", placeholder="Ej: 80T + 79P = 79.5 o 8.5")
+    nota = st.text_input("NOTA FINAL", placeholder="Ej: 80 o 8.5")
     c1, c2 = st.columns(2)
     if c1.button("Cancelar", use_container_width=True): st.rerun()
     if c2.button("Guardar Nota", type="primary", use_container_width=True):
@@ -741,13 +712,13 @@ def dialog_nueva_materia_activa():
     materias_ya_activas = [m['nombre'] for m in st.session_state['materias']]
     opciones_disponibles = [m for m in materias_validas if m not in materias_ya_activas]
     if not opciones_disponibles:
-        st.warning("No tenés materias en estado 'Cursando' o 'Regular' disponibles para agregar. Modificá tu Plan de Estudios primero.")
+        st.warning("No tenés materias en estado 'Cursando' o 'Regular' disponibles para agregar.")
         return
     
     n = st.selectbox("Seleccionar Materia", opciones_disponibles)
     colores = {
-        "🔵 Celeste": "#365b77", "🟢 Verde": "#22c55e", "🟡 Amarillo": "#eab308", 
-        "🟣 Violeta": "#a855f7", "🟠 Naranja": "#f97316", "🩷 Rosa": "#ec4899", "⚪ Gris": "#7498b6"
+        "Celeste": "#365b77", "Verde": "#22c55e", "Amarillo": "#eab308", 
+        "Violeta": "#a855f7", "Naranja": "#f97316", "Rosa": "#ec4899", "Gris": "#7498b6"
     }
     color_elegido = st.selectbox("Color Distintivo", list(colores.keys()))
     c = colores[color_elegido]
@@ -762,7 +733,6 @@ def dialog_agregar_sesion():
     if not nombres_materias:
         st.warning("Agregá materias en 'Organización' para poder registrar sesiones.")
         return
-    st.markdown("### Métricas Rápidas")
     col1, col2, col3, col4, col5 = st.columns(5)
     tiempo_neto = col1.number_input("TIEMPO NETO (min)", min_value=1, value=60)
     tiempo_pausa = col3.number_input("TIEMPO PAUSA (min)", min_value=0, value=10)
@@ -782,8 +752,7 @@ def dialog_agregar_sesion():
     if st.button("Guardar Sesión", type="primary", use_container_width=True):
         nueva_sesion = {
             "FECHA": fecha.strftime("%d/%m/%Y"), "MATERIA": materia, "MÉTODO": metodo,
-            "TIEMPO (min)": tiempo_neto, "EFIC.": f"{eficiencia}%",
-            "INTERRUPCIONES": []
+            "TIEMPO (min)": tiempo_neto, "EFIC.": f"{eficiencia}%", "INTERRUPCIONES": []
         }
         st.session_state['historial'].append(nueva_sesion)
         id_meta = opciones_obj[objetivo_sel]
@@ -813,7 +782,6 @@ with col_contenido:
             st.info("Agregá materias en el 'Plan de Estudios' para ver tu progreso general.")
         else:
             df_plan = pd.DataFrame(st.session_state['plan_carrera'])
-            
             counts = df_plan['estado'].value_counts().to_dict()
             aprobadas = counts.get("Aprobada/Promocionada", 0)
             regulares = counts.get("Regular", 0)
@@ -828,7 +796,7 @@ with col_contenido:
             p_pend = (pendientes / total_materias) * 100 if total_materias > 0 else 0
             
             st.markdown(f"""
-            <div style="width: 100%; height: 30px; border-radius: 15px; display: flex; overflow: hidden; margin-bottom: 25px; border: 1px solid #153f59;">
+            <div style="width: 100%; height: 20px; border-radius: 10px; display: flex; overflow: hidden; margin-bottom: 25px; border: 1px solid #153f59;">
                 <div style="width: {p_apr}%; background-color: #22c55e;" title="Aprobadas: {p_apr:.1f}%"></div>
                 <div style="width: {p_reg}%; background-color: #eab308;" title="Regulares: {p_reg:.1f}%"></div>
                 <div style="width: {p_curs}%; background-color: #3b82f6;" title="Cursando: {p_curs:.1f}%"></div>
@@ -838,14 +806,13 @@ with col_contenido:
             """, unsafe_allow_html=True)
             
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#22c55e;'>{p_apr:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>APROBADAS ({aprobadas})</div></div>", unsafe_allow_html=True)
-            c2.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#eab308;'>{p_reg:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>REGULARES ({regulares})</div></div>", unsafe_allow_html=True)
-            c3.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#3b82f6;'>{p_curs:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>CURSANDO ({cursando})</div></div>", unsafe_allow_html=True)
-            c4.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#ef4444;'>{p_lib:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>LIBRES ({libres})</div></div>", unsafe_allow_html=True)
-            c5.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#94b8d7;'>{p_pend:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>PENDIENTES ({pendientes})</div></div>", unsafe_allow_html=True)
+            c1.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#22c55e;'>{p_apr:.1f}%</div><div style='color:#7498b6; font-size:11px; font-weight:bold;'>APROBADAS ({aprobadas})</div></div>", unsafe_allow_html=True)
+            c2.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#eab308;'>{p_reg:.1f}%</div><div style='color:#7498b6; font-size:11px; font-weight:bold;'>REGULARES ({regulares})</div></div>", unsafe_allow_html=True)
+            c3.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#3b82f6;'>{p_curs:.1f}%</div><div style='color:#7498b6; font-size:11px; font-weight:bold;'>CURSANDO ({cursando})</div></div>", unsafe_allow_html=True)
+            c4.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#ef4444;'>{p_lib:.1f}%</div><div style='color:#7498b6; font-size:11px; font-weight:bold;'>LIBRES ({libres})</div></div>", unsafe_allow_html=True)
+            c5.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#94b8d7;'>{p_pend:.1f}%</div><div style='color:#7498b6; font-size:11px; font-weight:bold;'>PENDIENTES ({pendientes})</div></div>", unsafe_allow_html=True)
             
             st.divider()
-            
             col_izq, col_der = st.columns(2, gap="large")
             
             def calcular_prioridad(nombre_mat):
@@ -856,13 +823,11 @@ with col_contenido:
                 return count
 
             with col_izq:
-                st.markdown("### 📘 Cursando y Regulares")
-                st.caption("Ordenadas por prioridad (las que destraban más materias están arriba).")
+                st.markdown("### Cursando y Regulares")
                 mat_cursando = [m for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
                 mat_cursando.sort(key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
                 
-                if not mat_cursando:
-                    st.info("No tenés materias en estado 'Cursando' o 'Regular'.")
+                if not mat_cursando: st.info("No tenés materias en estado 'Cursando' o 'Regular'.")
                 else:
                     for m in mat_cursando:
                         color_border = "#eab308" if m['estado'] == "Regular" else "#3b82f6"
@@ -871,7 +836,7 @@ with col_contenido:
                             div[data-testid="stButton"] button[key="btn_carr_curs_{m['id']}"] {{
                                 background-color: #02152b; color: #f8fafc; text-align: left;
                                 border: none; border-left: 4px solid {color_border}; justify-content: flex-start;
-                                padding-left: 15px; font-size: 15px;
+                                padding-left: 15px; font-size: 14px;
                             }}
                         </style>
                         """, unsafe_allow_html=True)
@@ -879,9 +844,7 @@ with col_contenido:
                             dialog_detalle_materia(m['id'])
             
             with col_der:
-                st.markdown("### 🔓 Puedo Cursar")
-                st.caption("Materias pendientes o libres que cumplen todos los requisitos para ser cursadas.")
-                
+                st.markdown("### Puedo Cursar")
                 def is_met(m_name, req_type):
                     target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
                     if not target: return False
@@ -893,13 +856,11 @@ with col_contenido:
                     if m['estado'] in ["Pendiente", "Libre/Recursado"]:
                         req_reg_ok = all(is_met(r, 'reg') for r in m.get('req_regulares', []))
                         req_apr_ok = all(is_met(r, 'apr') for r in m.get('req_aprobadas', []))
-                        if req_reg_ok and req_apr_ok:
-                            puedo_cursar.append(m)
+                        if req_reg_ok and req_apr_ok: puedo_cursar.append(m)
                             
                 puedo_cursar.sort(key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
                             
-                if not puedo_cursar:
-                    st.info("No hay materias nuevas habilitadas para cursar en este momento.")
+                if not puedo_cursar: st.info("No hay materias nuevas habilitadas.")
                 else:
                     for m in puedo_cursar:
                         color_border = "#7498b6" if m['estado'] == "Pendiente" else "#ef4444"
@@ -908,7 +869,7 @@ with col_contenido:
                             div[data-testid="stButton"] button[key="btn_carr_puedo_{m['id']}"] {{
                                 background-color: #02152b; color: #f8fafc; text-align: left;
                                 border: none; border-left: 4px solid {color_border}; justify-content: flex-start;
-                                padding-left: 15px; font-size: 15px;
+                                padding-left: 15px; font-size: 14px;
                             }}
                         </style>
                         """, unsafe_allow_html=True)
@@ -917,7 +878,6 @@ with col_contenido:
 
             st.divider()
             
-            # --- PROMEDIO GENERAL ---
             notas_validas = []
             for m in st.session_state['plan_carrera']:
                 if m['estado'] == 'Aprobada/Promocionada':
@@ -937,21 +897,20 @@ with col_contenido:
             st.markdown(f"""
             <div style="background-color: #02152b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #153f59;">
                 <div style="color: #7498b6; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
-                <div style="color: #94b8d7; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
+                <div style="color: #10b981; font-size: 38px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
             
             st.write("<br>", unsafe_allow_html=True)
-            if st.button("📊 Histórico de Notas", use_container_width=True):
+            if st.button("Histórico de Notas", use_container_width=True):
                 dialog_historico_notas()
 
     elif menu_opcion == "Plan de Estudios":
         c_head1, c_head2 = st.columns([4, 1])
         with c_head1:
             st.header("Plan de Estudios")
-            st.caption("Gestioná todas las materias de tu carrera y sus correlatividades.")
         with c_head2:
-            if st.button("➕ Añadir Materia", type="primary", use_container_width=True):
+            if st.button("Añadir Materia", type="primary", use_container_width=True):
                 dialog_nueva_materia_plan()
                 
         st.divider()
@@ -965,11 +924,10 @@ with col_contenido:
             for anio in anios:
                 st.markdown(f"### Año {anio}")
                 materias_anio = df_plan[df_plan['año'] == anio]
-                
                 cols = st.columns(4)
                 for i, row in materias_anio.reset_index().iterrows():
                     with cols[i % 4]:
-                        with st.container(border=True):
+                        with st.container():
                             color_clase = "badge-pendiente"
                             if row['estado'] == "Regular": color_clase = "badge-regular"
                             elif row['estado'] == "Aprobada/Promocionada": color_clase = "badge-aprobada"
@@ -982,10 +940,10 @@ with col_contenido:
                             elif cuatri_val == "2do Cuatrimestre": cuatri_abrev = "2C"
                             elif cuatri_val == "Anual": cuatri_abrev = "Anual"
                             
-                            cuatri_html = f"<span style='float:right; font-size: 11px; color: #7498b6; font-weight: bold;'>{cuatri_abrev}</span>" if cuatri_abrev else ""
+                            cuatri_html = f"<span style='float:right; font-size: 10px; color: #7498b6; font-weight: bold;'>{cuatri_abrev}</span>" if cuatri_abrev else ""
 
                             html_badges = f"""
-                            <div style="margin-bottom: 8px;">
+                            <div style="margin-bottom: 5px;">
                                 <span class='{color_clase}'>{row['estado']}</span>
                                 {cuatri_html}
                             </div>
@@ -997,12 +955,11 @@ with col_contenido:
                                 
                             html_reqs = ""
                             if isinstance(row.get('req_regulares'), list) and len(row['req_regulares']) > 0: 
-                                html_reqs += f"<div style='font-size: 11px; color: #7498b6; margin-bottom: 2px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
+                                html_reqs += f"<div style='font-size: 10px; color: #7498b6; margin-bottom: 1px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
                             if isinstance(row.get('req_aprobadas'), list) and len(row['req_aprobadas']) > 0: 
-                                html_reqs += f"<div style='font-size: 11px; color: #7498b6; margin-bottom: 2px;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
+                                html_reqs += f"<div style='font-size: 10px; color: #7498b6;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
                             
-                            if html_reqs:
-                                st.markdown(html_reqs, unsafe_allow_html=True)
+                            if html_reqs: st.markdown(html_reqs, unsafe_allow_html=True)
 
     elif menu_opcion == "Resumen":
         renderizar_analitica()
@@ -1010,11 +967,9 @@ with col_contenido:
     elif menu_opcion == "Organización":
         with st.container(border=True):
             c_head1, c_head2 = st.columns([4, 1])
-            with c_head1:
-                st.markdown("### Materias Activas (Cronómetro)")
-                st.caption("Añadí acá solo las materias de tu plan que estás cursando o rindiendo AHORA.")
+            with c_head1: st.markdown("### Materias Activas (Cronómetro)")
             with c_head2:
-                if st.button("➕ Nueva Materia", type="secondary", use_container_width=True):
+                if st.button("Nueva Materia", type="secondary", use_container_width=True):
                     dialog_nueva_materia_activa()
                     
             cols_mat = st.columns(3)
@@ -1023,31 +978,30 @@ with col_contenido:
                 for plan_mat in st.session_state['plan_carrera']:
                     if plan_mat['nombre'] == mat['nombre']:
                         if plan_mat['estado'] == "Cursando":
-                            estado_badge = "<div style='margin-top: 8px;'><span class='badge-cursando'>Cursando</span></div>"
+                            estado_badge = "<div style='margin-top: 5px;'><span class='badge-cursando'>Cursando</span></div>"
                         elif plan_mat['estado'] == "Regular":
-                            estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
+                            estado_badge = "<div style='margin-top: 5px;'><span class='badge-regular'>Regular</span></div>"
                         break
 
                 with cols_mat[i % 3]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 20px; text-align: center; background-color: #02152b; margin-bottom: 15px;">
+                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 15px; text-align: center; background-color: #02152b; margin-bottom: 10px;">
                         <div class="color-circle" style="background-color: {mat['color']};"></div>
-                        <div style="font-size: 16px; font-weight: 600;">{mat['nombre']}</div>
+                        <div style="font-size: 15px; font-weight: 600;">{mat['nombre']}</div>
                         {estado_badge}
                     </div>
                     """, unsafe_allow_html=True)
-                    if st.button("🗑️ Eliminar", key=f"del_mat_{i}", use_container_width=True):
+                    if st.button("Eliminar", key=f"del_mat_{i}", use_container_width=True):
                         st.session_state['materias'].pop(i)
                         if guardar_datos(): st.rerun()
                         
         st.write("<br>", unsafe_allow_html=True)
-
         with st.container(border=True):
             c_dist1, c_dist2 = st.columns([4, 1])
             with c_dist1: st.markdown("### Gestionar Distracciones")
             with c_dist2:
                 nueva_dist = st.text_input("Nueva Distracción", label_visibility="collapsed", placeholder="Ej: Baño...")
-                if st.button("➕ Añadir", type="secondary", key="btn_dist", use_container_width=True):
+                if st.button("Añadir", type="secondary", key="btn_dist", use_container_width=True):
                     if nueva_dist and nueva_dist not in st.session_state['distracciones']:
                         st.session_state['distracciones'].append(nueva_dist)
                         if guardar_datos(): st.rerun()
@@ -1056,23 +1010,21 @@ with col_contenido:
             for i, dist in enumerate(st.session_state['distracciones']):
                 with cols_dist[i % 4]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 15px; text-align: center; background-color: #02152b; margin-bottom: 10px;">
-                        <div style="color: #7498b6; font-size: 14px;">⚫</div>
-                        <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{dist}</div>
+                    <div style="border: 1px solid #153f59; border-radius: 10px; padding: 10px; text-align: center; background-color: #02152b; margin-bottom: 5px;">
+                        <div style="font-weight: 600; font-size: 14px;">{dist}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    if st.button("🗑️", key=f"del_dist_{i}", use_container_width=True):
+                    if st.button("Eliminar", key=f"del_dist_{i}", use_container_width=True):
                         st.session_state['distracciones'].pop(i)
                         if guardar_datos(): st.rerun()
 
         st.write("<br>", unsafe_allow_html=True)
-
         with st.container(border=True):
             c_met1, c_met2 = st.columns([4, 1])
             with c_met1: st.markdown("### Gestionar Métodos")
             with c_met2:
                 nuevo_met = st.text_input("Nuevo Método", label_visibility="collapsed", placeholder="Ej: Mapa mental...")
-                if st.button("➕ Añadir", type="secondary", key="btn_met", use_container_width=True):
+                if st.button("Añadir", type="secondary", key="btn_met", use_container_width=True):
                     if nuevo_met and nuevo_met not in st.session_state['metodos']:
                         st.session_state['metodos'].append(nuevo_met)
                         if guardar_datos(): st.rerun()
@@ -1081,12 +1033,11 @@ with col_contenido:
             for i, met in enumerate(st.session_state['metodos']):
                 with cols_met[i % 4]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 15px; text-align: center; background-color: #02152b; margin-bottom: 10px;">
-                        <div style="color: #7498b6; font-size: 14px;">⚫</div>
-                        <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{met}</div>
+                    <div style="border: 1px solid #153f59; border-radius: 10px; padding: 10px; text-align: center; background-color: #02152b; margin-bottom: 5px;">
+                        <div style="font-weight: 600; font-size: 14px;">{met}</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    if st.button("🗑️", key=f"del_met_{i}", use_container_width=True):
+                    if st.button("Eliminar", key=f"del_met_{i}", use_container_width=True):
                         st.session_state['metodos'].pop(i)
                         if guardar_datos(): st.rerun()
 
@@ -1109,42 +1060,37 @@ with col_contenido:
                     if (hoy + pd.Timedelta(days=j)).weekday() in selected_ints:
                         dias_restantes += 1
             
-            etiqueta_estado = f"<span style='color: #f8fafc; font-weight:800; float:right;'>{dias_restantes} días</span>" if not is_pasada else "<span style='color: #ef4444; float:right;'>Examen pasado</span>"
-            
-            st.markdown(f"<div style='text-align:center; font-size: 16px; font-weight: 800; text-transform: uppercase; margin-bottom: 15px;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
+            etiqueta_estado = f"<span style='color: #10b981; font-weight:800; float:right;'>{dias_restantes} días</span>" if not is_pasada else "<span style='color: #ef4444; float:right;'>Examen pasado</span>"
+            st.markdown(f"<div style='text-align:center; font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 10px;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
             
             progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
             pct = int(progreso * 100)
             
             st.markdown(f"""
             <div style='display:flex; justify-content:space-between; align-items:center;'>
-                <h3 style='margin-bottom: 0px;'>{meta['nombre']}</h3>
-                <h3 style='margin-bottom: 0px;'>{pct}%</h3>
+                <h4 style='margin-bottom: 0px;'>{meta['nombre']}</h4>
+                <h4 style='margin-bottom: 0px;'>{pct}%</h4>
             </div>
-            <div style='color: #7498b6; font-size: 13px; font-weight: bold; margin-bottom: 10px;'>{meta['materia']} {etiqueta_estado}</div>
+            <div style='color: #7498b6; font-size: 12px; font-weight: bold; margin-bottom: 10px;'>{meta['materia']} {etiqueta_estado}</div>
             """, unsafe_allow_html=True)
             
             st.progress(progreso)
             
-            h_acum = int(meta['horas_acumuladas'])
-            m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
-            
             if not is_pasada:
                 horas_faltantes = max(0.0, meta['meta_horas'] - meta['horas_acumuladas'])
-                falt_h = int(horas_faltantes)
-                falt_m = int((horas_faltantes - falt_h) * 60)
-                st.markdown(f"<div style='text-align:right; font-size: 12px; color: #7498b6; font-weight:bold;'>Faltan {falt_h}h {falt_m}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
+                falt_h, falt_m = int(horas_faltantes), int((horas_faltantes - int(horas_faltantes)) * 60)
+                st.markdown(f"<div style='text-align:right; font-size: 11px; color: #7498b6; font-weight:bold;'>Faltan {falt_h}h {falt_m}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
             
             if is_pasada:
                 if meta.get('nota'):
-                    st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 20px; font-weight: 800; color: white;'>{meta['nota']}</span></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 18px; font-weight: 800; color: #10b981;'>{meta['nota']}</span></div>", unsafe_allow_html=True)
                 else:
                     st.write("<br>", unsafe_allow_html=True)
-                    if st.button("🎖️ Asignar Nota", key=f"nota_{prefijo_key}_{original_idx}", use_container_width=True):
+                    if st.button("Asignar Nota", key=f"nota_{prefijo_key}_{original_idx}", use_container_width=True):
                         dialog_asignar_nota(original_idx)
 
         with tabs[0]:
-            if st.session_state['timer_state'] == 'IDLE':
+            if st.session_state['timer']['state'] == 'IDLE':
                 col_izq, col_der = st.columns([1, 2], gap="large")
                 
                 with col_izq:
@@ -1168,36 +1114,47 @@ with col_contenido:
                 with col_der:
                     with st.container(border=True):
                         st.write("<br>", unsafe_allow_html=True)
-                        st.radio("Modo", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
-                        st.write("<br><br>", unsafe_allow_html=True)
-                        if st.button("▶ INICIAR ESTUDIO", type="primary", use_container_width=True):
-                            st.session_state['study_start'] = time.time()
-                            st.session_state['timer_state'] = 'RUNNING'
+                        modo_sel = st.radio("Modo", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
+                        st.session_state['timer']['mode'] = modo_sel
+                        
+                        if modo_sel == "Pomodoro":
+                            cp1, cp2 = st.columns(2)
+                            f_time = cp1.number_input("Minutos de Enfoque", min_value=1, value=st.session_state['timer']['focus_time'])
+                            b_time = cp2.number_input("Minutos de Pausa", min_value=1, value=st.session_state['timer']['break_time'])
+                            st.session_state['timer']['focus_time'] = f_time
+                            st.session_state['timer']['break_time'] = b_time
+                            
+                        st.write("<br>", unsafe_allow_html=True)
+                        if st.button("Iniciar Estudio", type="primary", use_container_width=True):
+                            st.session_state['timer']['start'] = time.time()
+                            st.session_state['timer']['state'] = 'RUNNING'
                             st.rerun()
                         st.write("<br>", unsafe_allow_html=True)
 
-            elif st.session_state['timer_state'] == 'RUNNING':
-                st.markdown("<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>Cronómetro Libre</p>", unsafe_allow_html=True)
-                current_elapsed = st.session_state['study_elapsed'] + (time.time() - st.session_state['study_start'])
+            elif st.session_state['timer']['state'] == 'RUNNING':
+                titulo = "Cronómetro Libre" if st.session_state['timer']['mode'] == "Libre" else "Modo Pomodoro (Enfoque)"
+                st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>{titulo}</p>", unsafe_allow_html=True)
+                current_elapsed = st.session_state['timer']['elapsed'] + (time.time() - st.session_state['timer']['start'])
                 render_live_timer(current_elapsed, True)
+                
                 c1, c2, c3 = st.columns([1, 2, 2])
                 with c1:
-                    if st.button("❌", use_container_width=True):
-                        st.session_state['timer_state'] = 'IDLE'
-                        st.session_state['study_elapsed'] = 0.0
+                    if st.button("Cancelar", use_container_width=True):
+                        st.session_state['timer']['state'] = 'IDLE'
+                        st.session_state['timer']['elapsed'] = 0.0
                         st.rerun()
                 with c2:
-                    if st.button("⏸ Pausar", use_container_width=True):
-                        st.session_state['study_elapsed'] += time.time() - st.session_state['study_start']
-                        st.session_state['timer_state'] = 'INTERRUPT'
+                    if st.button("Pausar", use_container_width=True):
+                        st.session_state['timer']['elapsed'] += time.time() - st.session_state['timer']['start']
+                        st.session_state['timer']['state'] = 'INTERRUPT'
                         st.rerun()
                 with c3:
-                    if st.button("⏹ Terminar", type="primary", use_container_width=True):
-                        st.session_state['study_elapsed'] += time.time() - st.session_state['study_start']
-                        st.session_state['timer_state'] = 'FINISHED'
+                    if st.button("Terminar", type="primary", use_container_width=True):
+                        st.session_state['timer']['elapsed'] += time.time() - st.session_state['timer']['start']
+                        st.session_state['timer']['state'] = 'FINISHED'
                         st.rerun()
 
-            elif st.session_state['timer_state'] == 'INTERRUPT':
+            elif st.session_state['timer']['state'] == 'INTERRUPT':
                 st.markdown("<h2 style='text-align: center;'>Interrupción</h2>", unsafe_allow_html=True)
                 st.markdown("<p style='text-align: center; color: #7498b6;'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
                 st.write("<br>", unsafe_allow_html=True)
@@ -1205,35 +1162,54 @@ with col_contenido:
                 for i, motivo in enumerate(st.session_state['distracciones']):
                     col = c1 if i % 2 == 0 else c2
                     if col.button(motivo, use_container_width=True):
-                        st.session_state['interruption_reason'] = motivo
-                        st.session_state['current_interruptions'].append(motivo)
-                        st.session_state['pause_start'] = time.time()
-                        st.session_state['pause_elapsed'] = 0.0
-                        st.session_state['timer_state'] = 'PAUSED'
+                        st.session_state['timer']['interruption_reason'] = motivo
+                        st.session_state['timer']['interruptions'].append(motivo)
+                        st.session_state['timer']['pause_start'] = time.time()
+                        st.session_state['timer']['pause_elapsed'] = 0.0
+                        st.session_state['timer']['state'] = 'PAUSED'
                         st.rerun()
                 st.divider()
-                if st.button("CANCELAR", use_container_width=True):
-                    st.session_state['timer_state'] = 'RUNNING'
-                    st.session_state['study_start'] = time.time()
+                if st.button("Volver al Cronómetro", use_container_width=True):
+                    st.session_state['timer']['state'] = 'RUNNING'
+                    st.session_state['timer']['start'] = time.time()
                     st.rerun()
 
-            elif st.session_state['timer_state'] == 'PAUSED':
-                st.markdown("<h1 style='text-align: center; color: #94b8d7;'>⏸ PAUSA</h1>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>Motivo: {st.session_state['interruption_reason']}</p>", unsafe_allow_html=True)
-                current_pause = st.session_state['pause_elapsed'] + (time.time() - st.session_state['pause_start'])
-                render_live_timer(current_pause, True)
+            elif st.session_state['timer']['state'] == 'PAUSED':
+                st.markdown("<h1 style='text-align: center; color: #10b981;'>PAUSA</h1>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>Motivo: {st.session_state['timer']['interruption_reason']}</p>", unsafe_allow_html=True)
+                current_pause = st.session_state['timer']['pause_elapsed'] + (time.time() - st.session_state['timer']['pause_start'])
+                
+                # Para la pausa mostramos reloj normal libre
+                html_pause = f"""
+                <div id="pause_clock" style="font-size: 75px; font-weight: 700; text-align: center; color: #f8fafc; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; margin: 15px 0;">00:00:00</div>
+                <script>
+                    var elapsedMs = {current_pause * 1000};
+                    var start = Date.now() - elapsedMs;
+                    function updateClock() {{
+                        var delta = Date.now() - start;
+                        var hrs = Math.floor(delta / 3600000).toString().padStart(2, '0');
+                        var mins = Math.floor((delta % 3600000) / 60000).toString().padStart(2, '0');
+                        var secs = Math.floor((delta % 60000) / 1000).toString().padStart(2, '0');
+                        document.getElementById("pause_clock").innerHTML = hrs + ":" + mins + ":" + secs;
+                    }}
+                    updateClock();
+                    setInterval(updateClock, 1000);
+                </script>
+                """
+                components.html(html_pause, height=120)
+
                 c1, c2, c3 = st.columns([1, 2, 1])
                 with c2:
                     if st.button("REANUDAR", type="primary", use_container_width=True):
-                        st.session_state['study_start'] = time.time()
-                        st.session_state['timer_state'] = 'RUNNING'
+                        st.session_state['timer']['start'] = time.time()
+                        st.session_state['timer']['state'] = 'RUNNING'
                         st.rerun()
 
-            elif st.session_state['timer_state'] == 'FINISHED':
+            elif st.session_state['timer']['state'] == 'FINISHED':
                 c_back, c_title, c_empty = st.columns([1, 10, 1])
                 with c_back:
-                    if st.button("⬅️ Volver", help="Regresar a Pausa"):
-                        st.session_state['timer_state'] = 'PAUSED'
+                    if st.button("Volver", help="Regresar a Pausa"):
+                        st.session_state['timer']['state'] = 'PAUSED'
                         st.rerun()
                 with c_title:
                     st.markdown("<h2 style='text-align: center; margin-top: -10px;'>Sesión Finalizada</h2>", unsafe_allow_html=True)
@@ -1258,16 +1234,16 @@ with col_contenido:
                         metodo_sel = st.radio("MÉTODO", st.session_state['metodos'], horizontal=True, label_visibility="collapsed")
                         
                     st.write("")
-                    if st.button("GUARDAR SESIÓN ➔", type="primary", use_container_width=True):
-                        minutos_estudio = round(st.session_state['study_elapsed'] / 60)
+                    if st.button("Guardar Sesión", type="primary", use_container_width=True):
+                        minutos_estudio = round(st.session_state['timer']['elapsed'] / 60)
                         nueva_sesion = {
                             "FECHA": datetime.now().strftime("%d/%m/%Y"),
                             "MATERIA": materia_sel, "MÉTODO": metodo_sel,
                             "TIEMPO (min)": minutos_estudio, "EFIC.": "100%",
-                            "INTERRUPCIONES": st.session_state.get('current_interruptions', [])
+                            "INTERRUPCIONES": st.session_state['timer']['interruptions']
                         }
                         st.session_state['historial'].append(nueva_sesion)
-                        st.session_state['current_interruptions'] = []
+                        st.session_state['timer']['interruptions'] = []
                         
                         id_meta = opciones_meta[meta_sel]
                         if id_meta:
@@ -1277,18 +1253,15 @@ with col_contenido:
                                     break
                         
                         if guardar_datos():
-                            st.toast(f"¡{minutos_estudio} minutos guardados!")
-                            st.session_state['timer_state'] = 'IDLE'
-                            st.session_state['study_elapsed'] = 0.0
-                            st.session_state['pause_elapsed'] = 0.0
+                            st.session_state['timer']['state'] = 'IDLE'
+                            st.session_state['timer']['elapsed'] = 0.0
+                            st.session_state['timer']['pause_elapsed'] = 0.0
                             time.sleep(1)
                             st.rerun()
 
-            if st.session_state['timer_state'] == 'IDLE':
+            if st.session_state['timer']['state'] == 'IDLE':
                 st.divider()
                 st.markdown("### Mi Horario de Cursado")
-                st.caption("Se completa con los horarios que cargues al editar tus materias 'Cursando' en el Plan de Estudios.")
-                
                 horarios_completos = []
                 for m in st.session_state['plan_carrera']:
                     if m['estado'] == "Cursando" and 'horarios_clase' in m:
@@ -1362,17 +1335,16 @@ with col_contenido:
                                 
                                 skip_cells[d] = span - 1
                                 
-                                texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
+                                texto = f"<span style='font-size: 10px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
                                 texto += f"{mat['materia']}"
                                 if mat['fin_orig']: 
-                                    texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
+                                    texto += f"<br><span style='font-size: 10px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
                                 
-                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
+                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"
                     html_tabla += "</table>"
-                    
                     st.markdown(html_tabla, unsafe_allow_html=True)
 
         with tabs[1]:
@@ -1380,21 +1352,20 @@ with col_contenido:
 
         with tabs[2]:
             materias_con_metas = list(set([m['materia'] for m in st.session_state['metas']]))
-            
             c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
-            with c_filt1: st.markdown("<div style='margin-top: 30px; color:#7498b6;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
+            with c_filt1: st.markdown("<div style='margin-top: 30px; color:#7498b6;'><b>Filtros</b></div>", unsafe_allow_html=True)
             f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, key="filtro_materias_metas", label_visibility="collapsed")
             f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], index=1, key="filtro_estado_metas", label_visibility="collapsed")
             
             with c_btn3:
                 st.write("<br>", unsafe_allow_html=True)
-                if st.button("➕ Nueva Meta", type="primary", use_container_width=True):
+                if st.button("Nueva Meta", type="primary", use_container_width=True):
                     dialog_nueva_meta()
                     
             st.divider()
                     
             if not st.session_state['metas']:
-                st.info("No tenés metas creadas. Tocá '+ Nueva Meta' para armar tu plan de examen.")
+                st.info("No tenés metas creadas. Tocá 'Nueva Meta' para armar tu plan de examen.")
             else:
                 metas_filtradas = st.session_state['metas']
                 if f_mat_metas != "Todas las materias":
@@ -1423,9 +1394,8 @@ with col_contenido:
 
         with tabs[3]:
             c_f1, c_f2, c_f3, c_f4, c_space, c_btn = st.columns([1.5, 3, 3, 3, 0.5, 3])
-            
             with c_f1: 
-                st.markdown("<div style='margin-top: 10px; color:#94b8d7; font-weight:800; font-size:16px;'>⚙️ Filtros</div>", unsafe_allow_html=True)
+                st.markdown("<div style='margin-top: 10px; color:#94b8d7; font-weight:800; font-size:14px;'>Filtros</div>", unsafe_allow_html=True)
                 
             nombres_materias = list(set([h['MATERIA'] for h in st.session_state['historial']]))
             nombres_metodos = list(set([h['MÉTODO'] for h in st.session_state['historial']]))
@@ -1435,7 +1405,7 @@ with col_contenido:
             f_met_hist = c_f4.selectbox("Métodos", ["Todos los métodos"] + nombres_metodos, key="filtro_met_hist", label_visibility="collapsed")
             
             with c_btn:
-                if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):
+                if st.button("Agregar Sesión", type="primary", use_container_width=True):
                     dialog_agregar_sesion()
                     
             if not st.session_state['historial']:
@@ -1468,9 +1438,9 @@ with col_contenido:
                         html_hist += "<tr><th>FECHA</th><th></th><th>TIEMPO</th><th>EFIC.</th></tr>"
                         for _, row in df_hist_view.iterrows():
                             fecha_str = row.get('FECHA', '')
-                            fecha_disp = f"<div style='font-weight:900; font-size:16px; color:#f8fafc;'>{fecha_str}</div><div style='font-size:12px; font-weight:600; color:#7498b6; margin-top:2px;'>--:--</div>"
+                            fecha_disp = f"<div style='font-weight:900; font-size:14px; color:#f8fafc;'>{fecha_str}</div><div style='font-size:11px; font-weight:600; color:#7498b6; margin-top:2px;'>--:--</div>"
                             mat_str = row.get('MATERIA', '')
-                            tiempo_str = f"<span style='color:#7498b6; font-weight:700; font-size:14px;'>{row.get('TIEMPO (min)', '')} min</span>"
+                            tiempo_str = f"<span style='color:#7498b6; font-weight:700; font-size:13px;'>{row.get('TIEMPO (min)', '')} min</span>"
                             efic_str = row.get('EFIC.', '')
                             html_hist += f"<tr><td>{fecha_disp}</td><td><div class='materia-pill'>{mat_str}</div></td><td>{tiempo_str}</td><td><span class='efic-green'>{efic_str}</span></td></tr>"
                         html_hist += "</table>"

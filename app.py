@@ -100,6 +100,62 @@ def cargar_datos():
     except: return None
     return None
 
+# --- SISTEMA DE MICROS ---
+@st.cache_data(ttl=3600)
+def obtener_datos_micros():
+    try:
+        client = get_gspread_client()
+        wb = client.open('StudyMeterDB')
+        # Buscamos las dos hojas dentro de tu DB
+        sheet_721 = wb.worksheet('Recorrido 721').get_all_values()
+        sheet_722 = wb.worksheet('Recorrido 722').get_all_values()
+        return {"721": sheet_721, "722": sheet_722}
+    except Exception as e:
+        return None
+
+def calcular_mejor_micro(hora_clase_str, dict_micros, origen, destino):
+    if not dict_micros: return None
+    
+    try:
+        hora_clase = datetime.strptime(hora_clase_str, "%H:%M")
+    except: return None
+    
+    # Margen de 5 a 20 minutos
+    lim_inf = hora_clase - pd.Timedelta(minutes=20)
+    lim_sup = hora_clase - pd.Timedelta(minutes=5)
+    
+    mejor_opcion = None
+    menor_diferencia = pd.Timedelta(minutes=100)
+    
+    for linea, datos in dict_micros.items():
+        idx_origen, idx_destino = -1, -1
+        for i, fila in enumerate(datos):
+            if fila:
+                if str(fila[0]).strip() == origen: idx_origen = i
+                if str(fila[0]).strip() == destino: idx_destino = i
+                
+        if idx_origen == -1 or idx_destino == -1: continue # No encontró las paradas en esta línea
+        
+        for col in range(1, len(datos[idx_destino])):
+            val_llegada = str(datos[idx_destino][col]).strip()
+            val_salida = str(datos[idx_origen][col]).strip()
+            
+            if val_llegada and val_salida:
+                try:
+                    h_llegada = datetime.strptime(val_llegada, "%H:%M")
+                    if lim_inf.time() <= h_llegada.time() <= lim_sup.time():
+                        # Si entra en el rango, vemos si es la mejor opción (la que te deja con menos tiempo muerto)
+                        dt_clase = datetime.combine(date.today(), hora_clase.time())
+                        dt_llegada = datetime.combine(date.today(), h_llegada.time())
+                        diferencia = dt_clase - dt_llegada
+                        
+                        if diferencia < menor_diferencia:
+                            menor_diferencia = diferencia
+                            mejor_opcion = {"linea": linea, "subida": val_salida, "bajada": val_llegada}
+                except:
+                    pass
+                    
+    return mejor_opcion
 # --- INICIALIZACIÓN DE VARIABLES ---
 if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
 if 'study_start' not in st.session_state: st.session_state['study_start'] = 0.0
@@ -1273,10 +1329,22 @@ with col_contenido:
                                 
                                 skip_cells[d] = span - 1
                                 
+                                dict_micros = obtener_datos_micros()
+                                
+                                info_micro = calcular_mejor_micro(
+                                    mat['inicio_orig'], 
+                                    dict_micros, 
+                                    "Viamonte, 2556", 
+                                    "Avenida Perú, 679"
+                                )
+                                
                                 texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
                                 texto += f"{mat['materia']}"
                                 if mat['fin_orig']: 
                                     texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
+                                
+                                if info_micro:
+                                    texto += f"<br><br><div style='font-size: 11px; background-color: #eab308; color: #1e293b; padding: 4px; border-radius: 4px; font-weight: 800; line-height: 1.1;'>🚌 L{info_micro['linea']} - Subir a las {info_micro['subida']}</div>"
                                 
                                 html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
                             else:

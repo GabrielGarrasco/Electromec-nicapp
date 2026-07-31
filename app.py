@@ -115,17 +115,18 @@ def obtener_datos_micros():
 
 def calcular_mejor_micro(hora_clase_str, dict_micros, origen, destino):
     if not dict_micros: return None
-    
     try:
-        hora_clase = datetime.strptime(hora_clase_str, "%H:%M")
+        hc = hora_clase_str.strip()
+        if ":" not in hc: hc += ":00"
+        if len(hc.split(":")[0]) == 1: hc = "0" + hc
+        hora_clase = datetime.strptime(hc, "%H:%M")
     except: return None
     
-    # Margen de 5 a 20 minutos
     lim_inf = hora_clase - pd.Timedelta(minutes=20)
     lim_sup = hora_clase - pd.Timedelta(minutes=5)
     
     mejor_opcion = None
-    menor_diferencia = pd.Timedelta(minutes=100)
+    menor_diferencia = pd.Timedelta(minutes=1000)
     
     for linea, datos in dict_micros.items():
         idx_origen, idx_destino = -1, -1
@@ -134,24 +135,27 @@ def calcular_mejor_micro(hora_clase_str, dict_micros, origen, destino):
                 if str(fila[0]).strip() == origen: idx_origen = i
                 if str(fila[0]).strip() == destino: idx_destino = i
                 
-        if idx_origen == -1 or idx_destino == -1: continue # No encontró las paradas en esta línea
+        if idx_origen == -1 or idx_destino == -1: continue
         
         for col in range(1, len(datos[idx_destino])):
-            val_llegada = str(datos[idx_destino][col]).strip()
-            val_salida = str(datos[idx_origen][col]).strip()
+            val_llegada = str(datos[idx_destino][col]).strip().replace('.', ':')
+            val_salida = str(datos[idx_origen][col]).strip().replace('.', ':')
             
             if val_llegada and val_salida:
                 try:
                     h_llegada = datetime.strptime(val_llegada, "%H:%M")
+                    h_salida = datetime.strptime(val_salida, "%H:%M")
+                    
+                    if h_salida >= h_llegada: continue # Evita que te mande a viajar al pasado
+                        
                     if lim_inf.time() <= h_llegada.time() <= lim_sup.time():
-                        # Si entra en el rango, vemos si es la mejor opción (la que te deja con menos tiempo muerto)
                         dt_clase = datetime.combine(date.today(), hora_clase.time())
                         dt_llegada = datetime.combine(date.today(), h_llegada.time())
                         diferencia = dt_clase - dt_llegada
                         
                         if diferencia < menor_diferencia:
                             menor_diferencia = diferencia
-                            mejor_opcion = {"linea": linea, "subida": val_salida, "bajada": val_llegada}
+                            mejor_opcion = {"linea": linea, "subida": h_salida.strftime("%H:%M"), "bajada": h_llegada.strftime("%H:%M")}
                 except:
                     pass
                     
@@ -1245,12 +1249,13 @@ with col_contenido:
                 st.markdown("### Mi Horario de Cursado")
                 st.caption("Se completa solo con los horarios que cargues al editar tus materias 'Cursando' en el Plan de Estudios.")
                 
+                dict_micros = obtener_datos_micros()
+                
                 horarios_completos = []
                 for m in st.session_state['plan_carrera']:
                     if m['estado'] == "Cursando" and 'horarios_clase' in m:
                         for hc in m['horarios_clase']:
                             if hc.get('dia') != "---" and hc.get('inicio'):
-                                # Magia para leer la hora aunque pongas "19" o "9" sin los ceros
                                 ini_c = hc['inicio'].strip()
                                 if ":" not in ini_c: ini_c += ":00"
                                 if len(ini_c.split(":")[0]) == 1: ini_c = "0" + ini_c
@@ -1266,28 +1271,42 @@ with col_contenido:
                                     "inicio": ini_c,
                                     "fin": fin_c,
                                     "inicio_orig": hc['inicio'],
-                                    "fin_orig": hc.get('fin', '')
+                                    "fin_orig": hc.get('fin', ''),
+                                    "tipo": "clase"
                                 })
+                                
+                                info_micro = calcular_mejor_micro(ini_c, dict_micros, "Viamonte, 2556", "Avenida Perú, 679")
+                                if info_micro:
+                                    sub_c = info_micro['subida']
+                                    if len(sub_c.split(":")[0]) == 1: sub_c = "0" + sub_c
+                                    baj_c = info_micro['bajada']
+                                    if len(baj_c.split(":")[0]) == 1: baj_c = "0" + baj_c
+                                    
+                                    horarios_completos.append({
+                                        "materia": f"{info_micro['linea']} - {info_micro['subida']}",
+                                        "dia": hc['dia'],
+                                        "inicio": sub_c,
+                                        "fin": baj_c,
+                                        "inicio_orig": info_micro['subida'],
+                                        "fin_orig": info_micro['bajada'],
+                                        "tipo": "micro"
+                                    })
                 
                 def get_sortable_time(t_str):
                     try: return datetime.strptime(t_str, "%H:%M").time()
                     except: return datetime.strptime("23:59", "%H:%M").time()
 
-                # Extraer todos los horarios únicos (tanto de inicio como de fin)
                 time_points = set()
                 for hc in horarios_completos:
                     time_points.add(hc['inicio'])
-                    if hc['fin']:
-                        time_points.add(hc['fin'])
+                    if hc['fin']: time_points.add(hc['fin'])
 
-                # AHORA SÍ dejamos TODAS las filas, incluida la de las 19:00 para que cierre el calendario perfecto
                 sorted_times = sorted(list(time_points), key=get_sortable_time)
                 
                 if not sorted_times:
                     st.info("No tenés horarios cargados. Andá a Carrera o Plan de Estudios, tocá en 'Editar' en una materia Cursando y poné a qué hora la tenés.")
                 else:
                     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-                    
                     matriz = {t: {d: [] for d in dias_semana} for t in sorted_times}
                     
                     for hc in horarios_completos:
@@ -1318,7 +1337,6 @@ with col_contenido:
                             if items:
                                 mat = items[0]
                                 span = 1
-                                # Sumar filas fusionadas
                                 for j in range(i + 1, len(sorted_times)):
                                     next_t = sorted_times[j]
                                     next_items = matriz[next_t][d]
@@ -1329,24 +1347,21 @@ with col_contenido:
                                 
                                 skip_cells[d] = span - 1
                                 
-                                dict_micros = obtener_datos_micros()
+                                if mat.get('tipo') == 'micro':
+                                    bg_color = "#eab308"
+                                    border_color = "#ca8a04"
+                                    text_color = "#1e293b"
+                                    texto = f"<div style='font-size: 13px; font-weight: 800;'>🚌 {mat['materia']}</div>"
+                                else:
+                                    bg_color = "#3b82f6"
+                                    border_color = "#2563eb"
+                                    text_color = "#ffffff"
+                                    texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
+                                    texto += f"{mat['materia']}"
+                                    if mat['fin_orig']: 
+                                        texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
                                 
-                                info_micro = calcular_mejor_micro(
-                                    mat['inicio_orig'], 
-                                    dict_micros, 
-                                    "Viamonte, 2556", 
-                                    "Avenida Perú, 679"
-                                )
-                                
-                                texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
-                                texto += f"{mat['materia']}"
-                                if mat['fin_orig']: 
-                                    texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
-                                
-                                if info_micro:
-                                    texto += f"<br><br><div style='font-size: 11px; background-color: #eab308; color: #1e293b; padding: 4px; border-radius: 4px; font-weight: 800; line-height: 1.1;'>🚌 L{info_micro['linea']} - Subir a las {info_micro['subida']}</div>"
-                                
-                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
+                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center; background-color: {bg_color}; border: 1px solid {border_color}; color: {text_color};'>{texto}</div></td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"

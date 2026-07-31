@@ -224,6 +224,12 @@ def renderizar_analitica():
 # ==========================================
 # --- MODALES (DIALOGS) ---
 # ==========================================
+def parse_float_nota(val_str):
+    try:
+        return float(val_str.replace(',', '.'))
+    except:
+        return None
+
 @st.dialog("Detalle de la Materia")
 def dialog_detalle_materia(mat_id):
     mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
@@ -248,9 +254,20 @@ def dialog_detalle_materia(mat_id):
         idx_estado = opciones_estado.index(mat['estado']) if mat['estado'] in opciones_estado else 0
         nuevo_estado = col3.selectbox("Estado", opciones_estado, index=idx_estado)
         
-        nueva_nota = ""
+        nueva_nota = mat.get('nota', '')
+        nuevos_intentos = mat.get('intentos', ["", "", "", ""])
+        while len(nuevos_intentos) < 4: nuevos_intentos.append("") # Asegurar 4 lugares
+        
         if nuevo_estado == "Aprobada/Promocionada":
-            nueva_nota = st.text_input("Nota Final (Opcional)", value=mat.get('nota', ''))
+            nueva_nota = st.text_input("Nota Final (Opcional)", value=nueva_nota, placeholder="Ej: 8, 9, 10...")
+        elif nuevo_estado == "Regular":
+            st.caption("Notas de Finales (hasta 4 intentos)")
+            c_i1, c_i2 = st.columns(2)
+            c_i3, c_i4 = st.columns(2)
+            nuevos_intentos[0] = c_i1.text_input("Intento 1", value=nuevos_intentos[0])
+            nuevos_intentos[1] = c_i2.text_input("Intento 2", value=nuevos_intentos[1])
+            nuevos_intentos[2] = c_i3.text_input("Intento 3", value=nuevos_intentos[2])
+            nuevos_intentos[3] = c_i4.text_input("Intento 4", value=nuevos_intentos[3])
             
         st.divider()
         st.caption("CORRELATIVIDADES")
@@ -269,13 +286,35 @@ def dialog_detalle_materia(mat_id):
             st.rerun()
         if c_btn2.button("Guardar Cambios", type="primary", use_container_width=True):
             if nuevo_nombre:
+                estado_final = nuevo_estado
+                nota_definitiva = nueva_nota
+                
+                # Lógica automática para los intentos en Regular
+                if nuevo_estado == "Regular":
+                    last_val = None
+                    cant_intentos = 0
+                    for val in nuevos_intentos:
+                        if val.strip():
+                            last_val = val.strip()
+                            cant_intentos += 1
+                    
+                    if last_val:
+                        val_num = parse_float_nota(last_val)
+                        if val_num is not None:
+                            if val_num >= 6:
+                                estado_final = "Aprobada/Promocionada"
+                                nota_definitiva = last_val
+                            elif cant_intentos >= 4:
+                                estado_final = "Libre/Recursado"
+                
                 mat['nombre'] = nuevo_nombre
                 mat['año'] = nuevo_anio
                 mat['cuatrimestre'] = nuevo_cuatri
-                mat['estado'] = nuevo_estado
+                mat['estado'] = estado_final
                 mat['req_regulares'] = nuevas_reg
                 mat['req_aprobadas'] = nuevas_apr
-                mat['nota'] = nueva_nota
+                mat['nota'] = nota_definitiva
+                mat['intentos'] = nuevos_intentos
                 
                 st.session_state['editando_plan_mat_id'] = None
                 if guardar_datos(): st.rerun()
@@ -287,10 +326,16 @@ def dialog_detalle_materia(mat_id):
         st.markdown(f"### {mat['nombre']}")
         cuatri = mat.get('cuatrimestre', 'No definido')
         
+        info_str = f"**Año:** {mat['año']} | **Cuatrimestre:** {cuatri} | **Estado:** {mat['estado']}"
         if mat['estado'] == "Aprobada/Promocionada" and mat.get('nota'):
-            st.markdown(f"**Año:** {mat['año']} | **Cuatrimestre:** {cuatri} | **Estado:** {mat['estado']} | **Nota:** {mat['nota']}")
-        else:
-            st.markdown(f"**Año:** {mat['año']} | **Cuatrimestre:** {cuatri} | **Estado:** {mat['estado']}")
+            info_str += f" | **Nota:** {mat['nota']}"
+        st.markdown(info_str)
+        
+        # Muestra el historial de intentos si quedó alguno registrado
+        intentos_guardados = mat.get('intentos', [])
+        intentos_validos = [i for i in intentos_guardados if i.strip()]
+        if intentos_validos:
+            st.caption(f"📝 Intentos registrados: {', '.join(intentos_validos)}")
             
         st.divider()
         
@@ -350,8 +395,18 @@ def dialog_nueva_materia_plan():
     estado = col3.selectbox("Estado", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
     
     nota_final = ""
+    intentos = ["", "", "", ""]
+    
     if estado == "Aprobada/Promocionada":
         nota_final = st.text_input("Nota Final (Opcional)", placeholder="Ej: 8, 9, 10...")
+    elif estado == "Regular":
+        st.caption("Notas de Finales (hasta 4 intentos)")
+        c_i1, c_i2 = st.columns(2)
+        c_i3, c_i4 = st.columns(2)
+        intentos[0] = c_i1.text_input("Intento 1")
+        intentos[1] = c_i2.text_input("Intento 2")
+        intentos[2] = c_i3.text_input("Intento 3")
+        intentos[3] = c_i4.text_input("Intento 4")
         
     st.divider()
     st.caption("CORRELATIVIDADES (Opcional)")
@@ -362,15 +417,37 @@ def dialog_nueva_materia_plan():
     st.write("<br>", unsafe_allow_html=True)
     if st.button("Guardar en el Plan", type="primary", use_container_width=True):
         if nombre:
+            estado_final = estado
+            nota_def = nota_final
+            
+            # Lógica automática para los intentos al crear
+            if estado == "Regular":
+                last_val = None
+                cant_intentos = 0
+                for v in intentos:
+                    if v.strip():
+                        last_val = v.strip()
+                        cant_intentos += 1
+                
+                if last_val:
+                    val_num = parse_float_nota(last_val)
+                    if val_num is not None:
+                        if val_num >= 6:
+                            estado_final = "Aprobada/Promocionada"
+                            nota_def = last_val
+                        elif cant_intentos >= 4:
+                            estado_final = "Libre/Recursado"
+
             st.session_state['plan_carrera'].append({
                 "id": str(time.time()), 
                 "nombre": nombre, 
                 "año": anio,
                 "cuatrimestre": cuatri,
-                "estado": estado, 
+                "estado": estado_final, 
                 "req_regulares": req_regulares, 
                 "req_aprobadas": req_aprobadas,
-                "nota": nota_final
+                "nota": nota_def,
+                "intentos": intentos
             })
             if guardar_datos(): st.rerun()
         else:
@@ -438,25 +515,16 @@ def dialog_nueva_materia_activa():
     materias_validas = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
     materias_ya_activas = [m['nombre'] for m in st.session_state['materias']]
     opciones_disponibles = [m for m in materias_validas if m not in materias_ya_activas]
-    
     if not opciones_disponibles:
         st.warning("No tenés materias en estado 'Cursando' o 'Regular' disponibles para agregar. Modificá tu Plan de Estudios primero.")
         return
-        
+    
     n = st.selectbox("Seleccionar Materia", opciones_disponibles)
-    
-    # Lista de colores predefinidos para evitar el bug del selector nativo
     colores = {
-        "🔵 Celeste": "#0ea5e9",
-        "🔴 Rojo": "#ef4444",
-        "🟢 Verde": "#22c55e",
-        "🟡 Amarillo": "#eab308",
-        "🟣 Violeta": "#a855f7",
-        "🟠 Naranja": "#f97316",
-        "🩷 Rosa": "#ec4899",
-        "⚪ Gris": "#94a3b8"
+        "🔵 Celeste": "#0ea5e9", "🔴 Rojo": "#ef4444", "🟢 Verde": "#22c55e",
+        "🟡 Amarillo": "#eab308", "🟣 Violeta": "#a855f7", "🟠 Naranja": "#f97316",
+        "🩷 Rosa": "#ec4899", "⚪ Gris": "#94a3b8"
     }
-    
     color_elegido = st.selectbox("Color Distintivo", list(colores.keys()))
     c = colores[color_elegido]
     
@@ -500,7 +568,6 @@ def dialog_agregar_sesion():
                     m['horas_acumuladas'] += (tiempo_neto / 60)
                     break
         if guardar_datos(): st.rerun()
-
 # ==========================================
 # --- LAYOUT PRINCIPAL (MENÚ FIJO) ---
 # ==========================================

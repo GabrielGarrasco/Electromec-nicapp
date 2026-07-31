@@ -332,7 +332,7 @@ def renderizar_analitica():
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
                 height=180,
-                annotations=[dict(text=f"{efic_promedio}%", x=0.5, y=0.5, font_size=28, showarrow=False, fontcolor="#f8fafc", fontweight="bold")]
+                annotations=[dict(text=f"<b>{efic_promedio}%</b>", x=0.5, y=0.5, showarrow=False, font=dict(size=28, color="#f8fafc"))]
             )
             st.plotly_chart(fig_efic, use_container_width=True, config={'displayModeBar': False})
             

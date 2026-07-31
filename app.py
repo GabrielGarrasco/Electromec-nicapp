@@ -11,82 +11,84 @@ import altair as alt
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 
-# --- CSS MEJORADO (Estética Dark Modern) ---
+# --- CSS MEJORADO (Estética Dark Blue Palette) ---
 st.markdown("""
     <style>
-    /* Fondo general oscuro */
-    .stApp { background-color: #0b1120; color: #f8fafc; font-family: 'Inter', sans-serif; }
+    /* Fondo general oscuro: #000a23 */
+    .stApp { background-color: #000a23; color: #f8fafc; font-family: 'Inter', sans-serif; }
     
     [data-testid="collapsedControl"] { display: none; }
     
     /* Pestañas (Tabs) */
-    .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 30px; border-bottom: 1px solid #1e293b; }
-    .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 700; font-size: 16px; padding-bottom: 10px; }
-    .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
+    .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 30px; border-bottom: 1px solid #153f59; }
+    .stTabs [data-baseweb="tab"] { color: #7498b6; font-weight: 700; font-size: 16px; padding-bottom: 10px; }
+    .stTabs [aria-selected="true"] { color: #94b8d7 !important; border-bottom: 3px solid #94b8d7 !important; }
     
-    /* Contenedores (Tarjetas) */
+    /* Contenedores (Tarjetas): #02152b con borde #153f59 */
     [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { 
-        background-color: #172033; border-radius: 16px; padding: 20px; border: 1px solid #1e293b; 
+        background-color: #02152b; border-radius: 16px; padding: 20px; border: 1px solid #153f59; 
     }
     
-    /* Botones primarios (Azul brillante) */
+    /* Botones primarios (Azules intermedios de la paleta) */
     [data-testid="baseButton-primary"] { 
-        background-color: #0ea5e9; border-color: #0ea5e9; color: white; border-radius: 12px; font-weight: bold; padding: 10px;
+        background-color: #365b77; border-color: #365b77; color: white; border-radius: 12px; font-weight: bold; padding: 10px;
     }
-    [data-testid="baseButton-primary"]:hover { background-color: #0284c7; border-color: #0284c7; }
+    [data-testid="baseButton-primary"]:hover { background-color: #557996; border-color: #557996; }
     
-    /* Botones secundarios (Gris oscuro) */
+    /* Botones secundarios (Azul más oscuro) */
     [data-testid="baseButton-secondary"] { 
-        background-color: #1e293b; border-color: #1e293b; color: #e2e8f0; border-radius: 12px; font-weight: 600;
+        background-color: #021d34; border-color: #153f59; color: #94b8d7; border-radius: 12px; font-weight: 600;
     }
-    [data-testid="baseButton-secondary"]:hover { border-color: #334155; color: white; }
+    [data-testid="baseButton-secondary"]:hover { border-color: #365b77; color: white; }
     
     /* Botón Racha (Especial) */
     button[kind="secondary"] {
-        background-color: transparent; border: 1px solid #334155; border-radius: 20px; color: #94a3b8; font-weight: 800; font-size: 15px; padding: 5px 15px;
+        background-color: transparent; border: 1px solid #153f59; border-radius: 20px; color: #7498b6; font-weight: 800; font-size: 15px; padding: 5px 15px;
     }
-    button[kind="secondary"]:hover { border-color: #0ea5e9; color: #0ea5e9; }
+    button[kind="secondary"]:hover { border-color: #557996; color: #94b8d7; }
     
     /* Métricas */
     [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 800; }
-    [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    [data-testid="stMetricLabel"] { color: #7498b6; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     header {visibility: hidden;}
     
     /* Badges */
-    .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
+    .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #153f59; }
     .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
-    .nota-box { background-color: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
+    .nota-box { background-color: #021d34; border: 1px solid #153f59; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
     
     /* Radio buttons tipo Pill para Libre/Pomodoro */
-    div[role="radiogroup"] { display: flex; justify-content: center; background-color: #1e293b; border-radius: 20px; padding: 5px; width: max-content; margin: 0 auto; }
-    div[role="radiogroup"] > label { padding: 8px 20px; border-radius: 15px; transition: 0.3s; margin-bottom: 0px; border: none; font-weight: bold; color: #94a3b8; }
-    div[role="radiogroup"] > label[data-checked="true"] { background-color: #334155; color: white; }
+    div[role="radiogroup"] { display: flex; justify-content: center; background-color: #021d34; border-radius: 20px; padding: 5px; width: max-content; margin: 0 auto; border: 1px solid #153f59;}
+    div[role="radiogroup"] > label { padding: 8px 20px; border-radius: 15px; transition: 0.3s; margin-bottom: 0px; border: none; font-weight: bold; color: #7498b6; }
+    div[role="radiogroup"] > label[data-checked="true"] { background-color: #365b77; color: white; }
     
     /* Horario Automático */
-    .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 15px; background-color: #0f172a; table-layout: fixed; }
-    .tabla-horario th { background-color: #121b29; color: #0ea5e9; padding: 15px 5px; border: 1px solid #1e293b; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
-    .tabla-horario th:first-child { color: #94a3b8; width: 10%; }
-    .tabla-horario td { padding: 0; border: 1px solid #1e293b; vertical-align: top; height: 75px; }
-    .tabla-horario td:first-child { font-weight: 700; color: #94a3b8; background-color: #121b29; padding-top: 15px; text-align: center; }
-    .materia-bloque { background-color: #3b82f6; color: #ffffff; padding: 5px; font-weight: 800; line-height: 1.2; width: 100%; height: 100%; min-height: 75px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; box-sizing: border-box; border: 1px solid #2563eb; border-radius: 4px; }
+    .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 15px; background-color: #000a23; table-layout: fixed; }
+    .tabla-horario th { background-color: #02152b; color: #94b8d7; padding: 15px 5px; border: 1px solid #153f59; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .tabla-horario th:first-child { color: #7498b6; width: 10%; }
+    .tabla-horario td { padding: 0; border: 1px solid #153f59; vertical-align: top; height: 75px; }
+    .tabla-horario td:first-child { font-weight: 700; color: #7498b6; background-color: #02152b; padding-top: 15px; text-align: center; }
+    .materia-bloque { background-color: #365b77; color: #ffffff; padding: 5px; font-weight: 800; line-height: 1.2; width: 100%; height: 100%; min-height: 75px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; box-sizing: border-box; border: 1px solid #557996; border-radius: 4px; }
     
-    /* Historial */
-    .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; font-size: 14px; background-color: #0b1120; border: 1px solid #1e293b; }
-    .tabla-historial th { background-color: #172033; color: #94a3b8; padding: 15px; border-bottom: 1px solid #1e293b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-    .tabla-historial td { padding: 15px; border-bottom: 1px solid #1e293b; vertical-align: middle; }
+    /* Historial Mejorado */
+    .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; background-color: transparent; }
+    .tabla-historial th { background-color: #02152b; color: #7498b6; padding: 15px 20px; border-bottom: 1px solid #153f59; font-weight: 800; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+    .tabla-historial td { padding: 20px; border-bottom: 1px solid #021d34; vertical-align: middle; }
     .tabla-historial tr:last-child td { border-bottom: none; }
-    .tabla-historial tr:hover td { background-color: #172033; }
+    .tabla-historial tr:hover td { background-color: #02152b; }
+    .materia-pill { background-color: #5753C9; color: white; padding: 6px 12px; border-radius: 6px; font-weight: 900; font-size: 12px; display: inline-block; text-transform: uppercase; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .efic-green { color: #2dd4bf; font-weight: 900; font-size: 22px; }
     
     /* Textos Analitica */
-    .analitica-title { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
+    .analitica-title { font-size: 11px; font-weight: 800; color: #7498b6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
     .analitica-big-number { font-size: 32px; font-weight: 900; color: #f8fafc; text-align: center; margin: 15px 0; }
-    .analitica-sub { text-align: center; color: #94a3b8; font-size: 14px; font-weight: 600; }
+    .analitica-sub { text-align: center; color: #7498b6; font-size: 14px; font-weight: 600; }
     .historico-box { text-align: center; }
-    .historico-title { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 10px; }
+    .historico-title { font-size: 10px; font-weight: 800; color: #7498b6; text-transform: uppercase; margin-bottom: 10px; }
     .historico-val { font-size: 24px; font-weight: 900; color: #f8fafc; }
     </style>
 """, unsafe_allow_html=True)
@@ -170,7 +172,6 @@ OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "S
 def calcular_datos_racha(historial):
     if not historial: return 0, 0, 0, 5
     
-    # Extraemos las fechas únicas en las que se registró al menos una sesión
     fechas_str = set([h['FECHA'] for h in historial])
     fechas_obj = sorted([datetime.strptime(f, "%d/%m/%Y").date() for f in fechas_str])
     
@@ -184,7 +185,6 @@ def calcular_datos_racha(historial):
     protectores = 0
     dias_para_protector = 5
     
-    # Simulamos el avance día por día para calcular protectores de forma fiel
     fecha_iter = fecha_inicio
     while fecha_iter <= hoy:
         estudio_hoy = fecha_iter in fechas_obj
@@ -198,7 +198,7 @@ def calcular_datos_racha(historial):
         else:
             if protectores > 0:
                 protectores -= 1
-                racha_actual += 1 # La racha se salva
+                racha_actual += 1 
             else:
                 racha_actual = 0
                 dias_para_protector = 5
@@ -225,30 +225,30 @@ with col_hdr2:
 def dialog_racha():
     st.markdown(f"""
     <div style='text-align: center;'>
-        <h1 style='font-size: 50px; margin-bottom: 0px;'>🔥 {racha_actual} días</h1>
-        <p style='color: #94a3b8; font-weight: bold; margin-top: 0px;'>¡Llevas una racha increíble!</p>
+        <h1 style='font-size: 50px; margin-bottom: 0px; color: #f8fafc;'>🔥 {racha_actual} días</h1>
+        <p style='color: #7498b6; font-weight: bold; margin-top: 0px;'>¡Llevas una racha increíble!</p>
     </div>
-    <h3 style='text-align: center;'>Protectores de Racha</h3>
+    <h3 style='text-align: center; color: #f8fafc;'>Protectores de Racha</h3>
     """, unsafe_allow_html=True)
     
     shields_html = "<div style='display: flex; justify-content: center; gap: 10px; margin: 20px 0;'>"
     for i in range(3):
-        color = "#334155" if i >= protectores else "#0ea5e9"
+        color = "#153f59" if i >= protectores else "#557996"
         opacity = "0.4" if i >= protectores else "1"
-        shields_html += f"<div style='width: 45px; height: 45px; border-radius: 50%; background-color: {color}; opacity: {opacity}; display: flex; justify-content: center; align-items: center; font-size: 20px; border: 1px solid #1e293b;'>🛡️</div>"
+        shields_html += f"<div style='width: 45px; height: 45px; border-radius: 50%; background-color: {color}; opacity: {opacity}; display: flex; justify-content: center; align-items: center; font-size: 20px; border: 1px solid #02253d;'>🛡️</div>"
     shields_html += "</div>"
     
     st.markdown(f"""
-    <div style='background-color: #172033; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #1e293b;'>
-        <div style='color: #94a3b8; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;'>TUS PROTECTORES</div>
+    <div style='background-color: #02152b; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #153f59;'>
+        <div style='color: #7498b6; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;'>TUS PROTECTORES</div>
         {shields_html}
-        <div style='font-weight: 800; font-size: 14px;'>Te faltan {dias_para_protector} días continuos para ganar otro.</div>
+        <div style='font-weight: 800; font-size: 14px; color: #f8fafc;'>Te faltan {dias_para_protector} días continuos para ganar otro.</div>
     </div>
     """, unsafe_allow_html=True)
     
     st.markdown("""
-    <div style='border: 1px solid #334155; border-radius: 12px; padding: 15px; margin-top: 15px; font-size: 13px;'>
-        <div style='color: #94a3b8; font-weight: 800; margin-bottom: 10px; font-size: 11px; text-transform: uppercase;'>ℹ️ CÓMO FUNCIONA</div>
+    <div style='border: 1px solid #153f59; border-radius: 12px; padding: 15px; margin-top: 15px; font-size: 13px; color: #f8fafc;'>
+        <div style='color: #7498b6; font-weight: 800; margin-bottom: 10px; font-size: 11px; text-transform: uppercase;'>ℹ️ CÓMO FUNCIONA</div>
         <div style='margin-bottom: 5px;'>✔️ Ganas 1 protector por cada 5 días de racha consecutivos.</div>
         <div style='margin-bottom: 5px;'>🛡️ Puedes almacenar un máximo de 3 protectores.</div>
         <div>❤️ Si olvidas estudiar un día, se consumirá un protector automáticamente para salvar tu racha.</div>
@@ -300,7 +300,6 @@ def renderizar_analitica():
         materia_top = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().idxmax() if total_minutos > 0 else "N/A"
         top_h = int(df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().max() // 60) if total_minutos > 0 else 0
         
-        # Datos de la última semana
         hoy = pd.Timestamp.now().normalize()
         fechas_7d = [hoy - pd.Timedelta(days=i) for i in range(6, -1, -1)]
         df_7d = df_hist[df_hist['FECHA_OBJ'] >= fechas_7d[0]]
@@ -308,7 +307,6 @@ def renderizar_analitica():
         h_sem = int(mins_semana // 60)
         m_sem = int(mins_semana % 60)
         
-        # Datos de hoy
         df_hoy = df_hist[df_hist['FECHA_OBJ'] == hoy]
         mins_hoy = df_hoy['TIEMPO (min)'].sum() if not df_hoy.empty else 0
         h_hoy = int(mins_hoy // 60)
@@ -327,17 +325,12 @@ def renderizar_analitica():
         with st.container(border=True):
             st.markdown("<div class='analitica-title'>EFICIENCIA</div>", unsafe_allow_html=True)
             source_efic = pd.DataFrame({"Cat": ["Eficiencia", "Falta"], "Valor": [efic_promedio, max(0, 100-efic_promedio)]})
-            chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=65).encode(
-                theta=alt.Theta(field="Valor", type="quantitative"),
-                color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=["#1e293b", "#0f172a"]), legend=None),
-                tooltip=['Cat', 'Valor']
-            ).properties(height=220)
             
-            # Simulamos el borde azul rellenando la dona si es > 0, sino gris
-            donut_color = "#0ea5e9" if efic_promedio > 0 else "#1e293b"
+            donut_color = "#365b77" if efic_promedio > 0 else "#021d34"
             chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=65).encode(
                 theta=alt.Theta(field="Valor", type="quantitative"),
-                color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=[donut_color, "#1e293b"]), legend=None)
+                color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=[donut_color, "#021d34"]), legend=None),
+                tooltip=['Cat', 'Valor']
             ).properties(height=220)
             
             st.altair_chart(chart_efic, use_container_width=True)
@@ -352,9 +345,9 @@ def renderizar_analitica():
                 df_barras = df_7d.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
                 df_barras['Horas'] = df_barras['TIEMPO (min)'] / 60
                 
-                bars = alt.Chart(df_barras).mark_bar(color="#334155").encode(
-                    x=alt.X("Horas:Q", title="", axis=alt.Axis(grid=True, gridColor="#1e293b", labelColor="#94a3b8")),
-                    y=alt.Y("MATERIA:N", title="", sort="-x", axis=alt.Axis(labelColor="#94a3b8", labelFontWeight="bold"))
+                bars = alt.Chart(df_barras).mark_bar(color="#557996").encode(
+                    x=alt.X("Horas:Q", title="", axis=alt.Axis(grid=True, gridColor="#153f59", labelColor="#7498b6")),
+                    y=alt.Y("MATERIA:N", title="", sort="-x", axis=alt.Axis(labelColor="#94b8d7", labelFontWeight="bold"))
                 ).properties(height=220)
                 st.altair_chart(bars, use_container_width=True)
                 
@@ -374,9 +367,9 @@ def renderizar_analitica():
                 df_linea = df_dias.copy()
                 df_linea['Horas'] = 0.0
                 
-            chart_linea = alt.Chart(df_linea).mark_line(point=alt.OverlayMarkDef(filled=False, fill="#0b1120", strokeWidth=2, size=50), color="#0ea5e9", strokeWidth=3).encode(
-                x=alt.X('Día:N', sort=None, title="", axis=alt.Axis(labelColor="#94a3b8", grid=False, domain=False, tickSize=0)),
-                y=alt.Y('Horas:Q', title="", axis=alt.Axis(labelColor="#94a3b8", grid=True, gridColor="#1e293b", domain=False))
+            chart_linea = alt.Chart(df_linea).mark_line(point=alt.OverlayMarkDef(filled=False, fill="#02152b", strokeWidth=2, size=50), color="#557996", strokeWidth=3).encode(
+                x=alt.X('Día:N', sort=None, title="", axis=alt.Axis(labelColor="#7498b6", grid=False, domain=False, tickSize=0)),
+                y=alt.Y('Horas:Q', title="", axis=alt.Axis(labelColor="#7498b6", grid=True, gridColor="#153f59", domain=False))
             ).properties(height=220)
             st.altair_chart(chart_linea, use_container_width=True)
 
@@ -385,7 +378,7 @@ def renderizar_analitica():
             st.markdown("<div class='analitica-title' style='text-align:center;'>SEMANAL</div>", unsafe_allow_html=True)
             txt_sem = f"{h_sem}h {m_sem}m" if h_sem > 0 else f"{m_sem}m"
             st.markdown(f"<div class='analitica-big-number'>{txt_sem}</div>", unsafe_allow_html=True)
-            st.markdown("<hr style='border: 1px solid #1e293b; margin: 20px 0;'>", unsafe_allow_html=True)
+            st.markdown("<hr style='border: 1px solid #153f59; margin: 20px 0;'>", unsafe_allow_html=True)
             st.markdown("<div class='analitica-title' style='text-align:center;'>HOY</div>", unsafe_allow_html=True)
             txt_hoy = f"{h_hoy:02d}:{m_hoy:02d}"
             st.markdown(f"<div class='analitica-big-number'>{txt_hoy}</div>", unsafe_allow_html=True)
@@ -399,11 +392,11 @@ def renderizar_analitica():
     with ch2:
         with st.container(border=True):
             st.markdown("<div class='historico-box'><div class='historico-title'>MATERIA TOP</div>", unsafe_allow_html=True)
-            color_mat = "#ef4444" # Default red
+            color_mat = "#557996" 
             for m in st.session_state['materias']:
                 if m['nombre'] == materia_top: color_mat = m['color']
             st.markdown(f"<div class='historico-val' style='font-size: 18px;'><span style='color:{color_mat};'>●</span> {materia_top}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='color:#94a3b8; font-size: 12px; font-weight:bold; margin-top:5px;'>{top_h}h</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color:#7498b6; font-size: 12px; font-weight:bold; margin-top:5px;'>{top_h}h</div></div>", unsafe_allow_html=True)
     with ch3:
         with st.container(border=True):
             st.markdown("<div class='historico-box'><div class='historico-title'>% GLOBAL</div>", unsafe_allow_html=True)
@@ -733,12 +726,12 @@ def dialog_historico_notas():
         except: return date.min
     notas_guardadas.sort(key=get_date, reverse=True)
     
-    html_notas = "<table class='tabla-historial'>"
+    html_notas = "<table class='tabla-historial' style='width: 100%;'>"
     html_notas += "<tr><th>FECHA</th><th>MATERIA</th><th>EXAMEN</th><th>NOTA</th></tr>"
     for m in notas_guardadas:
         try: fecha_str = date.fromisoformat(m['fecha_examen']).strftime('%d/%m/%Y')
         except: fecha_str = "---"
-        html_notas += f"<tr><td>{fecha_str}</td><td>{m['materia']}</td><td>{m['nombre']}</td><td style='color: #0ea5e9; font-weight: bold; font-size: 16px;'>{m['nota']}</td></tr>"
+        html_notas += f"<tr><td><span style='font-weight:bold; color:#f8fafc;'>{fecha_str}</span></td><td><div class='materia-pill'>{m['materia']}</div></td><td>{m['nombre']}</td><td><span class='efic-green'>{m['nota']}</span></td></tr>"
     html_notas += "</table>"
     st.markdown(html_notas, unsafe_allow_html=True)
 
@@ -753,9 +746,8 @@ def dialog_nueva_materia_activa():
     
     n = st.selectbox("Seleccionar Materia", opciones_disponibles)
     colores = {
-        "🔵 Celeste": "#0ea5e9", "🔴 Rojo": "#ef4444", "🟢 Verde": "#22c55e",
-        "🟡 Amarillo": "#eab308", "🟣 Violeta": "#a855f7", "🟠 Naranja": "#f97316",
-        "🩷 Rosa": "#ec4899", "⚪ Gris": "#94a3b8"
+        "🔵 Celeste": "#365b77", "🟢 Verde": "#22c55e", "🟡 Amarillo": "#eab308", 
+        "🟣 Violeta": "#a855f7", "🟠 Naranja": "#f97316", "🩷 Rosa": "#ec4899", "⚪ Gris": "#7498b6"
     }
     color_elegido = st.selectbox("Color Distintivo", list(colores.keys()))
     c = colores[color_elegido]
@@ -836,21 +828,21 @@ with col_contenido:
             p_pend = (pendientes / total_materias) * 100 if total_materias > 0 else 0
             
             st.markdown(f"""
-            <div style="width: 100%; height: 30px; border-radius: 15px; display: flex; overflow: hidden; margin-bottom: 25px; border: 1px solid #334155;">
+            <div style="width: 100%; height: 30px; border-radius: 15px; display: flex; overflow: hidden; margin-bottom: 25px; border: 1px solid #153f59;">
                 <div style="width: {p_apr}%; background-color: #22c55e;" title="Aprobadas: {p_apr:.1f}%"></div>
                 <div style="width: {p_reg}%; background-color: #eab308;" title="Regulares: {p_reg:.1f}%"></div>
                 <div style="width: {p_curs}%; background-color: #3b82f6;" title="Cursando: {p_curs:.1f}%"></div>
                 <div style="width: {p_lib}%; background-color: #ef4444;" title="Libres: {p_lib:.1f}%"></div>
-                <div style="width: {p_pend}%; background-color: #94a3b8;" title="Pendientes: {p_pend:.1f}%"></div>
+                <div style="width: {p_pend}%; background-color: #7498b6;" title="Pendientes: {p_pend:.1f}%"></div>
             </div>
             """, unsafe_allow_html=True)
             
             c1, c2, c3, c4, c5 = st.columns(5)
-            c1.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#22c55e;'>{p_apr:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>APROBADAS ({aprobadas})</div></div>", unsafe_allow_html=True)
-            c2.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#eab308;'>{p_reg:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>REGULARES ({regulares})</div></div>", unsafe_allow_html=True)
-            c3.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#3b82f6;'>{p_curs:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>CURSANDO ({cursando})</div></div>", unsafe_allow_html=True)
-            c4.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#ef4444;'>{p_lib:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>LIBRES ({libres})</div></div>", unsafe_allow_html=True)
-            c5.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#94a3b8;'>{p_pend:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>PENDIENTES ({pendientes})</div></div>", unsafe_allow_html=True)
+            c1.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#22c55e;'>{p_apr:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>APROBADAS ({aprobadas})</div></div>", unsafe_allow_html=True)
+            c2.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#eab308;'>{p_reg:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>REGULARES ({regulares})</div></div>", unsafe_allow_html=True)
+            c3.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#3b82f6;'>{p_curs:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>CURSANDO ({cursando})</div></div>", unsafe_allow_html=True)
+            c4.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#ef4444;'>{p_lib:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>LIBRES ({libres})</div></div>", unsafe_allow_html=True)
+            c5.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#94b8d7;'>{p_pend:.1f}%</div><div style='color:#7498b6; font-size:12px; font-weight:bold;'>PENDIENTES ({pendientes})</div></div>", unsafe_allow_html=True)
             
             st.divider()
             
@@ -877,7 +869,7 @@ with col_contenido:
                         st.markdown(f"""
                         <style>
                             div[data-testid="stButton"] button[key="btn_carr_curs_{m['id']}"] {{
-                                background-color: #172033; color: #f8fafc; text-align: left;
+                                background-color: #02152b; color: #f8fafc; text-align: left;
                                 border: none; border-left: 4px solid {color_border}; justify-content: flex-start;
                                 padding-left: 15px; font-size: 15px;
                             }}
@@ -910,11 +902,11 @@ with col_contenido:
                     st.info("No hay materias nuevas habilitadas para cursar en este momento.")
                 else:
                     for m in puedo_cursar:
-                        color_border = "#94a3b8" if m['estado'] == "Pendiente" else "#ef4444"
+                        color_border = "#7498b6" if m['estado'] == "Pendiente" else "#ef4444"
                         st.markdown(f"""
                         <style>
                             div[data-testid="stButton"] button[key="btn_carr_puedo_{m['id']}"] {{
-                                background-color: #172033; color: #f8fafc; text-align: left;
+                                background-color: #02152b; color: #f8fafc; text-align: left;
                                 border: none; border-left: 4px solid {color_border}; justify-content: flex-start;
                                 padding-left: 15px; font-size: 15px;
                             }}
@@ -943,9 +935,9 @@ with col_contenido:
             promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
             
             st.markdown(f"""
-            <div style="background-color: #172033; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #1e293b;">
-                <div style="color: #94a3b8; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
-                <div style="color: #0ea5e9; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
+            <div style="background-color: #02152b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #153f59;">
+                <div style="color: #7498b6; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
+                <div style="color: #94b8d7; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
             </div>
             """, unsafe_allow_html=True)
             
@@ -990,7 +982,7 @@ with col_contenido:
                             elif cuatri_val == "2do Cuatrimestre": cuatri_abrev = "2C"
                             elif cuatri_val == "Anual": cuatri_abrev = "Anual"
                             
-                            cuatri_html = f"<span style='float:right; font-size: 11px; color: #94a3b8; font-weight: bold;'>{cuatri_abrev}</span>" if cuatri_abrev else ""
+                            cuatri_html = f"<span style='float:right; font-size: 11px; color: #7498b6; font-weight: bold;'>{cuatri_abrev}</span>" if cuatri_abrev else ""
 
                             html_badges = f"""
                             <div style="margin-bottom: 8px;">
@@ -1005,9 +997,9 @@ with col_contenido:
                                 
                             html_reqs = ""
                             if isinstance(row.get('req_regulares'), list) and len(row['req_regulares']) > 0: 
-                                html_reqs += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
+                                html_reqs += f"<div style='font-size: 11px; color: #7498b6; margin-bottom: 2px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
                             if isinstance(row.get('req_aprobadas'), list) and len(row['req_aprobadas']) > 0: 
-                                html_reqs += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
+                                html_reqs += f"<div style='font-size: 11px; color: #7498b6; margin-bottom: 2px;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
                             
                             if html_reqs:
                                 st.markdown(html_reqs, unsafe_allow_html=True)
@@ -1038,7 +1030,7 @@ with col_contenido:
 
                 with cols_mat[i % 3]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #1e293b; border-radius: 12px; padding: 20px; text-align: center; background-color: #172033; margin-bottom: 15px;">
+                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 20px; text-align: center; background-color: #02152b; margin-bottom: 15px;">
                         <div class="color-circle" style="background-color: {mat['color']};"></div>
                         <div style="font-size: 16px; font-weight: 600;">{mat['nombre']}</div>
                         {estado_badge}
@@ -1064,8 +1056,8 @@ with col_contenido:
             for i, dist in enumerate(st.session_state['distracciones']):
                 with cols_dist[i % 4]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #1e293b; border-radius: 12px; padding: 15px; text-align: center; background-color: #172033; margin-bottom: 10px;">
-                        <div style="color: #94a3b8; font-size: 14px;">⚫</div>
+                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 15px; text-align: center; background-color: #02152b; margin-bottom: 10px;">
+                        <div style="color: #7498b6; font-size: 14px;">⚫</div>
                         <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{dist}</div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -1089,8 +1081,8 @@ with col_contenido:
             for i, met in enumerate(st.session_state['metodos']):
                 with cols_met[i % 4]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #1e293b; border-radius: 12px; padding: 15px; text-align: center; background-color: #172033; margin-bottom: 10px;">
-                        <div style="color: #94a3b8; font-size: 14px;">⚫</div>
+                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 15px; text-align: center; background-color: #02152b; margin-bottom: 10px;">
+                        <div style="color: #7498b6; font-size: 14px;">⚫</div>
                         <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{met}</div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -1129,7 +1121,7 @@ with col_contenido:
                 <h3 style='margin-bottom: 0px;'>{meta['nombre']}</h3>
                 <h3 style='margin-bottom: 0px;'>{pct}%</h3>
             </div>
-            <div style='color: #94a3b8; font-size: 13px; font-weight: bold; margin-bottom: 10px;'>{meta['materia']} {etiqueta_estado}</div>
+            <div style='color: #7498b6; font-size: 13px; font-weight: bold; margin-bottom: 10px;'>{meta['materia']} {etiqueta_estado}</div>
             """, unsafe_allow_html=True)
             
             st.progress(progreso)
@@ -1141,7 +1133,7 @@ with col_contenido:
                 horas_faltantes = max(0.0, meta['meta_horas'] - meta['horas_acumuladas'])
                 falt_h = int(horas_faltantes)
                 falt_m = int((horas_faltantes - falt_h) * 60)
-                st.markdown(f"<div style='text-align:right; font-size: 12px; color: #94a3b8; font-weight:bold;'>Faltan {falt_h}h {falt_m}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='text-align:right; font-size: 12px; color: #7498b6; font-weight:bold;'>Faltan {falt_h}h {falt_m}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
             
             if is_pasada:
                 if meta.get('nota'):
@@ -1166,18 +1158,12 @@ with col_contenido:
                         
                     if not metas_actuales:
                         with st.container(border=True):
-                            st.markdown("<div style='text-align:center; font-weight:bold; color:#94a3b8;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
+                            st.markdown("<div style='text-align:center; font-weight:bold; color:#7498b6;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
                             st.info("No tenés metas próximas. ¡Todo al día!")
                     else:
                         idx, meta_priority = metas_actuales[0]
                         with st.container(border=True):
                             render_meta_card(meta_priority, idx, False, hoy, "tab0")
-                            
-                    st.write("<br>", unsafe_allow_html=True)
-                    with st.container(border=True):
-                        st.markdown("<div style='text-align:center; font-size:13px; color:#94a3b8; margin-bottom:15px;'>Aquí puedes agregar una sesión manualmente</div>", unsafe_allow_html=True)
-                        if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):
-                            dialog_agregar_sesion()
 
                 with col_der:
                     with st.container(border=True):
@@ -1191,7 +1177,7 @@ with col_contenido:
                         st.write("<br>", unsafe_allow_html=True)
 
             elif st.session_state['timer_state'] == 'RUNNING':
-                st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Cronómetro Libre</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>Cronómetro Libre</p>", unsafe_allow_html=True)
                 current_elapsed = st.session_state['study_elapsed'] + (time.time() - st.session_state['study_start'])
                 render_live_timer(current_elapsed, True)
                 c1, c2, c3 = st.columns([1, 2, 2])
@@ -1213,7 +1199,7 @@ with col_contenido:
 
             elif st.session_state['timer_state'] == 'INTERRUPT':
                 st.markdown("<h2 style='text-align: center;'>Interrupción</h2>", unsafe_allow_html=True)
-                st.markdown("<p style='text-align: center; color: #94a3b8;'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align: center; color: #7498b6;'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
                 st.write("<br>", unsafe_allow_html=True)
                 c1, c2 = st.columns(2)
                 for i, motivo in enumerate(st.session_state['distracciones']):
@@ -1232,8 +1218,8 @@ with col_contenido:
                     st.rerun()
 
             elif st.session_state['timer_state'] == 'PAUSED':
-                st.markdown("<h1 style='text-align: center; color: #0ea5e9;'>⏸ PAUSA</h1>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Motivo: {st.session_state['interruption_reason']}</p>", unsafe_allow_html=True)
+                st.markdown("<h1 style='text-align: center; color: #94b8d7;'>⏸ PAUSA</h1>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>Motivo: {st.session_state['interruption_reason']}</p>", unsafe_allow_html=True)
                 current_pause = st.session_state['pause_elapsed'] + (time.time() - st.session_state['pause_start'])
                 render_live_timer(current_pause, True)
                 c1, c2, c3 = st.columns([1, 2, 1])
@@ -1298,7 +1284,6 @@ with col_contenido:
                             time.sleep(1)
                             st.rerun()
 
-            # --- SECCIÓN: HORARIO DE CURSADO AUTOMÁTICO A LO ANCHO ---
             if st.session_state['timer_state'] == 'IDLE':
                 st.divider()
                 st.markdown("### Mi Horario de Cursado")
@@ -1397,9 +1382,8 @@ with col_contenido:
             materias_con_metas = list(set([m['materia'] for m in st.session_state['metas']]))
             
             c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
-            with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
+            with c_filt1: st.markdown("<div style='margin-top: 30px; color:#7498b6;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
             f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, key="filtro_materias_metas", label_visibility="collapsed")
-            # Cambiado index a 1 para que por defecto arranque en "Actuales"
             f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], index=1, key="filtro_estado_metas", label_visibility="collapsed")
             
             with c_btn3:
@@ -1438,20 +1422,57 @@ with col_contenido:
                                 render_meta_card(meta, original_idx, is_pasada, hoy, "tab2")
 
         with tabs[3]:
-            c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
-            with c_btn3:
+            c_f1, c_f2, c_f3, c_f4, c_space, c_btn = st.columns([1.5, 3, 3, 3, 0.5, 3])
+            
+            with c_f1: 
+                st.markdown("<div style='margin-top: 10px; color:#94b8d7; font-weight:800; font-size:16px;'>⚙️ Filtros</div>", unsafe_allow_html=True)
+                
+            nombres_materias = list(set([h['MATERIA'] for h in st.session_state['historial']]))
+            nombres_metodos = list(set([h['MÉTODO'] for h in st.session_state['historial']]))
+            
+            f_mat_hist = c_f2.selectbox("Materias", ["Todas las materias"] + nombres_materias, key="filtro_mat_hist", label_visibility="collapsed")
+            f_tiempo_hist = c_f3.selectbox("Tiempo", ["Hoy", "Última Semana", "Último Mes", "Todo el Historial", "Personalizado..."], index=3, key="filtro_tiempo_hist", label_visibility="collapsed")
+            f_met_hist = c_f4.selectbox("Métodos", ["Todos los métodos"] + nombres_metodos, key="filtro_met_hist", label_visibility="collapsed")
+            
+            with c_btn:
                 if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):
                     dialog_agregar_sesion()
                     
             if not st.session_state['historial']:
-                st.write("Tu historial está vacío.")
+                st.write("<br><br>", unsafe_allow_html=True)
+                st.info("Tu historial está vacío.")
             else:
-                df_mostrar = pd.DataFrame(st.session_state['historial']).iloc[::-1]
+                st.write("<br>", unsafe_allow_html=True)
+                df_hist_view = pd.DataFrame(st.session_state['historial']).iloc[::-1]
                 
-                html_hist = "<table class='tabla-historial'>"
-                html_hist += "<tr><th>FECHA</th><th>MATERIA</th><th>MÉTODO</th><th>TIEMPO (min)</th><th>EFIC.</th></tr>"
-                for _, row in df_mostrar.iterrows():
-                    html_hist += f"<tr><td>{row.get('FECHA', '')}</td><td>{row.get('MATERIA', '')}</td><td>{row.get('MÉTODO', '')}</td><td>{row.get('TIEMPO (min)', '')}</td><td>{row.get('EFIC.', '')}</td></tr>"
-                html_hist += "</table>"
+                if f_mat_hist != "Todas las materias": 
+                    df_hist_view = df_hist_view[df_hist_view['MATERIA'] == f_mat_hist]
+                if f_met_hist != "Todos los métodos": 
+                    df_hist_view = df_hist_view[df_hist_view['MÉTODO'] == f_met_hist]
                 
-                st.markdown(html_hist, unsafe_allow_html=True)
+                df_hist_view['FECHA_OBJ'] = pd.to_datetime(df_hist_view['FECHA'], format='%d/%m/%Y', errors='coerce')
+                hoy = pd.Timestamp.now().normalize()
+                
+                if f_tiempo_hist == "Hoy":
+                    df_hist_view = df_hist_view[df_hist_view['FECHA_OBJ'] == hoy]
+                elif f_tiempo_hist == "Última Semana":
+                    df_hist_view = df_hist_view[df_hist_view['FECHA_OBJ'] >= (hoy - pd.Timedelta(days=7))]
+                elif f_tiempo_hist == "Último Mes":
+                    df_hist_view = df_hist_view[df_hist_view['FECHA_OBJ'] >= (hoy - pd.Timedelta(days=30))]
+
+                if df_hist_view.empty:
+                    st.warning("No hay sesiones que coincidan con los filtros.")
+                else:
+                    with st.container(border=True):
+                        html_hist = "<table class='tabla-historial' style='width: 100%;'>"
+                        html_hist += "<tr><th>FECHA</th><th></th><th>TIEMPO</th><th>EFIC.</th></tr>"
+                        for _, row in df_hist_view.iterrows():
+                            fecha_str = row.get('FECHA', '')
+                            fecha_disp = f"<div style='font-weight:900; font-size:16px; color:#f8fafc;'>{fecha_str}</div><div style='font-size:12px; font-weight:600; color:#7498b6; margin-top:2px;'>--:--</div>"
+                            mat_str = row.get('MATERIA', '')
+                            tiempo_str = f"<span style='color:#7498b6; font-weight:700; font-size:14px;'>{row.get('TIEMPO (min)', '')} min</span>"
+                            efic_str = row.get('EFIC.', '')
+                            html_hist += f"<tr><td>{fecha_disp}</td><td><div class='materia-pill'>{mat_str}</div></td><td>{tiempo_str}</td><td><span class='efic-green'>{efic_str}</span></td></tr>"
+                        html_hist += "</table>"
+                        
+                        st.markdown(html_hist, unsafe_allow_html=True)

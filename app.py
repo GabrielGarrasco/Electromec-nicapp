@@ -41,6 +41,12 @@ st.markdown("""
     }
     [data-testid="baseButton-secondary"]:hover { border-color: #334155; color: white; }
     
+    /* Botón Racha (Especial) */
+    button[kind="secondary"] {
+        background-color: transparent; border: 1px solid #334155; border-radius: 20px; color: #94a3b8; font-weight: 800; font-size: 15px; padding: 5px 15px;
+    }
+    button[kind="secondary"]:hover { border-color: #0ea5e9; color: #0ea5e9; }
+    
     /* Métricas */
     [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 800; }
     [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
@@ -74,6 +80,14 @@ st.markdown("""
     .tabla-historial td { padding: 15px; border-bottom: 1px solid #1e293b; vertical-align: middle; }
     .tabla-historial tr:last-child td { border-bottom: none; }
     .tabla-historial tr:hover td { background-color: #172033; }
+    
+    /* Textos Analitica */
+    .analitica-title { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; }
+    .analitica-big-number { font-size: 32px; font-weight: 900; color: #f8fafc; text-align: center; margin: 15px 0; }
+    .analitica-sub { text-align: center; color: #94a3b8; font-size: 14px; font-weight: 600; }
+    .historico-box { text-align: center; }
+    .historico-title { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 10px; }
+    .historico-val { font-size: 24px; font-weight: 900; color: #f8fafc; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -153,43 +167,101 @@ def parse_float_nota(val_str):
 OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
 
 # --- FUNCIONES DE CÁLCULO ---
-def calcular_racha(historial):
-    if not historial: return 0
-    # Obtenemos fechas únicas del historial, ordenadas de más reciente a más antigua
-    fechas_unicas = sorted(list(set([datetime.strptime(h['FECHA'], "%d/%m/%Y").date() for h in historial])), reverse=True)
-    hoy = date.today()
-    ayer = hoy - pd.Timedelta(days=1)
+def calcular_datos_racha(historial):
+    if not historial: return 0, 0, 0, 5
     
-    racha = 0
-    if fechas_unicas:
-        # Si hoy está en el historial, arrancamos chequeando desde hoy. Si no, pero está ayer, mantenemos la racha
-        if fechas_unicas[0] == hoy:
-            fecha_chequeo = hoy
-        elif fechas_unicas[0] == ayer:
-            fecha_chequeo = ayer
+    # Extraemos las fechas únicas en las que se registró al menos una sesión
+    fechas_str = set([h['FECHA'] for h in historial])
+    fechas_obj = sorted([datetime.strptime(f, "%d/%m/%Y").date() for f in fechas_str])
+    
+    if not fechas_obj: return 0, 0, 0, 5
+    
+    fecha_inicio = fechas_obj[0]
+    hoy = date.today()
+    
+    racha_actual = 0
+    mejor_racha = 0
+    protectores = 0
+    dias_para_protector = 5
+    
+    # Simulamos el avance día por día para calcular protectores de forma fiel
+    fecha_iter = fecha_inicio
+    while fecha_iter <= hoy:
+        estudio_hoy = fecha_iter in fechas_obj
+        
+        if estudio_hoy:
+            racha_actual += 1
+            dias_para_protector -= 1
+            if dias_para_protector <= 0:
+                protectores = min(3, protectores + 1)
+                dias_para_protector = 5
         else:
-            return 0 # Ni hoy ni ayer estudió, racha rota
-            
-        for f in fechas_unicas:
-            if f == fecha_chequeo:
-                racha += 1
-                fecha_chequeo -= pd.Timedelta(days=1)
+            if protectores > 0:
+                protectores -= 1
+                racha_actual += 1 # La racha se salva
             else:
-                break
-    return racha
+                racha_actual = 0
+                dias_para_protector = 5
+        
+        if racha_actual > mejor_racha:
+            mejor_racha = racha_actual
+            
+        fecha_iter += pd.Timedelta(days=1)
+        
+    return racha_actual, mejor_racha, protectores, dias_para_protector
 
-# --- HEADER SUPERIOR (Falso Header para la racha) ---
-racha_actual = calcular_racha(st.session_state['historial'])
-texto_racha = "¡Fuego activo!" if racha_actual > 0 else "Inicia tu racha de estudio ahora."
-st.markdown(f"""
-<div style="display: flex; justify-content: flex-end; align-items: center; padding: 10px 0 20px 0;">
-    <div style="color: #f97316; font-size: 14px; font-weight: 700; margin-right: 15px;">{texto_racha}</div>
-    <div style="background-color: transparent; border: 1px solid #334155; padding: 5px 15px; border-radius: 20px; color: #94a3b8; font-weight: 800; font-size: 15px;">
-        🔥 {racha_actual}
+# --- HEADER SUPERIOR ---
+racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_racha(st.session_state['historial'])
+
+col_hdr1, col_hdr2 = st.columns([3, 1])
+with col_hdr2:
+    st.markdown("<div style='display: flex; justify-content: flex-end; gap: 15px; margin-top: 10px;'>", unsafe_allow_html=True)
+    if st.button(f"🔥 {racha_actual}", help="Ver detalles de tu racha"):
+        st.session_state['show_racha_modal'] = True
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# --- MODALES (DIALOGS) ---
+@st.dialog("Racha", width="small")
+def dialog_racha():
+    st.markdown(f"""
+    <div style='text-align: center;'>
+        <h1 style='font-size: 50px; margin-bottom: 0px;'>🔥 {racha_actual} días</h1>
+        <p style='color: #94a3b8; font-weight: bold; margin-top: 0px;'>¡Llevas una racha increíble!</p>
     </div>
-</div>
-""", unsafe_allow_html=True)
+    <h3 style='text-align: center;'>Protectores de Racha</h3>
+    """, unsafe_allow_html=True)
+    
+    shields_html = "<div style='display: flex; justify-content: center; gap: 10px; margin: 20px 0;'>"
+    for i in range(3):
+        color = "#334155" if i >= protectores else "#0ea5e9"
+        opacity = "0.4" if i >= protectores else "1"
+        shields_html += f"<div style='width: 45px; height: 45px; border-radius: 50%; background-color: {color}; opacity: {opacity}; display: flex; justify-content: center; align-items: center; font-size: 20px; border: 1px solid #1e293b;'>🛡️</div>"
+    shields_html += "</div>"
+    
+    st.markdown(f"""
+    <div style='background-color: #172033; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #1e293b;'>
+        <div style='color: #94a3b8; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;'>TUS PROTECTORES</div>
+        {shields_html}
+        <div style='font-weight: 800; font-size: 14px;'>Te faltan {dias_para_protector} días continuos para ganar otro.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div style='border: 1px solid #334155; border-radius: 12px; padding: 15px; margin-top: 15px; font-size: 13px;'>
+        <div style='color: #94a3b8; font-weight: 800; margin-bottom: 10px; font-size: 11px; text-transform: uppercase;'>ℹ️ CÓMO FUNCIONA</div>
+        <div style='margin-bottom: 5px;'>✔️ Ganas 1 protector por cada 5 días de racha consecutivos.</div>
+        <div style='margin-bottom: 5px;'>🛡️ Puedes almacenar un máximo de 3 protectores.</div>
+        <div>❤️ Si olvidas estudiar un día, se consumirá un protector automáticamente para salvar tu racha.</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.write("<br>", unsafe_allow_html=True)
+    if st.button("Entendido", type="primary", use_container_width=True):
+        st.session_state['show_racha_modal'] = False
+        st.rerun()
 
+if st.session_state.get('show_racha_modal', False):
+    dialog_racha()
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -213,123 +285,136 @@ def render_live_timer(elapsed_seconds, is_running):
     components.html(html_code, height=130)
 
 def renderizar_analitica():
-    c_filt1, c_filt2, c_filt3, c_filt4 = st.columns([1, 2, 2, 2])
-    with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
-    nombres_materias = list(set([h['MATERIA'] for h in st.session_state['historial']]))
-    nombres_metodos = list(set([h['MÉTODO'] for h in st.session_state['historial']]))
-    
-    f_mat = c_filt2.selectbox("Materias", ["Todas las materias"] + nombres_materias, key="filtro_mat_analitica", label_visibility="collapsed")
-    f_hist = c_filt3.selectbox("Historial", ["Todo el Historial", "Últimos 7 días", "Último Mes"], key="filtro_tiempo_analitica", label_visibility="collapsed")
-    f_met = c_filt4.selectbox("Métodos", ["Todos los métodos"] + nombres_metodos, key="filtro_met_analitica", label_visibility="collapsed")
+    st.markdown("### Tus Estadísticas")
     st.write("<br>", unsafe_allow_html=True)
-
-    if not st.session_state['historial']:
-        st.info("Todavía no hay datos para procesar. ¡Hacé tu primera sesión!")
-        return
-
+    
     df_hist = pd.DataFrame(st.session_state['historial'])
-    if f_mat != "Todas las materias": df_hist = df_hist[df_hist['MATERIA'] == f_mat]
-    if f_met != "Todos los métodos": df_hist = df_hist[df_hist['MÉTODO'] == f_met]
-    if f_hist == "Últimos 7 días":
-        df_hist['FECHA_OBJ'] = pd.to_datetime(df_hist['FECHA'], format='%d/%m/%Y')
-        df_hist = df_hist[df_hist['FECHA_OBJ'] >= (pd.Timestamp.now() - pd.Timedelta(days=7))]
-    elif f_hist == "Último Mes":
-        df_hist['FECHA_OBJ'] = pd.to_datetime(df_hist['FECHA'], format='%d/%m/%Y')
-        df_hist = df_hist[df_hist['FECHA_OBJ'] >= (pd.Timestamp.now() - pd.Timedelta(days=30))]
-
-    if df_hist.empty:
-        st.warning("No hay datos para los filtros seleccionados.")
-        return
-
-    total_minutos = df_hist['TIEMPO (min)'].sum()
-    horas = total_minutos // 60
-    minutos = total_minutos % 60
     
-    materia_top = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().idxmax()
-    materia_top_min = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().max()
-    top_h = materia_top_min // 60
-    top_m = materia_top_min % 60
-    
-    df_hist['EFIC_NUM'] = df_hist['EFIC.'].str.replace('%','').astype(float)
-    efic_promedio = int(df_hist['EFIC_NUM'].mean()) if not df_hist.empty else 0
-
-    c1, c2 = st.columns(2)
-    with c1:
-        with st.container(border=True): st.metric("TOTAL DE HORAS ESTUDIADAS", f"{horas}h {minutos}m")
-    with c2:
-        with st.container(border=True): st.metric("MATERIA MÁS ESTUDIADA", f"{materia_top}", f"{top_h}h {top_m}m")
+    if not df_hist.empty:
+        df_hist['FECHA_OBJ'] = pd.to_datetime(df_hist['FECHA'], format='%d/%m/%Y', errors='coerce')
+        df_hist['TIEMPO (min)'] = pd.to_numeric(df_hist['TIEMPO (min)'], errors='coerce').fillna(0)
+        df_hist['EFIC_NUM'] = df_hist['EFIC.'].astype(str).str.replace('%','').astype(float)
         
-    c3, c4 = st.columns(2)
+        efic_promedio = int(df_hist['EFIC_NUM'].mean())
+        total_minutos = df_hist['TIEMPO (min)'].sum()
+        materia_top = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().idxmax() if total_minutos > 0 else "N/A"
+        top_h = int(df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().max() // 60) if total_minutos > 0 else 0
+        
+        # Datos de la última semana
+        hoy = pd.Timestamp.now().normalize()
+        fechas_7d = [hoy - pd.Timedelta(days=i) for i in range(6, -1, -1)]
+        df_7d = df_hist[df_hist['FECHA_OBJ'] >= fechas_7d[0]]
+        mins_semana = df_7d['TIEMPO (min)'].sum() if not df_7d.empty else 0
+        h_sem = int(mins_semana // 60)
+        m_sem = int(mins_semana % 60)
+        
+        # Datos de hoy
+        df_hoy = df_hist[df_hist['FECHA_OBJ'] == hoy]
+        mins_hoy = df_hoy['TIEMPO (min)'].sum() if not df_hoy.empty else 0
+        h_hoy = int(mins_hoy // 60)
+        m_hoy = int(mins_hoy % 60)
+        
+    else:
+        efic_promedio = 0
+        total_minutos = 0
+        materia_top = "N/A"
+        top_h = 0
+        h_sem = m_sem = h_hoy = m_hoy = 0
+        df_7d = pd.DataFrame()
+
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        with st.container(border=True):
+            st.markdown("<div class='analitica-title'>EFICIENCIA</div>", unsafe_allow_html=True)
+            source_efic = pd.DataFrame({"Cat": ["Eficiencia", "Falta"], "Valor": [efic_promedio, max(0, 100-efic_promedio)]})
+            chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=65).encode(
+                theta=alt.Theta(field="Valor", type="quantitative"),
+                color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=["#1e293b", "#0f172a"]), legend=None),
+                tooltip=['Cat', 'Valor']
+            ).properties(height=220)
+            
+            # Simulamos el borde azul rellenando la dona si es > 0, sino gris
+            donut_color = "#0ea5e9" if efic_promedio > 0 else "#1e293b"
+            chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=65).encode(
+                theta=alt.Theta(field="Valor", type="quantitative"),
+                color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=[donut_color, "#1e293b"]), legend=None)
+            ).properties(height=220)
+            
+            st.altair_chart(chart_efic, use_container_width=True)
+            st.markdown(f"<div style='text-align:center; margin-top:-155px; font-size:36px; font-weight:900; color:white;'>{efic_promedio}%</div><div style='height:105px;'></div>", unsafe_allow_html=True)
+            
+    with c2:
+        with st.container(border=True):
+            st.markdown("<div class='analitica-title'>HORAS (SEMANAL)</div>", unsafe_allow_html=True)
+            if df_7d.empty:
+                st.info("Sin datos esta semana.")
+            else:
+                df_barras = df_7d.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
+                df_barras['Horas'] = df_barras['TIEMPO (min)'] / 60
+                
+                bars = alt.Chart(df_barras).mark_bar(color="#334155").encode(
+                    x=alt.X("Horas:Q", title="", axis=alt.Axis(grid=True, gridColor="#1e293b", labelColor="#94a3b8")),
+                    y=alt.Y("MATERIA:N", title="", sort="-x", axis=alt.Axis(labelColor="#94a3b8", labelFontWeight="bold"))
+                ).properties(height=220)
+                st.altair_chart(bars, use_container_width=True)
+                
+    c3, c4 = st.columns([2, 1])
     with c3:
         with st.container(border=True):
-            st.caption("EFICIENCIA GLOBAL")
-            source_efic = pd.DataFrame({"Cat": ["Eficiencia", "Falta"], "Valor": [efic_promedio, 100-efic_promedio]})
-            chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=60).encode(
-                theta=alt.Theta(field="Valor", type="quantitative"),
-                color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=["#0ea5e9", "#1e293b"]), legend=None),
-                tooltip=['Cat', 'Valor']
-            ).properties(height=200)
-            st.altair_chart(chart_efic, use_container_width=True)
-            st.markdown(f"<div style='text-align:center; margin-top:-140px; font-size:32px; font-weight:bold; color:white;'>{efic_promedio}%</div><div style='height:90px;'></div>", unsafe_allow_html=True)
+            st.markdown("<div class='analitica-title'>HORAS POR DÍA</div>", unsafe_allow_html=True)
+            nombres_dias = {0: 'lun', 1: 'mar', 2: 'mié', 3: 'jue', 4: 'vie', 5: 'sáb', 6: 'dom'}
+            df_dias = pd.DataFrame({'FECHA_OBJ': fechas_7d})
+            df_dias['Día'] = df_dias['FECHA_OBJ'].dt.dayofweek.map(nombres_dias)
+            
+            if not df_hist.empty:
+                agrupado = df_7d.groupby('FECHA_OBJ')['TIEMPO (min)'].sum().reset_index()
+                agrupado['Horas'] = agrupado['TIEMPO (min)'] / 60
+                df_linea = pd.merge(df_dias, agrupado, on='FECHA_OBJ', how='left').fillna(0)
+            else:
+                df_linea = df_dias.copy()
+                df_linea['Horas'] = 0.0
+                
+            chart_linea = alt.Chart(df_linea).mark_line(point=alt.OverlayMarkDef(filled=False, fill="#0b1120", strokeWidth=2, size=50), color="#0ea5e9", strokeWidth=3).encode(
+                x=alt.X('Día:N', sort=None, title="", axis=alt.Axis(labelColor="#94a3b8", grid=False, domain=False, tickSize=0)),
+                y=alt.Y('Horas:Q', title="", axis=alt.Axis(labelColor="#94a3b8", grid=True, gridColor="#1e293b", domain=False))
+            ).properties(height=220)
+            st.altair_chart(chart_linea, use_container_width=True)
 
     with c4:
         with st.container(border=True):
-            st.caption("INTERRUPCIONES COMUNES")
-            todas_interrupciones = []
-            if 'INTERRUPCIONES' in df_hist.columns:
-                for inter_list in df_hist['INTERRUPCIONES'].dropna():
-                    if isinstance(inter_list, list):
-                        todas_interrupciones.extend(inter_list)
+            st.markdown("<div class='analitica-title' style='text-align:center;'>SEMANAL</div>", unsafe_allow_html=True)
+            txt_sem = f"{h_sem}h {m_sem}m" if h_sem > 0 else f"{m_sem}m"
+            st.markdown(f"<div class='analitica-big-number'>{txt_sem}</div>", unsafe_allow_html=True)
+            st.markdown("<hr style='border: 1px solid #1e293b; margin: 20px 0;'>", unsafe_allow_html=True)
+            st.markdown("<div class='analitica-title' style='text-align:center;'>HOY</div>", unsafe_allow_html=True)
+            txt_hoy = f"{h_hoy:02d}:{m_hoy:02d}"
+            st.markdown(f"<div class='analitica-big-number'>{txt_hoy}</div>", unsafe_allow_html=True)
             
-            if not todas_interrupciones:
-                st.info("No registraste ninguna interrupción en estas sesiones.")
-            else:
-                from collections import Counter
-                conteo = Counter(todas_interrupciones)
-                motivos = []
-                frecuencias = []
-                for d in st.session_state['distracciones']:
-                    if conteo.get(d, 0) > 0:
-                        motivos.append(d)
-                        frecuencias.append(conteo.get(d, 0))
-                
-                distr_data = pd.DataFrame({"Motivo": motivos, "Frecuencia": frecuencias})
-                if not distr_data.empty:
-                    chart_dist = alt.Chart(distr_data).mark_bar(color="#f59e0b").encode(
-                        x=alt.X("Frecuencia:Q", axis=alt.Axis(grid=True, tickMinStep=1, title="")),
-                        y=alt.Y("Motivo:N", sort='-x', axis=alt.Axis(title="", labelColor="#f8fafc", labelFontWeight="bold"))
-                    ).properties(height=200)
-                    st.altair_chart(chart_dist, use_container_width=True)
+    st.markdown("<div class='analitica-title' style='margin-top: 25px;'>HISTÓRICO</div>", unsafe_allow_html=True)
+    ch1, ch2, ch3, ch4 = st.columns(4)
+    with ch1:
+        with st.container(border=True):
+            st.markdown("<div class='historico-box'><div class='historico-title'>MEJOR RACHA</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='historico-val'>{mejor_racha} 🔥</div></div>", unsafe_allow_html=True)
+    with ch2:
+        with st.container(border=True):
+            st.markdown("<div class='historico-box'><div class='historico-title'>MATERIA TOP</div>", unsafe_allow_html=True)
+            color_mat = "#ef4444" # Default red
+            for m in st.session_state['materias']:
+                if m['nombre'] == materia_top: color_mat = m['color']
+            st.markdown(f"<div class='historico-val' style='font-size: 18px;'><span style='color:{color_mat};'>●</span> {materia_top}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='color:#94a3b8; font-size: 12px; font-weight:bold; margin-top:5px;'>{top_h}h</div></div>", unsafe_allow_html=True)
+    with ch3:
+        with st.container(border=True):
+            st.markdown("<div class='historico-box'><div class='historico-title'>% GLOBAL</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='historico-val'>{efic_promedio}%</div></div>", unsafe_allow_html=True)
+    with ch4:
+        with st.container(border=True):
+            st.markdown("<div class='historico-box'><div class='historico-title'>HORAS TOTALES</div>", unsafe_allow_html=True)
+            h_tot = int(total_minutos // 60)
+            st.markdown(f"<div class='historico-val'>{h_tot}h</div></div>", unsafe_allow_html=True)
 
-    with st.container(border=True):
-        st.caption("TIEMPO POR MATERIA (Minutos)")
-        df_g = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
-        color_map = {m['nombre']: m['color'] for m in st.session_state['materias']}
-        
-        if len(df_g) > 0 and len(color_map) > 0:
-            try:
-                bars = alt.Chart(df_g).mark_bar().encode(
-                    x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
-                    y=alt.Y("TIEMPO (min):Q", title=""),
-                    color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
-                    tooltip=['MATERIA', 'TIEMPO (min)']
-                ).properties(height=250)
-                st.altair_chart(bars, use_container_width=True)
-            except:
-                st.bar_chart(df_g.set_index('MATERIA'), color="#0ea5e9") 
-        elif len(df_g) > 0:
-            bars = alt.Chart(df_g).mark_bar(color="#0ea5e9").encode(
-                x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
-                y=alt.Y("TIEMPO (min):Q", title=""),
-                tooltip=['MATERIA', 'TIEMPO (min)']
-            ).properties(height=250)
-            st.altair_chart(bars, use_container_width=True)
-        else:
-            st.info("No hay datos para mostrar el gráfico.")
 
-# ==========================================
-# --- MODALES (DIALOGS) ---
-# ==========================================
 @st.dialog("Detalle de la Materia")
 def dialog_detalle_materia(mat_id):
     mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
@@ -928,7 +1013,6 @@ with col_contenido:
                                 st.markdown(html_reqs, unsafe_allow_html=True)
 
     elif menu_opcion == "Resumen":
-        st.header("Tus Estadísticas")
         renderizar_analitica()
 
     elif menu_opcion == "Organización":
@@ -1015,7 +1099,7 @@ with col_contenido:
                         if guardar_datos(): st.rerun()
 
     elif menu_opcion == "Página Principal":
-        tabs = st.tabs(["Cronómetro", "Analítica", "Metas"]) # Saqué la tab de historial para alinear a tu captura
+        tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
 
         def render_meta_card(meta, original_idx, is_pasada, hoy, prefijo_key):
             try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
@@ -1085,7 +1169,6 @@ with col_contenido:
                             st.markdown("<div style='text-align:center; font-weight:bold; color:#94a3b8;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
                             st.info("No tenés metas próximas. ¡Todo al día!")
                     else:
-                        # Mostramos solo la más prioritaria para dejarlo igual a la captura
                         idx, meta_priority = metas_actuales[0]
                         with st.container(border=True):
                             render_meta_card(meta_priority, idx, False, hoy, "tab0")
@@ -1316,7 +1399,8 @@ with col_contenido:
             c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
             with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
             f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, key="filtro_materias_metas", label_visibility="collapsed")
-            f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], key="filtro_estado_metas", label_visibility="collapsed")
+            # Cambiado index a 1 para que por defecto arranque en "Actuales"
+            f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], index=1, key="filtro_estado_metas", label_visibility="collapsed")
             
             with c_btn3:
                 st.write("<br>", unsafe_allow_html=True)
@@ -1351,5 +1435,23 @@ with col_contenido:
                         
                         with cols[i % 3]:
                             with st.container(border=True):
-                                # Usamos la función modificada de la tab 0
                                 render_meta_card(meta, original_idx, is_pasada, hoy, "tab2")
+
+        with tabs[3]:
+            c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
+            with c_btn3:
+                if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):
+                    dialog_agregar_sesion()
+                    
+            if not st.session_state['historial']:
+                st.write("Tu historial está vacío.")
+            else:
+                df_mostrar = pd.DataFrame(st.session_state['historial']).iloc[::-1]
+                
+                html_hist = "<table class='tabla-historial'>"
+                html_hist += "<tr><th>FECHA</th><th>MATERIA</th><th>MÉTODO</th><th>TIEMPO (min)</th><th>EFIC.</th></tr>"
+                for _, row in df_mostrar.iterrows():
+                    html_hist += f"<tr><td>{row.get('FECHA', '')}</td><td>{row.get('MATERIA', '')}</td><td>{row.get('MÉTODO', '')}</td><td>{row.get('TIEMPO (min)', '')}</td><td>{row.get('EFIC.', '')}</td></tr>"
+                html_hist += "</table>"
+                
+                st.markdown(html_hist, unsafe_allow_html=True)

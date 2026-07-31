@@ -44,7 +44,6 @@ st.markdown("""
     .req-cumplido { background-color: rgba(255, 255, 255, 0.12); padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.05); }
     .req-pendiente { padding: 6px 10px; margin-bottom: 4px; color: #94a3b8; }
     
-    /* Estilo para que el menú fijo parezca una lista de navegación copada */
     div[role="radiogroup"] > label { padding: 10px; border-radius: 8px; transition: 0.3s; margin-bottom: 5px; }
     div[role="radiogroup"] > label:hover { background-color: #1e293b; }
     </style>
@@ -213,12 +212,22 @@ def renderizar_analitica():
         st.caption("TIEMPO POR MATERIA (Minutos)")
         df_g = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
         color_map = {m['nombre']: m['color'] for m in st.session_state['materias']}
-        bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4).encode(
-            x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
-            y=alt.Y("TIEMPO (min):Q", title=""),
-            color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
-            tooltip=['MATERIA', 'TIEMPO (min)']
-        ).properties(height=250)
+        
+        # Parche antibug de Altair: Si no hay materias en color_map, evitamos pasar el scale que rompe la librería
+        if color_map:
+            bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4).encode(
+                x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
+                y=alt.Y("TIEMPO (min):Q", title=""),
+                color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
+                tooltip=['MATERIA', 'TIEMPO (min)']
+            ).properties(height=250)
+        else:
+            bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4, color="#0ea5e9").encode(
+                x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
+                y=alt.Y("TIEMPO (min):Q", title=""),
+                tooltip=['MATERIA', 'TIEMPO (min)']
+            ).properties(height=250)
+            
         st.altair_chart(bars, use_container_width=True)
 
 # ==========================================
@@ -256,7 +265,7 @@ def dialog_detalle_materia(mat_id):
         
         nueva_nota = mat.get('nota', '')
         nuevos_intentos = mat.get('intentos', ["", "", "", ""])
-        while len(nuevos_intentos) < 4: nuevos_intentos.append("") # Asegurar 4 lugares
+        while len(nuevos_intentos) < 4: nuevos_intentos.append("") 
         
         if nuevo_estado == "Aprobada/Promocionada":
             nueva_nota = st.text_input("Nota Final (Opcional)", value=nueva_nota, placeholder="Ej: 8, 9, 10...")
@@ -331,7 +340,6 @@ def dialog_detalle_materia(mat_id):
             info_str += f" | **Nota:** {mat['nota']}"
         st.markdown(info_str)
         
-        # Muestra el historial de intentos si quedó alguno registrado
         intentos_guardados = mat.get('intentos', [])
         intentos_validos = [i for i in intentos_guardados if i.strip()]
         if intentos_validos:
@@ -420,7 +428,6 @@ def dialog_nueva_materia_plan():
             estado_final = estado
             nota_def = nota_final
             
-            # Lógica automática para los intentos al crear
             if estado == "Regular":
                 last_val = None
                 cant_intentos = 0
@@ -568,6 +575,8 @@ def dialog_agregar_sesion():
                     m['horas_acumuladas'] += (tiempo_neto / 60)
                     break
         if guardar_datos(): st.rerun()
+
+
 # ==========================================
 # --- LAYOUT PRINCIPAL (MENÚ FIJO) ---
 # ==========================================
@@ -579,8 +588,82 @@ with col_menu:
 
 with col_contenido:
     if menu_opcion == "Carrera":
-        st.header("Carrera")
-        st.info("Espacio reservado. Acá vamos a agregar la información general de tu carrera más adelante.")
+        st.header("Progreso de la Carrera")
+        
+        if not st.session_state['plan_carrera']:
+            st.info("Agregá materias en el 'Plan de Estudios' para ver tu progreso general.")
+        else:
+            df_plan = pd.DataFrame(st.session_state['plan_carrera'])
+            total_materias = len(df_plan)
+            
+            counts = df_plan['estado'].value_counts().to_dict()
+            aprobadas = counts.get("Aprobada/Promocionada", 0)
+            regulares = counts.get("Regular", 0)
+            cursando = counts.get("Cursando", 0)
+            libres = counts.get("Libre/Recursado", 0)
+            pendientes = counts.get("Pendiente", 0)
+            
+            p_apr = (aprobadas / total_materias) * 100
+            p_reg = (regulares / total_materias) * 100
+            p_curs = (cursando / total_materias) * 100
+            p_lib = (libres / total_materias) * 100
+            p_pend = (pendientes / total_materias) * 100
+            
+            st.markdown(f"""
+            <div style="width: 100%; height: 30px; border-radius: 15px; display: flex; overflow: hidden; margin-bottom: 25px; border: 1px solid #334155;">
+                <div style="width: {p_apr}%; background-color: #22c55e;" title="Aprobadas: {p_apr:.1f}%"></div>
+                <div style="width: {p_reg}%; background-color: #eab308;" title="Regulares: {p_reg:.1f}%"></div>
+                <div style="width: {p_curs}%; background-color: #3b82f6;" title="Cursando: {p_curs:.1f}%"></div>
+                <div style="width: {p_lib}%; background-color: #ef4444;" title="Libres: {p_lib:.1f}%"></div>
+                <div style="width: {p_pend}%; background-color: #94a3b8;" title="Pendientes: {p_pend:.1f}%"></div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            c1, c2, c3, c4, c5 = st.columns(5)
+            c1.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#22c55e;'>{p_apr:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>APROBADAS ({aprobadas})</div></div>", unsafe_allow_html=True)
+            c2.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#eab308;'>{p_reg:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>REGULARES ({regulares})</div></div>", unsafe_allow_html=True)
+            c3.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#3b82f6;'>{p_curs:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>CURSANDO ({cursando})</div></div>", unsafe_allow_html=True)
+            c4.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#ef4444;'>{p_lib:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>LIBRES ({libres})</div></div>", unsafe_allow_html=True)
+            c5.markdown(f"<div style='text-align:center;'><div style='font-size:24px; font-weight:bold; color:#94a3b8;'>{p_pend:.1f}%</div><div style='color:#94a3b8; font-size:12px; font-weight:bold;'>PENDIENTES ({pendientes})</div></div>", unsafe_allow_html=True)
+            
+            st.divider()
+            
+            col_izq, col_der = st.columns(2, gap="large")
+            
+            with col_izq:
+                st.markdown("### 📘 Cursando")
+                st.caption("Materias que estás cursando actualmente.")
+                mat_cursando = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] == "Cursando"]
+                if not mat_cursando:
+                    st.info("No tenés materias en estado 'Cursando'.")
+                else:
+                    for m in mat_cursando:
+                        st.markdown(f"<div style='background-color: #1e293b; padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #3b82f6; color:#f8fafc;'>{m}</div>", unsafe_allow_html=True)
+            
+            with col_der:
+                st.markdown("### 🔓 Puedo Cursar")
+                st.caption("Materias pendientes o libres que cumplen todos los requisitos para ser cursadas.")
+                
+                def is_met(m_name, req_type):
+                    target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
+                    if not target: return False
+                    if req_type == 'reg': return target['estado'] in ["Regular", "Aprobada/Promocionada"]
+                    return target['estado'] == "Aprobada/Promocionada"
+                    
+                puedo_cursar = []
+                for m in st.session_state['plan_carrera']:
+                    if m['estado'] in ["Pendiente", "Libre/Recursado"]:
+                        req_reg_ok = all(is_met(r, 'reg') for r in m.get('req_regulares', []))
+                        req_apr_ok = all(is_met(r, 'apr') for r in m.get('req_aprobadas', []))
+                        if req_reg_ok and req_apr_ok:
+                            puedo_cursar.append((m['nombre'], m['estado']))
+                            
+                if not puedo_cursar:
+                    st.info("No hay materias nuevas habilitadas para cursar en este momento.")
+                else:
+                    for m_nombre, m_estado in puedo_cursar:
+                        color_border = "#94a3b8" if m_estado == "Pendiente" else "#ef4444"
+                        st.markdown(f"<div style='background-color: #1e293b; padding: 10px 15px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid {color_border}; color:#f8fafc;'>{m_nombre}</div>", unsafe_allow_html=True)
 
     elif menu_opcion == "Plan de Estudios":
         c_head1, c_head2 = st.columns([4, 1])

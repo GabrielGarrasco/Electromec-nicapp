@@ -15,11 +15,17 @@ st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
+    
     [data-testid="collapsedControl"] { display: none; }
+    
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
-    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { background-color: #162032; border-radius: 12px; padding: 12px; border: 1px solid #334155; }
+    
+    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { 
+        background-color: #162032; border-radius: 12px; padding: 12px; border: 1px solid #334155; 
+    }
+    
     [data-testid="baseButton-primary"] { background-color: #0ea5e9; border-color: #0ea5e9; color: white; border-radius: 8px; font-weight: bold; }
     [data-testid="baseButton-primary"]:hover { background-color: #0284c7; border-color: #0284c7; }
     [data-testid="baseButton-secondary"] { background-color: #334155; border-color: #334155; color: white; border-radius: 8px; }
@@ -27,27 +33,31 @@ st.markdown("""
     [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 700; }
     [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
     header {visibility: hidden;}
+    
     .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
+    
     .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .nota-box { background-color: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
+    
     .req-cumplido { background-color: rgba(255, 255, 255, 0.12); padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.05); }
     .req-pendiente { padding: 6px 10px; margin-bottom: 4px; color: #94a3b8; }
+    
     div[role="radiogroup"] > label { padding: 10px; border-radius: 8px; transition: 0.3s; margin-bottom: 5px; }
     div[role="radiogroup"] > label:hover { background-color: #1e293b; }
     
-    /* CSS Horario Aislado y Perfecto */
+    /* CSS para el horario automático (Estilo Bloques) */
     .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 15px; background-color: #0f172a; table-layout: fixed; }
     .tabla-horario th { background-color: #121b29; color: #0ea5e9; padding: 15px 5px; border: 1px solid #2a3441; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
     .tabla-horario th:first-child { color: #94a3b8; width: 10%; }
     .tabla-horario td { padding: 0; border: 1px solid #2a3441; vertical-align: top; height: 75px; }
-    .tabla-horario td:first-child { font-weight: 700; color: #94a3b8; background-color: #121b29; padding-top: 5px; }
+    .tabla-horario td:first-child { font-weight: 700; color: #94a3b8; background-color: #121b29; padding-top: 15px; text-align: center; }
     .materia-bloque { background-color: #3b82f6; color: #ffffff; padding: 5px; font-weight: 800; line-height: 1.2; width: 100%; height: 100%; min-height: 75px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; box-sizing: border-box; border: 1px solid #2563eb; border-radius: 4px; }
     
-    /* CSS Historial */
+    /* CSS para el Historial (Clean Dark) */
     .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; font-size: 14px; background-color: #0f172a; border: 1px solid #334155; }
     .tabla-historial th { background-color: #162032; color: #94a3b8; padding: 15px; border-bottom: 1px solid #334155; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     .tabla-historial td { padding: 15px; border-bottom: 1px solid #1e293b; vertical-align: middle; }
@@ -944,10 +954,10 @@ with col_contenido:
                         st.session_state['metodos'].pop(i)
                         if guardar_datos(): st.rerun()
 
-   elif menu_opcion == "Página Principal":
+    elif menu_opcion == "Página Principal":
         tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
 
-        # Función auxiliar para renderizar la UI de una Meta (así no repetimos código)
+        # Función auxiliar para renderizar la UI de una Meta
         def render_meta_card(meta, original_idx, is_pasada, hoy):
             try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
             except: fecha_str = ""
@@ -1165,6 +1175,7 @@ with col_contenido:
                     if m['estado'] == "Cursando" and 'horarios_clase' in m:
                         for hc in m['horarios_clase']:
                             if hc.get('dia') != "---" and hc.get('inicio'):
+                                # Magia para leer la hora aunque pongas "19" o "9" sin los ceros
                                 ini_c = hc['inicio'].strip()
                                 if ":" not in ini_c: ini_c += ":00"
                                 if len(ini_c.split(":")[0]) == 1: ini_c = "0" + ini_c
@@ -1179,18 +1190,20 @@ with col_contenido:
                                     "dia": hc['dia'],
                                     "inicio": ini_c,
                                     "fin": fin_c,
-                                    "inicio_orig": ini_c, 
-                                    "fin_orig": fin_c
+                                    "inicio_orig": hc['inicio'],
+                                    "fin_orig": hc.get('fin', '')
                                 })
                 
                 def get_sortable_time(t_str):
                     try: return datetime.strptime(t_str, "%H:%M").time()
                     except: return datetime.strptime("23:59", "%H:%M").time()
 
+                # Extraer todos los horarios únicos (tanto de inicio como de fin)
                 time_points = set()
                 for hc in horarios_completos:
                     time_points.add(hc['inicio'])
-                    if hc['fin']: time_points.add(hc['fin'])
+                    if hc['fin']:
+                        time_points.add(hc['fin'])
 
                 sorted_times = sorted(list(time_points), key=get_sortable_time)
                 
@@ -1198,15 +1211,15 @@ with col_contenido:
                     st.info("No tenés horarios cargados. Andá a Carrera o Plan de Estudios, tocá en 'Editar' en una materia Cursando y poné a qué hora la tenés.")
                 else:
                     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-                    filas_horario = sorted_times[:-1] if len(sorted_times) > 1 else sorted_times
-                    matriz = {t: {d: [] for d in dias_semana} for t in filas_horario}
+                    
+                    matriz = {t: {d: [] for d in dias_semana} for t in sorted_times}
                     
                     for hc in horarios_completos:
                         if hc['dia'] in dias_semana:
                             t_ini = get_sortable_time(hc['inicio'])
                             t_fin = get_sortable_time(hc['fin']) if hc['fin'] else get_sortable_time("23:59")
                             
-                            for t_row in filas_horario:
+                            for t_row in sorted_times:
                                 t_actual = get_sortable_time(t_row)
                                 if t_ini <= t_actual < t_fin:
                                     matriz[t_row][hc['dia']].append(hc)
@@ -1216,9 +1229,17 @@ with col_contenido:
                     for d in dias_semana: html_tabla += f"<th>{d.upper()}</th>"
                     html_tabla += "</tr>"
                     
+                    # Para saber si tenemos que saltear una celda porque ya la fusionamos (rowspan)
                     skip_cells = {d: 0 for d in dias_semana}
                     
-                    for i, t_row in enumerate(filas_horario):
+                    for i, t_row in enumerate(sorted_times):
+                        # No dibujamos la última fila si está completamente vacía (solo sirve como límite visual)
+                        if i == len(sorted_times) - 1:
+                            es_vacia = all(len(matriz[t_row][d]) == 0 for d in dias_semana)
+                            if es_vacia:
+                                # Opcional: imprimir solo la hora para cerrar el bloque, sin celdas
+                                break
+
                         html_tabla += f"<tr><td>{t_row}</td>"
                         for d in dias_semana:
                             if skip_cells[d] > 0:
@@ -1229,21 +1250,24 @@ with col_contenido:
                             if items:
                                 mat = items[0]
                                 span = 1
-                                for j in range(i + 1, len(filas_horario)):
-                                    next_t = filas_horario[j]
+                                # Mirar hacia abajo cuántas filas abarca esta misma clase para fusionarlas
+                                for j in range(i + 1, len(sorted_times)):
+                                    next_t = sorted_times[j]
                                     next_items = matriz[next_t][d]
-                                    if next_items and next_items[0]['materia'] == mat['materia'] and next_items[0]['inicio'] == mat['inicio']:
+                                    if next_items and next_items[0]['materia'] == mat['materia']:
                                         span += 1
-                                    else: break
+                                    else:
+                                        break
                                 
                                 skip_cells[d] = span - 1
                                 
-                                texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8; margin-bottom: auto;'>{mat['inicio_orig']}</span>"
-                                texto += f"<span style='margin: auto 0;'>{mat['materia']}</span>"
+                                # Diseño del bloque: hora arriba, materia, hora abajo
+                                texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
+                                texto += f"{mat['materia']}"
                                 if mat['fin_orig']: 
-                                    texto += f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8; margin-top: auto;'>{mat['fin_orig']}</span>"
+                                    texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
                                 
-                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque'>{texto}</div></td>"
+                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"

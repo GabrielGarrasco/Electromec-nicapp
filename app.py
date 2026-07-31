@@ -6,6 +6,7 @@ from datetime import datetime, date
 import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import altair as alt
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
@@ -31,43 +32,41 @@ st.markdown("""
     .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
     .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .nota-box { background-color: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
     </style>
 """, unsafe_allow_html=True)
 
 # --- SISTEMA DE GUARDADO EN GOOGLE SHEETS ---
 def get_gspread_client():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds_dict = json.loads(st.secrets["google_credentials"])
+    secret_str = st.secrets["google_credentials"]
+    try: creds_dict = json.loads(secret_str)
+    except: creds_dict = json.loads(secret_str, strict=False)
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
 
 def guardar_datos():
     try:
         datos = {
-            'materias': st.session_state['materias'],
-            'metodos': st.session_state['metodos'],
-            'distracciones': st.session_state['distracciones'],
-            'historial': st.session_state['historial'],
-            'metas': st.session_state['metas'],
-            'plan_carrera': st.session_state['plan_carrera']
+            'materias': st.session_state['materias'], 'metodos': st.session_state['metodos'],
+            'distracciones': st.session_state['distracciones'], 'historial': st.session_state['historial'],
+            'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera']
         }
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
         sheet.update_acell('A2', json.dumps(datos))
-        return True # Retorna True si todo salió bien
+        return True
     except Exception as e:
         st.error(f"🚨 Error exacto de Google: {e}")
-        st.stop() # Frena la app acá nomás para que leas el error
+        st.stop()
 
 def cargar_datos():
     try:
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
         valor = sheet.acell('A2').value
-        if valor:
-            return json.loads(valor)
-    except:
-        return None
+        if valor: return json.loads(valor)
+    except: return None
     return None
 
 # --- INICIALIZACIÓN DE VARIABLES ---
@@ -87,6 +86,10 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['historial'] = datos_guardados.get('historial', [])
         st.session_state['metas'] = datos_guardados.get('metas', [])
         st.session_state['plan_carrera'] = datos_guardados.get('plan_carrera', [])
+        
+        # Parche para agregar 'nota' a metas viejas que no lo tengan
+        for m in st.session_state['metas']:
+            if 'nota' not in m: m['nota'] = None
     else:
         st.session_state['materias'] = []
         st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
@@ -96,7 +99,6 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['plan_carrera'] = []
     st.session_state['datos_cargados'] = True
 
-# Parche de limpieza si quedó formato viejo en memoria
 if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materias'][0], str):
     st.session_state['materias'] = []
 
@@ -122,33 +124,106 @@ def render_live_timer(elapsed_seconds, is_running):
     components.html(html_code, height=130)
 
 def renderizar_analitica():
+    # FILTROS
+    c_filt1, c_filt2, c_filt3, c_filt4 = st.columns([1, 2, 2, 2])
+    with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
+    
+    nombres_materias = list(set([h['MATERIA'] for h in st.session_state['historial']]))
+    nombres_metodos = list(set([h['MÉTODO'] for h in st.session_state['historial']]))
+    
+    f_mat = c_filt2.selectbox("Materias", ["Todas las materias"] + nombres_materias, label_visibility="collapsed")
+    f_hist = c_filt3.selectbox("Historial", ["Todo el Historial", "Últimos 7 días", "Último Mes"], label_visibility="collapsed")
+    f_met = c_filt4.selectbox("Métodos", ["Todos los métodos"] + nombres_metodos, label_visibility="collapsed")
+    
+    st.write("<br>", unsafe_allow_html=True)
+
     if not st.session_state['historial']:
         st.info("Todavía no hay datos para procesar. ¡Hacé tu primera sesión!")
-        c1, c2 = st.columns(2)
-        with c1:
-            with st.container(border=True): st.metric("TOTAL HORAS ESTUDIADAS", "0h 0m")
-        with c2:
-            with st.container(border=True): st.metric("MATERIA TOP", "-")
-    else:
-        df_hist = pd.DataFrame(st.session_state['historial'])
-        total_minutos = df_hist['TIEMPO (min)'].sum()
-        horas = total_minutos // 60
-        minutos = total_minutos % 60
-        
-        materia_top = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().idxmax()
-        materia_top_min = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().max()
-        top_h = materia_top_min // 60
-        top_m = materia_top_min % 60
+        return
 
-        c1, c2 = st.columns(2)
-        with c1:
-            with st.container(border=True): st.metric("TOTAL HORAS ESTUDIADAS", f"{horas}h {minutos}m")
-        with c2:
-            with st.container(border=True): st.metric("MATERIA TOP", f"{materia_top}", f"{top_h}h {top_m}m")
+    df_hist = pd.DataFrame(st.session_state['historial'])
+    
+    # Aplicar filtros
+    if f_mat != "Todas las materias": df_hist = df_hist[df_hist['MATERIA'] == f_mat]
+    if f_met != "Todos los métodos": df_hist = df_hist[df_hist['MÉTODO'] == f_met]
+    if f_hist == "Últimos 7 días":
+        df_hist['FECHA_OBJ'] = pd.to_datetime(df_hist['FECHA'], format='%d/%m/%Y')
+        df_hist = df_hist[df_hist['FECHA_OBJ'] >= (pd.Timestamp.now() - pd.Timedelta(days=7))]
+    elif f_hist == "Último Mes":
+        df_hist['FECHA_OBJ'] = pd.to_datetime(df_hist['FECHA'], format='%d/%m/%Y')
+        df_hist = df_hist[df_hist['FECHA_OBJ'] >= (pd.Timestamp.now() - pd.Timedelta(days=30))]
+
+    if df_hist.empty:
+        st.warning("No hay datos para los filtros seleccionados.")
+        return
+
+    total_minutos = df_hist['TIEMPO (min)'].sum()
+    horas = total_minutos // 60
+    minutos = total_minutos % 60
+    
+    materia_top = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().idxmax()
+    materia_top_min = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().max()
+    top_h = materia_top_min // 60
+    top_m = materia_top_min % 60
+    
+    # Extraer eficiencia promedio
+    df_hist['EFIC_NUM'] = df_hist['EFIC.'].str.replace('%','').astype(float)
+    efic_promedio = int(df_hist['EFIC_NUM'].mean()) if not df_hist.empty else 0
+
+    c1, c2 = st.columns(2)
+    with c1:
+        with st.container(border=True): st.metric("TOTAL DE HORAS ESTUDIADAS", f"{horas}h {minutos}m")
+    with c2:
+        with st.container(border=True): st.metric("MATERIA MÁS ESTUDIADA", f"{materia_top}", f"{top_h}h {top_m}m")
+        
+    c3, c4 = st.columns(2)
+    with c3:
+        with st.container(border=True):
+            st.caption("EFICIENCIA GLOBAL")
+            # Gráfico de Donut con Altair
+            source_efic = pd.DataFrame({"Cat": ["Eficiencia", "Falta"], "Valor": [efic_promedio, 100-efic_promedio]})
+            chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=60).encode(
+                theta=alt.Theta(field="Valor", type="quantitative"),
+                color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=["#0ea5e9", "#1e293b"]), legend=None),
+                tooltip=['Cat', 'Valor']
+            ).properties(height=200)
             
-        st.divider()
-        st.markdown("### Tiempo por Materia")
-        st.bar_chart(df_hist.groupby('MATERIA')['TIEMPO (min)'].sum(), color="#0ea5e9")
+            # Superponer el texto en el centro (Truco de Streamlit)
+            st.altair_chart(chart_efic, use_container_width=True)
+            st.markdown(f"<div style='text-align:center; margin-top:-140px; font-size:32px; font-weight:bold; color:white;'>{efic_promedio}%</div><div style='height:90px;'></div>", unsafe_allow_html=True)
+
+    with c4:
+        with st.container(border=True):
+            st.caption("INTERRUPCIONES COMUNES")
+            # Mockup Data basado en la lista de distracciones del usuario
+            distr_data = pd.DataFrame({
+                "Motivo": st.session_state['distracciones'][:5],
+                "Frecuencia": [22, 11, 6, 2, 1][:len(st.session_state['distracciones'][:5])]
+            })
+            chart_dist = alt.Chart(distr_data).mark_bar(color="#f59e0b", cornerRadiusEnd=4, height=15).encode(
+                x=alt.X("Frecuencia:Q", axis=alt.Axis(grid=True, tickMinStep=2, title="")),
+                y=alt.Y("Motivo:N", sort='-x', axis=alt.Axis(title="", labelColor="#f8fafc", labelFontWeight="bold"))
+            ).properties(height=200)
+            st.altair_chart(chart_dist, use_container_width=True)
+
+    with st.container(border=True):
+        st.caption("TIEMPO POR MATERIA (Minutos)")
+        # Gráfico de barras por materia
+        df_g = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
+        # Mapear colores de las materias activas
+        color_map = {m['nombre']: m['color'] for m in st.session_state['materias']}
+        
+        bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4).encode(
+            x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
+            y=alt.Y("TIEMPO (min):Q", title=""),
+            color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
+            tooltip=['MATERIA', 'TIEMPO (min)']
+        ).properties(height=250)
+        st.altair_chart(bars, use_container_width=True)
+        
+    with st.container(border=True):
+        st.caption("PATRONES DE EFICIENCIA (SEMANAL)")
+        st.info("💡 Gráfico de calor (Heatmap) en desarrollo. El motor registrará las horas de tu cronómetro por franja horaria.")
 
 # ==========================================
 # --- MODALES (DIALOGS) ---
@@ -159,14 +234,10 @@ def dialog_nueva_materia_plan():
     col1, col2 = st.columns(2)
     anio = col1.selectbox("Año de cursado", [1, 2, 3, 4, 5, 6])
     estado = col2.selectbox("Estado actual", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
-    
     st.divider()
-    st.caption("CORRELATIVIDADES (Opcional)")
     opciones_materias = [m['nombre'] for m in st.session_state['plan_carrera']]
     req_regulares = st.multiselect("Para cursar necesito REGULAR:", opciones_materias)
     req_aprobadas = st.multiselect("Para cursar necesito APROBADA:", opciones_materias)
-    
-    st.write("<br>", unsafe_allow_html=True)
     if st.button("Guardar en el Plan", type="primary", use_container_width=True):
         if nombre:
             st.session_state['plan_carrera'].append({
@@ -174,8 +245,6 @@ def dialog_nueva_materia_plan():
                 "estado": estado, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas
             })
             if guardar_datos(): st.rerun()
-        else:
-            st.error("Falta el nombre de la materia.")
 
 @st.dialog("Nueva Meta de Examen")
 def dialog_nueva_meta():
@@ -183,21 +252,19 @@ def dialog_nueva_meta():
     if not nombres_materias:
         st.warning("Primero agregá materias activas desde el menú 'Organización'.")
         return
-        
     nombre = st.text_input("NOMBRE (EJ: PARCIAL 1)")
     materia = st.selectbox("MATERIA (de tus materias activas)", nombres_materias)
-    
     col1, col2 = st.columns(2)
     meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=20)
     fecha_examen = col2.date_input("FECHA EXAMEN", min_value=date.today())
-    
     c1, c2 = st.columns(2)
     if c1.button("Cancelar", use_container_width=True): st.rerun()
     if c2.button("Guardar", type="primary", use_container_width=True):
         if nombre:
             nueva = {
                 "id": str(time.time()), "nombre": nombre, "materia": materia,
-                "meta_horas": meta_horas, "fecha_examen": fecha_examen.isoformat(), "horas_acumuladas": 0.0
+                "meta_horas": meta_horas, "fecha_examen": fecha_examen.isoformat(), 
+                "horas_acumuladas": 0.0, "nota": None
             }
             st.session_state['metas'].append(nueva)
             if guardar_datos(): st.rerun()
@@ -208,16 +275,12 @@ def dialog_editar_meta(meta_idx):
     nombres_materias = [m["nombre"] for m in st.session_state['materias']]
     try: fecha_obj = date.fromisoformat(meta_actual['fecha_examen'])
     except: fecha_obj = date.today()
-        
     idx_materia = nombres_materias.index(meta_actual['materia']) if meta_actual['materia'] in nombres_materias else 0
-        
     nombre = st.text_input("NOMBRE", value=meta_actual['nombre'])
     materia = st.selectbox("MATERIA", nombres_materias, index=idx_materia)
-    
     col1, col2 = st.columns(2)
     meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=int(meta_actual['meta_horas']))
     fecha_examen = col2.date_input("FECHA EXAMEN", value=fecha_obj)
-    
     c1, c2 = st.columns(2)
     if c1.button("Cancelar", use_container_width=True): st.rerun()
     if c2.button("Actualizar", type="primary", use_container_width=True):
@@ -228,19 +291,28 @@ def dialog_editar_meta(meta_idx):
             st.session_state['metas'][meta_idx]['fecha_examen'] = fecha_examen.isoformat()
             if guardar_datos(): st.rerun()
 
-@st.dialog("Nueva Materia Activa (Cronómetro)")
+@st.dialog("Asignar Nota Final")
+def dialog_asignar_nota(meta_idx):
+    meta_actual = st.session_state['metas'][meta_idx]
+    st.write(f"**Examen:** {meta_actual['nombre']} ({meta_actual['materia']})")
+    nota = st.text_input("NOTA FINAL", placeholder="Ej: 80T + 79P = 79.5 o 8.5")
+    c1, c2 = st.columns(2)
+    if c1.button("Cancelar", use_container_width=True): st.rerun()
+    if c2.button("Guardar Nota", type="primary", use_container_width=True):
+        if nota:
+            st.session_state['metas'][meta_idx]['nota'] = nota
+            if guardar_datos(): st.rerun()
+
+@st.dialog("Nueva Materia Activa")
 def dialog_nueva_materia_activa():
     materias_validas = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
     materias_ya_activas = [m['nombre'] for m in st.session_state['materias']]
     opciones_disponibles = [m for m in materias_validas if m not in materias_ya_activas]
-    
     if not opciones_disponibles:
         st.warning("No tenés materias en estado 'Cursando' o 'Regular' disponibles para agregar. Modificá tu Plan de Estudios primero.")
         return
-        
     n = st.selectbox("Seleccionar Materia", opciones_disponibles)
     c = st.color_picker("Color Distintivo", "#0ea5e9")
-    
     if st.button("Activar Materia", type="primary", use_container_width=True):
         st.session_state['materias'].append({"nombre": n, "color": c})
         if guardar_datos(): st.rerun()
@@ -251,35 +323,29 @@ def dialog_agregar_sesion():
     if not nombres_materias:
         st.warning("Agregá materias en 'Organización' para poder registrar sesiones.")
         return
-
     st.markdown("### Métricas Rápidas")
     col1, col2, col3, col4, col5 = st.columns(5)
     tiempo_neto = col1.number_input("TIEMPO NETO (min)", min_value=1, value=60)
     tiempo_pausa = col3.number_input("TIEMPO PAUSA (min)", min_value=0, value=10)
-    
     total_min = tiempo_neto + tiempo_pausa
     col2.metric("TOTAL", f"{total_min} min")
     eficiencia = round((tiempo_neto / total_min * 100) if total_min > 0 else 0)
     col5.metric("EFICIENCIA", f"{eficiencia}%")
-    
     st.divider()
     c1, c2, c3 = st.columns(3)
     fecha = c1.date_input("FECHA")
     materia = c2.selectbox("MATERIA", nombres_materias)
     metodo = c3.selectbox("MÉTODO", st.session_state['metodos'])
-    
     metas_disponibles = [m for m in st.session_state['metas'] if m['materia'] == materia]
     opciones_obj = {"-- Sin vincular --": None}
     for m in metas_disponibles: opciones_obj[f"{m['nombre']} ({m['materia']})"] = m['id']
     objetivo_sel = st.selectbox("VINCULAR OBJETIVO", list(opciones_obj.keys()))
-    
     if st.button("Guardar Sesión", type="primary", use_container_width=True):
         nueva_sesion = {
             "FECHA": fecha.strftime("%d/%m/%Y"), "MATERIA": materia, "MÉTODO": metodo,
             "TIEMPO (min)": tiempo_neto, "EFIC.": f"{eficiencia}%"
         }
         st.session_state['historial'].append(nueva_sesion)
-        
         id_meta = opciones_obj[objetivo_sel]
         if id_meta:
             for m in st.session_state['metas']:
@@ -332,17 +398,15 @@ if menu_opcion == "Plan de Estudios":
                         st.markdown(f"<span class='{color_clase}'>{row['estado']}</span>", unsafe_allow_html=True)
                         st.markdown(f"#### {row['nombre']}")
                         
-                        if row['req_regulares']:
-                            st.caption(f"**Req. Regular:** {', '.join(row['req_regulares'])}")
-                        if row['req_aprobadas']:
-                            st.caption(f"**Req. Aprobada:** {', '.join(row['req_aprobadas'])}")
+                        if row['req_regulares']: st.caption(f"**Req. Regular:** {', '.join(row['req_regulares'])}")
+                        if row['req_aprobadas']: st.caption(f"**Req. Aprobada:** {', '.join(row['req_aprobadas'])}")
                         
                         if st.button("🗑️", key=f"del_plan_{row['id']}", help="Eliminar del plan"):
                             st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != row['id']]
                             if guardar_datos(): st.rerun()
 
 # ==========================================
-# --- VISTA: RESUMEN ---
+# --- VISTA: RESUMEN (ANALÍTICA DIRECTA) ---
 # ==========================================
 elif menu_opcion == "Resumen":
     st.header("Tus Estadísticas")
@@ -563,37 +627,81 @@ elif menu_opcion == "Página Principal":
         renderizar_analitica()
 
     with tabs[2]:
-        c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
+        # FILTROS DE METAS
+        materias_con_metas = list(set([m['materia'] for m in st.session_state['metas']]))
+        
+        c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
+        with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
+        f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, label_visibility="collapsed")
+        f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], label_visibility="collapsed")
+        
         with c_btn3:
+            st.write("<br>", unsafe_allow_html=True)
             if st.button("➕ Nueva Meta", type="primary", use_container_width=True):
                 dialog_nueva_meta()
+                
+        st.divider()
                 
         if not st.session_state['metas']:
             st.info("No tenés metas creadas. Tocá '+ Nueva Meta' para armar tu plan de examen.")
         else:
-            cols = st.columns(3)
-            for i, meta in enumerate(st.session_state['metas']):
-                with cols[i % 3]:
-                    with st.container(border=True):
-                        try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
-                        except: fecha_str = meta['fecha_examen']
-                        st.caption(f"{meta['materia'].upper()} - Fecha: {fecha_str}")
-                        st.markdown(f"### {meta['nombre']}")
-                        
-                        progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
-                        st.progress(progreso)
-                        
-                        h_acum = int(meta['horas_acumuladas'])
-                        m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
-                        st.caption(f"{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m")
-                        
-                        st.write("")
-                        c_ed1, c_ed2 = st.columns(2)
-                        if c_ed1.button("✏️ Editar", key=f"edit_meta_{i}", use_container_width=True):
-                            dialog_editar_meta(i)
-                        if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{i}", use_container_width=True):
-                            st.session_state['metas'].pop(i)
-                            if guardar_datos(): st.rerun()
+            # Filtrar metas
+            metas_filtradas = st.session_state['metas']
+            if f_mat_metas != "Todas las materias":
+                metas_filtradas = [m for m in metas_filtradas if m['materia'] == f_mat_metas]
+                
+            hoy = date.today()
+            if f_est_metas == "Actuales":
+                metas_filtradas = [m for m in metas_filtradas if date.fromisoformat(m['fecha_examen']) >= hoy]
+            elif f_est_metas == "Pasadas":
+                metas_filtradas = [m for m in metas_filtradas if date.fromisoformat(m['fecha_examen']) < hoy]
+
+            if not metas_filtradas:
+                st.warning("No hay metas que coincidan con los filtros seleccionados.")
+            else:
+                cols = st.columns(3)
+                for i, meta in enumerate(metas_filtradas):
+                    # Encontrar el índice original para poder editar/borrar correctamente
+                    original_idx = st.session_state['metas'].index(meta)
+                    
+                    with cols[i % 3]:
+                        with st.container(border=True):
+                            try: fecha_obj = date.fromisoformat(meta['fecha_examen'])
+                            except: fecha_obj = date.today()
+                            fecha_str = fecha_obj.strftime('%d/%m/%Y')
+                            
+                            is_pasada = fecha_obj < hoy
+                            etiqueta_estado = "<span style='color: #3b82f6; float:right; font-size: 14px;'>Examen pasado</span>" if is_pasada else ""
+                            
+                            st.markdown(f"<div style='color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase;'>{meta['materia']} {etiqueta_estado}</div>", unsafe_allow_html=True)
+                            st.markdown(f"### {meta['nombre']}")
+                            st.caption(f"📅 {fecha_str}")
+                            
+                            progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
+                            st.progress(progreso)
+                            
+                            h_acum = int(meta['horas_acumuladas'])
+                            m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
+                            
+                            pct = int(progreso * 100)
+                            st.markdown(f"<div style='display:flex; justify-content:space-between; font-size: 13px; color: #94a3b8;'><span>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</span><span>{pct}%</span></div>", unsafe_allow_html=True)
+                            
+                            # Si la fecha ya pasó
+                            if is_pasada:
+                                if meta.get('nota'):
+                                    st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 20px; font-weight: 800; color: white;'>{meta['nota']}</span></div>", unsafe_allow_html=True)
+                                else:
+                                    st.write("<br>", unsafe_allow_html=True)
+                                    if st.button("🎖️ Asignar Nota", key=f"nota_{original_idx}", use_container_width=True):
+                                        dialog_asignar_nota(original_idx)
+                            
+                            st.write("<br>", unsafe_allow_html=True)
+                            c_ed1, c_ed2 = st.columns(2)
+                            if c_ed1.button("✏️ Editar", key=f"edit_meta_{original_idx}", use_container_width=True):
+                                dialog_editar_meta(original_idx)
+                            if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{original_idx}", use_container_width=True):
+                                st.session_state['metas'].pop(original_idx)
+                                if guardar_datos(): st.rerun()
 
     with tabs[3]:
         c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])

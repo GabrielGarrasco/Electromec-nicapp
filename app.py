@@ -11,31 +11,43 @@ import altair as alt
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 
-# --- CSS MEJORADO ---
+# --- CSS MEJORADO (Estética Dark Modern) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #0f172a; color: #f8fafc; }
+    /* Fondo general oscuro */
+    .stApp { background-color: #0b1120; color: #f8fafc; font-family: 'Inter', sans-serif; }
     
     [data-testid="collapsedControl"] { display: none; }
     
-    .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
-    .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
+    /* Pestañas (Tabs) */
+    .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 30px; border-bottom: 1px solid #1e293b; }
+    .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 700; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
     
+    /* Contenedores (Tarjetas) */
     [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { 
-        background-color: #162032; border-radius: 12px; padding: 12px; border: 1px solid #334155; 
+        background-color: #172033; border-radius: 16px; padding: 20px; border: 1px solid #1e293b; 
     }
     
-    [data-testid="baseButton-primary"] { background-color: #0ea5e9; border-color: #0ea5e9; color: white; border-radius: 8px; font-weight: bold; }
+    /* Botones primarios (Azul brillante) */
+    [data-testid="baseButton-primary"] { 
+        background-color: #0ea5e9; border-color: #0ea5e9; color: white; border-radius: 12px; font-weight: bold; padding: 10px;
+    }
     [data-testid="baseButton-primary"]:hover { background-color: #0284c7; border-color: #0284c7; }
-    [data-testid="baseButton-secondary"] { background-color: #334155; border-color: #334155; color: white; border-radius: 8px; }
-    [data-testid="baseButton-secondary"]:hover { border-color: #94a3b8; }
-    [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 700; }
-    [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+    
+    /* Botones secundarios (Gris oscuro) */
+    [data-testid="baseButton-secondary"] { 
+        background-color: #1e293b; border-color: #1e293b; color: #e2e8f0; border-radius: 12px; font-weight: 600;
+    }
+    [data-testid="baseButton-secondary"]:hover { border-color: #334155; color: white; }
+    
+    /* Métricas */
+    [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 800; }
+    [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     header {visibility: hidden;}
     
+    /* Badges */
     .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
-    
     .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
@@ -43,26 +55,25 @@ st.markdown("""
     .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .nota-box { background-color: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
     
-    .req-cumplido { background-color: rgba(255, 255, 255, 0.12); padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.05); }
-    .req-pendiente { padding: 6px 10px; margin-bottom: 4px; color: #94a3b8; }
+    /* Radio buttons tipo Pill para Libre/Pomodoro */
+    div[role="radiogroup"] { display: flex; justify-content: center; background-color: #1e293b; border-radius: 20px; padding: 5px; width: max-content; margin: 0 auto; }
+    div[role="radiogroup"] > label { padding: 8px 20px; border-radius: 15px; transition: 0.3s; margin-bottom: 0px; border: none; font-weight: bold; color: #94a3b8; }
+    div[role="radiogroup"] > label[data-checked="true"] { background-color: #334155; color: white; }
     
-    div[role="radiogroup"] > label { padding: 10px; border-radius: 8px; transition: 0.3s; margin-bottom: 5px; }
-    div[role="radiogroup"] > label:hover { background-color: #1e293b; }
-    
-    /* CSS para el horario automático (Estilo Bloques) */
+    /* Horario Automático */
     .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 15px; background-color: #0f172a; table-layout: fixed; }
-    .tabla-horario th { background-color: #121b29; color: #0ea5e9; padding: 15px 5px; border: 1px solid #2a3441; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .tabla-horario th { background-color: #121b29; color: #0ea5e9; padding: 15px 5px; border: 1px solid #1e293b; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
     .tabla-horario th:first-child { color: #94a3b8; width: 10%; }
-    .tabla-horario td { padding: 0; border: 1px solid #2a3441; vertical-align: top; height: 75px; }
+    .tabla-horario td { padding: 0; border: 1px solid #1e293b; vertical-align: top; height: 75px; }
     .tabla-horario td:first-child { font-weight: 700; color: #94a3b8; background-color: #121b29; padding-top: 15px; text-align: center; }
-    .materia-bloque { padding: 5px; line-height: 1.2; width: 100%; box-sizing: border-box; border-radius: 4px; }
+    .materia-bloque { background-color: #3b82f6; color: #ffffff; padding: 5px; font-weight: 800; line-height: 1.2; width: 100%; height: 100%; min-height: 75px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; box-sizing: border-box; border: 1px solid #2563eb; border-radius: 4px; }
     
-    /* CSS para el Historial (Clean Dark) */
-    .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; font-size: 14px; background-color: #0f172a; border: 1px solid #334155; }
-    .tabla-historial th { background-color: #162032; color: #94a3b8; padding: 15px; border-bottom: 1px solid #334155; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+    /* Historial */
+    .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; font-size: 14px; background-color: #0b1120; border: 1px solid #1e293b; }
+    .tabla-historial th { background-color: #172033; color: #94a3b8; padding: 15px; border-bottom: 1px solid #1e293b; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     .tabla-historial td { padding: 15px; border-bottom: 1px solid #1e293b; vertical-align: middle; }
     .tabla-historial tr:last-child td { border-bottom: none; }
-    .tabla-historial tr:hover td { background-color: #1e293b; }
+    .tabla-historial tr:hover td { background-color: #172033; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -99,69 +110,6 @@ def cargar_datos():
         if valor: return json.loads(valor)
     except: return None
     return None
-
-# --- SISTEMA DE MICROS ---
-@st.cache_data(ttl=3600)
-def obtener_datos_micros():
-    try:
-        client = get_gspread_client()
-        wb = client.open('StudyMeterDB')
-        sheet_721 = wb.worksheet('Recorrido 721').get_all_values()
-        sheet_722 = wb.worksheet('Recorrido 722').get_all_values()
-        return {"721": sheet_721, "722": sheet_722}
-    except Exception as e:
-        return None
-
-def calcular_mejor_micro(hora_clase_str, dict_micros, origen, destino):
-    if not dict_micros: return None
-    try:
-        hc = hora_clase_str.strip()
-        if ":" not in hc: hc += ":00"
-        if len(hc.split(":")[0]) == 1: hc = "0" + hc
-        hora_clase = datetime.strptime(hc, "%H:%M")
-    except: return None
-    
-    # Margen amplio: desde 1 hora antes hasta la hora exacta de cursado
-    lim_inf = hora_clase - pd.Timedelta(minutes=60)
-    lim_sup = hora_clase
-    
-    mejor_opcion = None
-    menor_diferencia = pd.Timedelta(minutes=1000)
-    
-    for linea, datos in dict_micros.items():
-        idx_origen, idx_destino = -1, -1
-        for i, fila in enumerate(datos):
-            if fila:
-                val_est = str(fila[0]).strip().lower()
-                if val_est == origen.lower(): idx_origen = i
-                if val_est == destino.lower(): idx_destino = i
-                
-        if idx_origen == -1 or idx_destino == -1: continue
-        
-        for col in range(1, len(datos[idx_destino])):
-            if col >= len(datos[idx_origen]): continue
-            
-            val_llegada = str(datos[idx_destino][col]).strip().replace('.', ':')
-            val_salida = str(datos[idx_origen][col]).strip().replace('.', ':')
-            
-            if val_llegada and val_salida:
-                try:
-                    h_llegada = datetime.strptime(val_llegada, "%H:%M")
-                    h_salida = datetime.strptime(val_salida, "%H:%M")
-                    
-                    if h_salida >= h_llegada: continue # Ignorar cruces
-                    
-                    if lim_inf.time() <= h_llegada.time() <= lim_sup.time():
-                        dt_clase = datetime.combine(date.today(), hora_clase.time())
-                        dt_llegada = datetime.combine(date.today(), h_llegada.time())
-                        diferencia = dt_clase - dt_llegada
-                        
-                        if diferencia < menor_diferencia:
-                            menor_diferencia = diferencia
-                            mejor_opcion = {"linea": linea, "subida": h_salida.strftime("%H:%M"), "bajada": h_llegada.strftime("%H:%M")}
-                except:
-                    pass
-    return mejor_opcion
 
 # --- INICIALIZACIÓN DE VARIABLES ---
 if 'timer_state' not in st.session_state: st.session_state['timer_state'] = 'IDLE'
@@ -203,6 +151,45 @@ def parse_float_nota(val_str):
     except: return None
 
 OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+
+# --- FUNCIONES DE CÁLCULO ---
+def calcular_racha(historial):
+    if not historial: return 0
+    # Obtenemos fechas únicas del historial, ordenadas de más reciente a más antigua
+    fechas_unicas = sorted(list(set([datetime.strptime(h['FECHA'], "%d/%m/%Y").date() for h in historial])), reverse=True)
+    hoy = date.today()
+    ayer = hoy - pd.Timedelta(days=1)
+    
+    racha = 0
+    if fechas_unicas:
+        # Si hoy está en el historial, arrancamos chequeando desde hoy. Si no, pero está ayer, mantenemos la racha
+        if fechas_unicas[0] == hoy:
+            fecha_chequeo = hoy
+        elif fechas_unicas[0] == ayer:
+            fecha_chequeo = ayer
+        else:
+            return 0 # Ni hoy ni ayer estudió, racha rota
+            
+        for f in fechas_unicas:
+            if f == fecha_chequeo:
+                racha += 1
+                fecha_chequeo -= pd.Timedelta(days=1)
+            else:
+                break
+    return racha
+
+# --- HEADER SUPERIOR (Falso Header para la racha) ---
+racha_actual = calcular_racha(st.session_state['historial'])
+texto_racha = "¡Fuego activo!" if racha_actual > 0 else "Inicia tu racha de estudio ahora."
+st.markdown(f"""
+<div style="display: flex; justify-content: flex-end; align-items: center; padding: 10px 0 20px 0;">
+    <div style="color: #f97316; font-size: 14px; font-weight: 700; margin-right: 15px;">{texto_racha}</div>
+    <div style="background-color: transparent; border: 1px solid #334155; padding: 5px 15px; border-radius: 20px; color: #94a3b8; font-weight: 800; font-size: 15px;">
+        🔥 {racha_actual}
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -348,7 +335,6 @@ def dialog_detalle_materia(mat_id):
     mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
     if not mat: return
     
-    # --- MODO EDICIÓN ---
     if st.session_state.get('editando_plan_mat_id') == mat_id:
         st.markdown("### Editar Materia")
         nuevo_nombre = st.text_input("Nombre", value=mat['nombre'])
@@ -452,7 +438,6 @@ def dialog_detalle_materia(mat_id):
             else:
                 st.error("Falta el nombre.")
                 
-    # --- MODO LECTURA ---
     else:
         st.markdown(f"### {mat['nombre']}")
         cuatri = mat.get('cuatrimestre', 'No definido')
@@ -524,7 +509,6 @@ def dialog_detalle_materia(mat_id):
 @st.dialog("Agregar Materia al Plan de Estudios")
 def dialog_nueva_materia_plan():
     nombre = st.text_input("Nombre de la materia")
-    
     col1, col2, col3 = st.columns(3)
     anio = col1.selectbox("Año", [1, 2, 3, 4, 5, 6])
     cuatri = col2.selectbox("Cuatrimestre", ["1er Cuatrimestre", "2do Cuatrimestre", "Anual"])
@@ -551,7 +535,6 @@ def dialog_nueva_materia_plan():
             sel_d = c_d.selectbox(f"Día {i+1}", OPCIONES_DIAS, key=f"nvo_d_{i}")
             val_i = c_i.text_input("Inicio", placeholder="Ej: 13:45", key=f"nvo_i_{i}")
             val_f = c_f.text_input("Fin", placeholder="Ej: 16:00", key=f"nvo_f_{i}")
-            
             if sel_d != "---" and val_i.strip():
                 nuevos_horarios.append({"dia": sel_d, "inicio": val_i.strip(), "fin": val_f.strip()})
         
@@ -566,7 +549,6 @@ def dialog_nueva_materia_plan():
         if nombre:
             estado_final = estado
             nota_def = nota_final
-            
             if estado == "Regular":
                 last_val = None
                 cant_intentos = 0
@@ -574,7 +556,6 @@ def dialog_nueva_materia_plan():
                     if v.strip():
                         last_val = v.strip()
                         cant_intentos += 1
-                
                 if last_val:
                     val_num = parse_float_nota(last_val)
                     if val_num is not None:
@@ -585,16 +566,9 @@ def dialog_nueva_materia_plan():
                             estado_final = "Libre/Recursado"
 
             st.session_state['plan_carrera'].append({
-                "id": str(time.time()), 
-                "nombre": nombre, 
-                "año": anio,
-                "cuatrimestre": cuatri,
-                "estado": estado_final, 
-                "req_regulares": req_regulares, 
-                "req_aprobadas": req_aprobadas,
-                "nota": nota_def,
-                "intentos": intentos,
-                "horarios_clase": nuevos_horarios
+                "id": str(time.time()), "nombre": nombre, "año": anio, "cuatrimestre": cuatri,
+                "estado": estado_final, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas,
+                "nota": nota_def, "intentos": intentos, "horarios_clase": nuevos_horarios
             })
             if guardar_datos(): st.rerun()
         else:
@@ -611,7 +585,6 @@ def dialog_nueva_meta():
     col1, col2 = st.columns(2)
     meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=20)
     fecha_examen = col2.date_input("FECHA EXAMEN", min_value=date.today())
-    
     dias_sel = st.multiselect("DÍAS DE ESTUDIO", ["L", "M", "X", "J", "V", "S", "D"], default=["L", "M", "X", "J", "V"])
     
     c1, c2 = st.columns(2)
@@ -638,7 +611,6 @@ def dialog_editar_meta(meta_idx):
     col1, col2 = st.columns(2)
     meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=int(meta_actual['meta_horas']))
     fecha_examen = col2.date_input("FECHA EXAMEN", value=fecha_obj)
-    
     def_dias = meta_actual.get("dias_estudio", ["L", "M", "X", "J", "V", "S", "D"])
     dias_sel = st.multiselect("DÍAS DE ESTUDIO", ["L", "M", "X", "J", "V", "S", "D"], default=def_dias)
     
@@ -668,11 +640,9 @@ def dialog_asignar_nota(meta_idx):
 @st.dialog("Histórico de Notas", width="large")
 def dialog_historico_notas():
     notas_guardadas = [m for m in st.session_state['metas'] if m.get('nota') is not None and str(m['nota']).strip() != ""]
-    
     if not notas_guardadas:
         st.info("Todavía no tenés notas registradas en tus exámenes pasados.")
         return
-        
     def get_date(m):
         try: return date.fromisoformat(m['fecha_examen'])
         except: return date.min
@@ -683,10 +653,8 @@ def dialog_historico_notas():
     for m in notas_guardadas:
         try: fecha_str = date.fromisoformat(m['fecha_examen']).strftime('%d/%m/%Y')
         except: fecha_str = "---"
-        
         html_notas += f"<tr><td>{fecha_str}</td><td>{m['materia']}</td><td>{m['nombre']}</td><td style='color: #0ea5e9; font-weight: bold; font-size: 16px;'>{m['nota']}</td></tr>"
     html_notas += "</table>"
-    
     st.markdown(html_notas, unsafe_allow_html=True)
 
 @st.dialog("Nueva Materia Activa")
@@ -755,7 +723,8 @@ def dialog_agregar_sesion():
 col_menu, col_contenido = st.columns([1, 4], gap="large")
 
 with col_menu:
-    st.markdown("### Menú")
+    st.write("<br><br>", unsafe_allow_html=True)
+    st.markdown("### Navegación")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios"], label_visibility="collapsed")
 
 with col_contenido:
@@ -823,7 +792,7 @@ with col_contenido:
                         st.markdown(f"""
                         <style>
                             div[data-testid="stButton"] button[key="btn_carr_curs_{m['id']}"] {{
-                                background-color: #1e293b; color: #f8fafc; text-align: left;
+                                background-color: #172033; color: #f8fafc; text-align: left;
                                 border: none; border-left: 4px solid {color_border}; justify-content: flex-start;
                                 padding-left: 15px; font-size: 15px;
                             }}
@@ -860,7 +829,7 @@ with col_contenido:
                         st.markdown(f"""
                         <style>
                             div[data-testid="stButton"] button[key="btn_carr_puedo_{m['id']}"] {{
-                                background-color: #1e293b; color: #f8fafc; text-align: left;
+                                background-color: #172033; color: #f8fafc; text-align: left;
                                 border: none; border-left: 4px solid {color_border}; justify-content: flex-start;
                                 padding-left: 15px; font-size: 15px;
                             }}
@@ -889,7 +858,7 @@ with col_contenido:
             promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
             
             st.markdown(f"""
-            <div style="background-color: #1e293b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #334155;">
+            <div style="background-color: #172033; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #1e293b;">
                 <div style="color: #94a3b8; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
                 <div style="color: #0ea5e9; font-size: 42px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
             </div>
@@ -985,7 +954,7 @@ with col_contenido:
 
                 with cols_mat[i % 3]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; background-color: #1e293b; margin-bottom: 15px;">
+                    <div style="border: 1px solid #1e293b; border-radius: 12px; padding: 20px; text-align: center; background-color: #172033; margin-bottom: 15px;">
                         <div class="color-circle" style="background-color: {mat['color']};"></div>
                         <div style="font-size: 16px; font-weight: 600;">{mat['nombre']}</div>
                         {estado_badge}
@@ -1011,7 +980,7 @@ with col_contenido:
             for i, dist in enumerate(st.session_state['distracciones']):
                 with cols_dist[i % 4]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #334155; border-radius: 12px; padding: 15px; text-align: center; background-color: #1e293b; margin-bottom: 10px;">
+                    <div style="border: 1px solid #1e293b; border-radius: 12px; padding: 15px; text-align: center; background-color: #172033; margin-bottom: 10px;">
                         <div style="color: #94a3b8; font-size: 14px;">⚫</div>
                         <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{dist}</div>
                     </div>
@@ -1036,7 +1005,7 @@ with col_contenido:
             for i, met in enumerate(st.session_state['metodos']):
                 with cols_met[i % 4]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #334155; border-radius: 12px; padding: 15px; text-align: center; background-color: #1e293b; margin-bottom: 10px;">
+                    <div style="border: 1px solid #1e293b; border-radius: 12px; padding: 15px; text-align: center; background-color: #172033; margin-bottom: 10px;">
                         <div style="color: #94a3b8; font-size: 14px;">⚫</div>
                         <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{met}</div>
                     </div>
@@ -1046,7 +1015,7 @@ with col_contenido:
                         if guardar_datos(): st.rerun()
 
     elif menu_opcion == "Página Principal":
-        tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
+        tabs = st.tabs(["Cronómetro", "Analítica", "Metas"]) # Saqué la tab de historial para alinear a tu captura
 
         def render_meta_card(meta, original_idx, is_pasada, hoy, prefijo_key):
             try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
@@ -1064,28 +1033,31 @@ with col_contenido:
                     if (hoy + pd.Timedelta(days=j)).weekday() in selected_ints:
                         dias_restantes += 1
             
-            etiqueta_estado = f"<span style='color: #3b82f6; float:right;'>{dias_restantes} días restantes</span>" if not is_pasada else "<span style='color: #ef4444; float:right;'>Examen pasado</span>"
+            etiqueta_estado = f"<span style='color: #f8fafc; font-weight:800; float:right;'>{dias_restantes} días</span>" if not is_pasada else "<span style='color: #ef4444; float:right;'>Examen pasado</span>"
             
-            st.markdown(f"<div style='color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;'>{meta['materia']} {etiqueta_estado}</div>", unsafe_allow_html=True)
-            st.markdown(f"<h3 style='margin-bottom: 5px;'>{meta['nombre']}</h3>", unsafe_allow_html=True)
-            st.caption(f"📅 {fecha_str}")
-            st.write("<br>", unsafe_allow_html=True)
-            
-            if not is_pasada:
-                horas_faltantes = max(0.0, meta['meta_horas'] - meta['horas_acumuladas'])
-                ritmo = horas_faltantes / dias_restantes if dias_restantes > 0 else 0.0
-                r_h = int(ritmo)
-                r_m = int((ritmo - r_h) * 60)
-                
-                st.markdown(f"<div style='color: #0ea5e9; font-size: 13px; font-weight: 700; margin-bottom: 5px;'>Ritmo sugerido: {r_h}h {r_m}m / día</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='text-align:center; font-size: 16px; font-weight: 800; text-transform: uppercase; margin-bottom: 15px;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
             
             progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
+            pct = int(progreso * 100)
+            
+            st.markdown(f"""
+            <div style='display:flex; justify-content:space-between; align-items:center;'>
+                <h3 style='margin-bottom: 0px;'>{meta['nombre']}</h3>
+                <h3 style='margin-bottom: 0px;'>{pct}%</h3>
+            </div>
+            <div style='color: #94a3b8; font-size: 13px; font-weight: bold; margin-bottom: 10px;'>{meta['materia']} {etiqueta_estado}</div>
+            """, unsafe_allow_html=True)
+            
             st.progress(progreso)
             
             h_acum = int(meta['horas_acumuladas'])
             m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
-            pct = int(progreso * 100)
-            st.markdown(f"<div style='display:flex; justify-content:space-between; font-size: 13px; color: #94a3b8; font-weight:bold;'><span>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</span><span>{pct}%</span></div>", unsafe_allow_html=True)
+            
+            if not is_pasada:
+                horas_faltantes = max(0.0, meta['meta_horas'] - meta['horas_acumuladas'])
+                falt_h = int(horas_faltantes)
+                falt_m = int((horas_faltantes - falt_h) * 60)
+                st.markdown(f"<div style='text-align:right; font-size: 12px; color: #94a3b8; font-weight:bold;'>Faltan {falt_h}h {falt_m}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
             
             if is_pasada:
                 if meta.get('nota'):
@@ -1094,22 +1066,12 @@ with col_contenido:
                     st.write("<br>", unsafe_allow_html=True)
                     if st.button("🎖️ Asignar Nota", key=f"nota_{prefijo_key}_{original_idx}", use_container_width=True):
                         dialog_asignar_nota(original_idx)
-            
-            st.write("<br>", unsafe_allow_html=True)
-            c_ed1, c_ed2 = st.columns(2)
-            if c_ed1.button("✏️ Editar", key=f"edit_meta_{prefijo_key}_{original_idx}", use_container_width=True): dialog_editar_meta(original_idx)
-            if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{prefijo_key}_{original_idx}", use_container_width=True):
-                st.session_state['metas'].pop(original_idx)
-                if guardar_datos(): st.rerun()
 
         with tabs[0]:
             if st.session_state['timer_state'] == 'IDLE':
-                col_izq, col_der = st.columns([1, 1.5], gap="large")
+                col_izq, col_der = st.columns([1, 2], gap="large")
                 
                 with col_izq:
-                    st.markdown("### Metas actuales")
-                    st.caption("Progreso de tus metas vigentes.")
-                    
                     hoy = date.today()
                     metas_actuales = []
                     for i, m in enumerate(st.session_state['metas']):
@@ -1119,19 +1081,31 @@ with col_contenido:
                         except: pass
                         
                     if not metas_actuales:
-                        st.info("No tenés metas de exámenes próximas. ¡Todo al día!")
+                        with st.container(border=True):
+                            st.markdown("<div style='text-align:center; font-weight:bold; color:#94a3b8;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
+                            st.info("No tenés metas próximas. ¡Todo al día!")
                     else:
-                        for idx, meta in metas_actuales:
-                            with st.container(border=True):
-                                render_meta_card(meta, idx, False, hoy, "tab0")
+                        # Mostramos solo la más prioritaria para dejarlo igual a la captura
+                        idx, meta_priority = metas_actuales[0]
+                        with st.container(border=True):
+                            render_meta_card(meta_priority, idx, False, hoy, "tab0")
+                            
+                    st.write("<br>", unsafe_allow_html=True)
+                    with st.container(border=True):
+                        st.markdown("<div style='text-align:center; font-size:13px; color:#94a3b8; margin-bottom:15px;'>Aquí puedes agregar una sesión manualmente</div>", unsafe_allow_html=True)
+                        if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):
+                            dialog_agregar_sesion()
 
                 with col_der:
-                    st.write("<br>", unsafe_allow_html=True)
-                    st.radio("Modo de Estudio", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
-                    if st.button("▶ INICIAR ESTUDIO", type="primary", use_container_width=True):
-                        st.session_state['study_start'] = time.time()
-                        st.session_state['timer_state'] = 'RUNNING'
-                        st.rerun()
+                    with st.container(border=True):
+                        st.write("<br>", unsafe_allow_html=True)
+                        st.radio("Modo", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
+                        st.write("<br><br>", unsafe_allow_html=True)
+                        if st.button("▶ INICIAR ESTUDIO", type="primary", use_container_width=True):
+                            st.session_state['study_start'] = time.time()
+                            st.session_state['timer_state'] = 'RUNNING'
+                            st.rerun()
+                        st.write("<br>", unsafe_allow_html=True)
 
             elif st.session_state['timer_state'] == 'RUNNING':
                 st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Cronómetro Libre</p>", unsafe_allow_html=True)
@@ -1245,9 +1219,7 @@ with col_contenido:
             if st.session_state['timer_state'] == 'IDLE':
                 st.divider()
                 st.markdown("### Mi Horario de Cursado")
-                st.caption("Se completa solo con los horarios que cargues al editar tus materias 'Cursando' en el Plan de Estudios.")
-                
-                dict_micros = obtener_datos_micros()
+                st.caption("Se completa con los horarios que cargues al editar tus materias 'Cursando' en el Plan de Estudios.")
                 
                 horarios_completos = []
                 for m in st.session_state['plan_carrera']:
@@ -1264,32 +1236,10 @@ with col_contenido:
                                     if len(fin_c.split(":")[0]) == 1: fin_c = "0" + fin_c
                                 
                                 horarios_completos.append({
-                                    "materia": m['nombre'],
-                                    "dia": hc['dia'],
-                                    "inicio": ini_c,
-                                    "fin": fin_c,
-                                    "inicio_orig": hc['inicio'],
-                                    "fin_orig": hc.get('fin', ''),
-                                    "tipo": "clase"
+                                    "materia": m['nombre'], "dia": hc['dia'],
+                                    "inicio": ini_c, "fin": fin_c,
+                                    "inicio_orig": hc['inicio'], "fin_orig": hc.get('fin', '')
                                 })
-                                
-                                info_micro = calcular_mejor_micro(ini_c, dict_micros, "Viamonte, 2556", "Avenida Perú, 679")
-                                if info_micro:
-                                    sub_c = info_micro['subida']
-                                    if len(sub_c.split(":")[0]) == 1: sub_c = "0" + sub_c
-                                    baj_c = info_micro['bajada']
-                                    if len(baj_c.split(":")[0]) == 1: baj_c = "0" + baj_c
-                                    
-                                    horarios_completos.append({
-                                        "materia": f"{info_micro['linea']} - {info_micro['subida']}",
-                                        "dia": hc['dia'],
-                                        "inicio": sub_c,
-                                        "fin": baj_c,
-                                        "inicio_orig": info_micro['subida'],
-                                        "fin_orig": info_micro['bajada'],
-                                        "tipo": "micro",
-                                        "linea": info_micro['linea']
-                                    })
                 
                 def get_sortable_time(t_str):
                     try: return datetime.strptime(t_str, "%H:%M").time()
@@ -1303,7 +1253,7 @@ with col_contenido:
                 sorted_times = sorted(list(time_points), key=get_sortable_time)
                 
                 if not sorted_times:
-                    st.info("No tenés horarios cargados. Andá a Carrera o Plan de Estudios, tocá en 'Editar' en una materia Cursando y poné a qué hora la tenés.")
+                    st.info("No tenés horarios cargados.")
                 else:
                     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
                     matriz = {t: {d: [] for d in dias_semana} for t in sorted_times}
@@ -1339,28 +1289,17 @@ with col_contenido:
                                 for j in range(i + 1, len(sorted_times)):
                                     next_t = sorted_times[j]
                                     next_items = matriz[next_t][d]
-                                    if next_items and next_items[0]['materia'] == mat['materia']:
-                                        span += 1
-                                    else:
-                                        break
+                                    if next_items and next_items[0]['materia'] == mat['materia']: span += 1
+                                    else: break
                                 
                                 skip_cells[d] = span - 1
                                 
-                                if mat.get('tipo') == 'micro':
-                                    bg_color = "#eab308"
-                                    border_color = "#ca8a04"
-                                    text_color = "#1e293b"
-                                    texto = f"<div style='font-size: 13px; font-weight: 800;'>🚌 {mat['linea']} - {mat['inicio_orig']}</div>"
-                                else:
-                                    bg_color = "#3b82f6"
-                                    border_color = "#2563eb"
-                                    text_color = "#ffffff"
-                                    texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
-                                    texto += f"{mat['materia']}"
-                                    if mat['fin_orig']: 
-                                        texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
+                                texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
+                                texto += f"{mat['materia']}"
+                                if mat['fin_orig']: 
+                                    texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
                                 
-                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center; background-color: {bg_color}; border: 1px solid {border_color}; color: {text_color};'>{texto}</div></td>"
+                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"
@@ -1412,23 +1351,5 @@ with col_contenido:
                         
                         with cols[i % 3]:
                             with st.container(border=True):
+                                # Usamos la función modificada de la tab 0
                                 render_meta_card(meta, original_idx, is_pasada, hoy, "tab2")
-
-        with tabs[3]:
-            c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
-            with c_btn3:
-                if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):
-                    dialog_agregar_sesion()
-                    
-            if not st.session_state['historial']:
-                st.write("Tu historial está vacío.")
-            else:
-                df_mostrar = pd.DataFrame(st.session_state['historial']).iloc[::-1]
-                
-                html_hist = "<table class='tabla-historial'>"
-                html_hist += "<tr><th>FECHA</th><th>MATERIA</th><th>MÉTODO</th><th>TIEMPO (min)</th><th>EFIC.</th></tr>"
-                for _, row in df_mostrar.iterrows():
-                    html_hist += f"<tr><td>{row.get('FECHA', '')}</td><td>{row.get('MATERIA', '')}</td><td>{row.get('MÉTODO', '')}</td><td>{row.get('TIEMPO (min)', '')}</td><td>{row.get('EFIC.', '')}</td></tr>"
-                html_hist += "</table>"
-                
-                st.markdown(html_hist, unsafe_allow_html=True)

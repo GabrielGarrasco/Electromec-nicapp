@@ -49,13 +49,13 @@ st.markdown("""
     div[role="radiogroup"] > label { padding: 10px; border-radius: 8px; transition: 0.3s; margin-bottom: 5px; }
     div[role="radiogroup"] > label:hover { background-color: #1e293b; }
     
-    /* CSS para el horario custom */
+    /* CSS para el horario automático */
     .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
     .tabla-horario th { background-color: #0f172a; color: #0ea5e9; padding: 15px; border: 1px solid #334155; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
     .tabla-horario th:first-child { color: #94a3b8; }
-    .tabla-horario td { background-color: #162032; padding: 10px; border: 1px solid #334155; }
-    .tabla-horario td:first-child { font-weight: bold; color: #94a3b8; background-color: #0f172a; width: 80px; }
-    .materia-bloque { background-color: #3b82f6; color: white; padding: 8px; border-radius: 6px; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    .tabla-horario td { background-color: #162032; padding: 10px; border: 1px solid #334155; vertical-align: middle; }
+    .tabla-horario td:first-child { font-weight: bold; color: #94a3b8; background-color: #0f172a; width: 120px; }
+    .materia-bloque { background-color: #3b82f6; color: white; padding: 8px; border-radius: 6px; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); line-height: 1.3; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -100,6 +100,7 @@ if 'pause_start' not in st.session_state: st.session_state['pause_start'] = 0.0
 if 'pause_elapsed' not in st.session_state: st.session_state['pause_elapsed'] = 0.0
 if 'interruption_reason' not in st.session_state: st.session_state['interruption_reason'] = ""
 if 'editando_plan_mat_id' not in st.session_state: st.session_state['editando_plan_mat_id'] = None
+if 'current_interruptions' not in st.session_state: st.session_state['current_interruptions'] = []
 
 if 'datos_cargados' not in st.session_state:
     datos_guardados = cargar_datos()
@@ -128,9 +129,7 @@ def parse_float_nota(val_str):
     try: return float(str(val_str).replace(',', '.'))
     except: return None
 
-# Listas globales para horarios
 OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-OPCIONES_HORAS = ["---", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"]
 
 # --- RELOJ EN VIVO ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -216,42 +215,55 @@ def renderizar_analitica():
     with c4:
         with st.container(border=True):
             st.caption("INTERRUPCIONES COMUNES")
-            distr_data = pd.DataFrame({
-                "Motivo": st.session_state['distracciones'][:5],
-                "Frecuencia": [22, 11, 6, 2, 1][:len(st.session_state['distracciones'][:5])]
-            })
-            chart_dist = alt.Chart(distr_data).mark_bar(color="#f59e0b").encode(
-                x=alt.X("Frecuencia:Q", axis=alt.Axis(grid=True, tickMinStep=2, title="")),
-                y=alt.Y("Motivo:N", sort='-x', axis=alt.Axis(title="", labelColor="#f8fafc", labelFontWeight="bold"))
-            ).properties(height=200)
-            st.altair_chart(chart_dist, use_container_width=True)
+            # Extraemos las interrupciones reales guardadas en el historial
+            todas_interrupciones = []
+            if 'INTERRUPCIONES' in df_hist.columns:
+                for inter_list in df_hist['INTERRUPCIONES'].dropna():
+                    if isinstance(inter_list, list):
+                        todas_interrupciones.extend(inter_list)
+            
+            if not todas_interrupciones:
+                st.info("No registraste ninguna interrupción en estas sesiones.")
+            else:
+                from collections import Counter
+                conteo = Counter(todas_interrupciones)
+                motivos = []
+                frecuencias = []
+                for d in st.session_state['distracciones']:
+                    if conteo.get(d, 0) > 0:
+                        motivos.append(d)
+                        frecuencias.append(conteo.get(d, 0))
+                
+                distr_data = pd.DataFrame({"Motivo": motivos, "Frecuencia": frecuencias})
+                if not distr_data.empty:
+                    chart_dist = alt.Chart(distr_data).mark_bar(color="#f59e0b").encode(
+                        x=alt.X("Frecuencia:Q", axis=alt.Axis(grid=True, tickMinStep=1, title="")),
+                        y=alt.Y("Motivo:N", sort='-x', axis=alt.Axis(title="", labelColor="#f8fafc", labelFontWeight="bold"))
+                    ).properties(height=200)
+                    st.altair_chart(chart_dist, use_container_width=True)
 
     with st.container(border=True):
         st.caption("TIEMPO POR MATERIA (Minutos)")
         df_g = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
         color_map = {m['nombre']: m['color'] for m in st.session_state['materias']}
         
-        # Parche antibalas para Altair: si no hay datos en DF o no hay materias, pinta default.
-        if len(df_g) > 0 and len(color_map) > 0:
-            try:
-                bars = alt.Chart(df_g).mark_bar().encode(
-                    x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
-                    y=alt.Y("TIEMPO (min):Q", title=""),
-                    color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
-                    tooltip=['MATERIA', 'TIEMPO (min)']
-                ).properties(height=250)
-                st.altair_chart(bars, use_container_width=True)
-            except:
-                st.bar_chart(df_g.set_index('MATERIA'), color="#0ea5e9") # Backup nativo
-        elif len(df_g) > 0:
+        if df_g.empty:
+            st.info("No hay datos suficientes para graficar.")
+        elif color_map:
+            bars = alt.Chart(df_g).mark_bar().encode(
+                x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
+                y=alt.Y("TIEMPO (min):Q", title=""),
+                color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
+                tooltip=['MATERIA', 'TIEMPO (min)']
+            ).properties(height=250)
+            st.altair_chart(bars, use_container_width=True)
+        else:
             bars = alt.Chart(df_g).mark_bar(color="#0ea5e9").encode(
                 x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
                 y=alt.Y("TIEMPO (min):Q", title=""),
                 tooltip=['MATERIA', 'TIEMPO (min)']
             ).properties(height=250)
             st.altair_chart(bars, use_container_width=True)
-        else:
-            st.info("No hay datos para mostrar el gráfico.")
 
 # ==========================================
 # --- MODALES (DIALOGS) ---
@@ -299,17 +311,19 @@ def dialog_detalle_materia(mat_id):
             nuevos_intentos[3] = c_i4.text_input("Intento 4", value=nuevos_intentos[3])
         elif nuevo_estado == "Cursando":
             st.caption("Horarios de Cursado (Para tu grilla)")
-            while len(horarios_clase) < 3: horarios_clase.append({"dia": "---", "hora": "---"})
+            while len(horarios_clase) < 3: horarios_clase.append({"dia": "---", "inicio": "", "fin": ""})
             for i in range(3):
-                c_d, c_h = st.columns(2)
+                c_d, c_i, c_f = st.columns([2, 1.5, 1.5])
                 d_val = horarios_clase[i].get("dia", "---")
-                h_val = horarios_clase[i].get("hora", "---")
+                ini_val = horarios_clase[i].get("inicio", horarios_clase[i].get("hora", ""))
+                fin_val = horarios_clase[i].get("fin", "")
                 
-                sel_d = c_d.selectbox(f"Día {i+1}", OPCIONES_DIAS, index=OPCIONES_DIAS.index(d_val) if d_val in OPCIONES_DIAS else 0)
-                sel_h = c_h.selectbox(f"Hora {i+1}", OPCIONES_HORAS, index=OPCIONES_HORAS.index(h_val) if h_val in OPCIONES_HORAS else 0)
+                sel_d = c_d.selectbox(f"Día {i+1}", OPCIONES_DIAS, index=OPCIONES_DIAS.index(d_val) if d_val in OPCIONES_DIAS else 0, key=f"ed_d_{i}")
+                val_i = c_i.text_input("Inicio", value=ini_val, placeholder="Ej: 13:45", key=f"ed_i_{i}")
+                val_f = c_f.text_input("Fin", value=fin_val, placeholder="Ej: 15:30", key=f"ed_f_{i}")
                 
-                if sel_d != "---" and sel_h != "---":
-                    nuevos_horarios.append({"dia": sel_d, "hora": sel_h})
+                if sel_d != "---" and val_i.strip():
+                    nuevos_horarios.append({"dia": sel_d, "inicio": val_i.strip(), "fin": val_f.strip()})
             
         st.divider()
         st.caption("CORRELATIVIDADES")
@@ -380,8 +394,9 @@ def dialog_detalle_materia(mat_id):
             
         horarios = mat.get('horarios_clase', [])
         if mat['estado'] == "Cursando" and horarios:
-            text_h = " | ".join([f"{h['dia']} {h['hora']}" for h in horarios])
-            st.caption(f"🕒 **Cursado:** {text_h}")
+            for hc in horarios:
+                rango = f"{hc['inicio']} a {hc['fin']}" if hc.get('fin') else hc['inicio']
+                st.caption(f"🕒 **{hc['dia']}:** {rango}")
             
         st.divider()
         
@@ -457,11 +472,13 @@ def dialog_nueva_materia_plan():
     elif estado == "Cursando":
         st.caption("Horarios de Cursado (Para tu grilla)")
         for i in range(3):
-            c_d, c_h = st.columns(2)
-            sel_d = c_d.selectbox(f"Día {i+1}", OPCIONES_DIAS)
-            sel_h = c_h.selectbox(f"Hora {i+1}", OPCIONES_HORAS)
-            if sel_d != "---" and sel_h != "---":
-                nuevos_horarios.append({"dia": sel_d, "hora": sel_h})
+            c_d, c_i, c_f = st.columns([2, 1.5, 1.5])
+            sel_d = c_d.selectbox(f"Día {i+1}", OPCIONES_DIAS, key=f"nvo_d_{i}")
+            val_i = c_i.text_input("Inicio", placeholder="Ej: 13:45", key=f"nvo_i_{i}")
+            val_f = c_f.text_input("Fin", placeholder="Ej: 15:30", key=f"nvo_f_{i}")
+            
+            if sel_d != "---" and val_i.strip():
+                nuevos_horarios.append({"dia": sel_d, "inicio": val_i.strip(), "fin": val_f.strip()})
         
     st.divider()
     st.caption("CORRELATIVIDADES (Opcional)")
@@ -613,7 +630,8 @@ def dialog_agregar_sesion():
     if st.button("Guardar Sesión", type="primary", use_container_width=True):
         nueva_sesion = {
             "FECHA": fecha.strftime("%d/%m/%Y"), "MATERIA": materia, "MÉTODO": metodo,
-            "TIEMPO (min)": tiempo_neto, "EFIC.": f"{eficiencia}%"
+            "TIEMPO (min)": tiempo_neto, "EFIC.": f"{eficiencia}%",
+            "INTERRUPCIONES": []
         }
         st.session_state['historial'].append(nueva_sesion)
         id_meta = opciones_obj[objetivo_sel]
@@ -924,7 +942,6 @@ with col_contenido:
                 col_izq, col_der = st.columns([1, 1.5], gap="large")
                 
                 with col_izq:
-                    # --- SECCIÓN: METAS ACTUALES ---
                     st.markdown("### Metas actuales")
                     st.caption("Progreso de tus metas vigentes.")
                     
@@ -962,55 +979,6 @@ with col_contenido:
                         st.session_state['timer_state'] = 'RUNNING'
                         st.rerun()
 
-                # --- SECCIÓN: HORARIO DE CURSADO AUTOMÁTICO ---
-                st.divider()
-                st.markdown("### Mi Horario de Cursado")
-                st.caption("Se completa solo con los horarios que cargues al editar tus materias 'Cursando'.")
-                
-                dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-                matriz = {h: {d: "" for d in dias_semana} for h in OPCIONES_HORAS[1:]} # Ignoramos "---"
-                
-                for m in st.session_state['plan_carrera']:
-                    if m['estado'] == "Cursando" and 'horarios_clase' in m:
-                        for hc in m['horarios_clase']:
-                            d = hc.get('dia')
-                            h = hc.get('hora')
-                            if d in dias_semana and h in OPCIONES_HORAS:
-                                if matriz[h][d]:
-                                    matriz[h][d] += "<br>" + m['nombre']
-                                else:
-                                    matriz[h][d] = m['nombre']
-                
-                # Filtrar solo las horas que van desde la primer clase hasta la última para que no quede gigante
-                horas_activas = [h for h in OPCIONES_HORAS[1:] if any(matriz[h].values())]
-                if horas_activas:
-                    idx_min = OPCIONES_HORAS.index(min(horas_activas))
-                    idx_max = OPCIONES_HORAS.index(max(horas_activas))
-                    rango_mostrar = OPCIONES_HORAS[idx_min : idx_max + 2] # Mostramos una hora más de margen
-                else:
-                    rango_mostrar = ["08:00", "10:00", "12:00", "14:00", "16:00", "18:00"]
-                    
-                # Generar tabla HTML prolija
-                html_tabla = "<table class='tabla-horario'>"
-                html_tabla += "<tr><th>Hora</th>"
-                for d in dias_semana: html_tabla += f"<th>{d}</th>"
-                html_tabla += "</tr>"
-                
-                for h in rango_mostrar:
-                    if h not in matriz: continue
-                    html_tabla += f"<tr><td>{h}</td>"
-                    for d in dias_semana:
-                        materia_str = matriz[h][d]
-                        if materia_str:
-                            html_tabla += f"<td><div class='materia-bloque'>{materia_str}</div></td>"
-                        else:
-                            html_tabla += "<td></td>"
-                    html_tabla += "</tr>"
-                html_tabla += "</table>"
-                
-                st.markdown(html_tabla, unsafe_allow_html=True)
-
-
             elif st.session_state['timer_state'] == 'RUNNING':
                 st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Cronómetro Libre</p>", unsafe_allow_html=True)
                 current_elapsed = st.session_state['study_elapsed'] + (time.time() - st.session_state['study_start'])
@@ -1041,6 +1009,7 @@ with col_contenido:
                     col = c1 if i % 2 == 0 else c2
                     if col.button(motivo, use_container_width=True):
                         st.session_state['interruption_reason'] = motivo
+                        st.session_state['current_interruptions'].append(motivo)
                         st.session_state['pause_start'] = time.time()
                         st.session_state['pause_elapsed'] = 0.0
                         st.session_state['timer_state'] = 'PAUSED'
@@ -1097,9 +1066,11 @@ with col_contenido:
                         nueva_sesion = {
                             "FECHA": datetime.now().strftime("%d/%m/%Y"),
                             "MATERIA": materia_sel, "MÉTODO": metodo_sel,
-                            "TIEMPO (min)": minutos_estudio, "EFIC.": "100%" 
+                            "TIEMPO (min)": minutos_estudio, "EFIC.": "100%",
+                            "INTERRUPCIONES": st.session_state.get('current_interruptions', [])
                         }
                         st.session_state['historial'].append(nueva_sesion)
+                        st.session_state['current_interruptions'] = []
                         
                         id_meta = opciones_meta[meta_sel]
                         if id_meta:
@@ -1115,6 +1086,68 @@ with col_contenido:
                             st.session_state['pause_elapsed'] = 0.0
                             time.sleep(1)
                             st.rerun()
+
+            # --- SECCIÓN: HORARIO DE CURSADO AUTOMÁTICO A LO ANCHO ---
+            if st.session_state['timer_state'] == 'IDLE':
+                st.divider()
+                st.markdown("### Mi Horario de Cursado")
+                st.caption("Se completa solo con los horarios que cargues al editar tus materias 'Cursando' en el Plan de Estudios.")
+                
+                horarios_completos = []
+                for m in st.session_state['plan_carrera']:
+                    if m['estado'] == "Cursando" and 'horarios_clase' in m:
+                        for hc in m['horarios_clase']:
+                            if hc.get('dia') != "---" and hc.get('inicio'):
+                                horarios_completos.append({
+                                    "materia": m['nombre'],
+                                    "dia": hc['dia'],
+                                    "inicio": hc['inicio'],
+                                    "fin": hc.get('fin', '')
+                                })
+                
+                def get_sortable_time(t_str):
+                    try: return datetime.strptime(t_str, "%H:%M").time()
+                    except: return datetime.strptime("00:00", "%H:%M").time()
+
+                time_slots = {}
+                for hc in horarios_completos:
+                    slot = f"{hc['inicio']} a {hc['fin']}" if hc['fin'] else hc['inicio']
+                    if slot not in time_slots:
+                        time_slots[slot] = get_sortable_time(hc['inicio'])
+
+                sorted_slots = sorted(time_slots.keys(), key=lambda x: time_slots[x])
+                
+                if not sorted_slots:
+                    st.info("No tenés horarios cargados. Andá a Carrera o Plan de Estudios, tocá en 'Editar' en una materia Cursando y poné a qué hora la tenés.")
+                else:
+                    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+                    matriz = {slot: {d: "" for d in dias_semana} for slot in sorted_slots}
+                    
+                    for hc in horarios_completos:
+                        slot = f"{hc['inicio']} a {hc['fin']}" if hc['fin'] else hc['inicio']
+                        if hc['dia'] in dias_semana:
+                            if matriz[slot][hc['dia']]:
+                                matriz[slot][hc['dia']] += "<br><br>" + hc['materia']
+                            else:
+                                matriz[slot][hc['dia']] = hc['materia']
+                                
+                    html_tabla = "<table class='tabla-horario'>"
+                    html_tabla += "<tr><th>Horario</th>"
+                    for d in dias_semana: html_tabla += f"<th>{d}</th>"
+                    html_tabla += "</tr>"
+                    
+                    for slot in sorted_slots:
+                        html_tabla += f"<tr><td>{slot}</td>"
+                        for d in dias_semana:
+                            materia_str = matriz[slot][d]
+                            if materia_str:
+                                html_tabla += f"<td><div class='materia-bloque'>{materia_str}</div></td>"
+                            else:
+                                html_tabla += "<td></td>"
+                        html_tabla += "</tr>"
+                    html_tabla += "</table>"
+                    
+                    st.markdown(html_tabla, unsafe_allow_html=True)
 
         with tabs[1]:
             renderizar_analitica()

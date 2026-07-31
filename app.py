@@ -11,14 +11,19 @@ import altair as alt
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚")
 
-# --- CSS MEJORADO ---
+# --- CSS MEJORADO (Tarjetas más compactas) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
-    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { background-color: #162032; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+    
+    /* Achicamos el padding de 20px a 14px para que todo sea más compacto */
+    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { 
+        background-color: #162032; border-radius: 12px; padding: 14px; border: 1px solid #334155; 
+    }
+    
     [data-testid="baseButton-primary"] { background-color: #0ea5e9; border-color: #0ea5e9; color: white; border-radius: 8px; font-weight: bold; }
     [data-testid="baseButton-primary"]:hover { background-color: #0284c7; border-color: #0284c7; }
     [data-testid="baseButton-secondary"] { background-color: #334155; border-color: #334155; color: white; border-radius: 8px; }
@@ -27,11 +32,11 @@ st.markdown("""
     [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
     header {visibility: hidden;}
     .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
-    .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-    .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-    .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-    .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-    .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+    .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+    .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+    .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
+    .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .nota-box { background-color: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
     </style>
 """, unsafe_allow_html=True)
@@ -86,8 +91,6 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['historial'] = datos_guardados.get('historial', [])
         st.session_state['metas'] = datos_guardados.get('metas', [])
         st.session_state['plan_carrera'] = datos_guardados.get('plan_carrera', [])
-        
-        # Parche para agregar 'nota' a metas viejas que no lo tengan
         for m in st.session_state['metas']:
             if 'nota' not in m: m['nota'] = None
     else:
@@ -124,16 +127,16 @@ def render_live_timer(elapsed_seconds, is_running):
     components.html(html_code, height=130)
 
 def renderizar_analitica():
-    # FILTROS
     c_filt1, c_filt2, c_filt3, c_filt4 = st.columns([1, 2, 2, 2])
     with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
     
     nombres_materias = list(set([h['MATERIA'] for h in st.session_state['historial']]))
     nombres_metodos = list(set([h['MÉTODO'] for h in st.session_state['historial']]))
     
-    f_mat = c_filt2.selectbox("Materias", ["Todas las materias"] + nombres_materias, label_visibility="collapsed")
-    f_hist = c_filt3.selectbox("Historial", ["Todo el Historial", "Últimos 7 días", "Último Mes"], label_visibility="collapsed")
-    f_met = c_filt4.selectbox("Métodos", ["Todos los métodos"] + nombres_metodos, label_visibility="collapsed")
+    # Se agregaron Keys únicos a los filtros
+    f_mat = c_filt2.selectbox("Materias", ["Todas las materias"] + nombres_materias, key="filtro_mat_analitica", label_visibility="collapsed")
+    f_hist = c_filt3.selectbox("Historial", ["Todo el Historial", "Últimos 7 días", "Último Mes"], key="filtro_tiempo_analitica", label_visibility="collapsed")
+    f_met = c_filt4.selectbox("Métodos", ["Todos los métodos"] + nombres_metodos, key="filtro_met_analitica", label_visibility="collapsed")
     
     st.write("<br>", unsafe_allow_html=True)
 
@@ -143,7 +146,6 @@ def renderizar_analitica():
 
     df_hist = pd.DataFrame(st.session_state['historial'])
     
-    # Aplicar filtros
     if f_mat != "Todas las materias": df_hist = df_hist[df_hist['MATERIA'] == f_mat]
     if f_met != "Todos los métodos": df_hist = df_hist[df_hist['MÉTODO'] == f_met]
     if f_hist == "Últimos 7 días":
@@ -166,7 +168,6 @@ def renderizar_analitica():
     top_h = materia_top_min // 60
     top_m = materia_top_min % 60
     
-    # Extraer eficiencia promedio
     df_hist['EFIC_NUM'] = df_hist['EFIC.'].str.replace('%','').astype(float)
     efic_promedio = int(df_hist['EFIC_NUM'].mean()) if not df_hist.empty else 0
 
@@ -180,22 +181,18 @@ def renderizar_analitica():
     with c3:
         with st.container(border=True):
             st.caption("EFICIENCIA GLOBAL")
-            # Gráfico de Donut con Altair
             source_efic = pd.DataFrame({"Cat": ["Eficiencia", "Falta"], "Valor": [efic_promedio, 100-efic_promedio]})
             chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=60).encode(
                 theta=alt.Theta(field="Valor", type="quantitative"),
                 color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=["#0ea5e9", "#1e293b"]), legend=None),
                 tooltip=['Cat', 'Valor']
             ).properties(height=200)
-            
-            # Superponer el texto en el centro (Truco de Streamlit)
             st.altair_chart(chart_efic, use_container_width=True)
             st.markdown(f"<div style='text-align:center; margin-top:-140px; font-size:32px; font-weight:bold; color:white;'>{efic_promedio}%</div><div style='height:90px;'></div>", unsafe_allow_html=True)
 
     with c4:
         with st.container(border=True):
             st.caption("INTERRUPCIONES COMUNES")
-            # Mockup Data basado en la lista de distracciones del usuario
             distr_data = pd.DataFrame({
                 "Motivo": st.session_state['distracciones'][:5],
                 "Frecuencia": [22, 11, 6, 2, 1][:len(st.session_state['distracciones'][:5])]
@@ -208,11 +205,8 @@ def renderizar_analitica():
 
     with st.container(border=True):
         st.caption("TIEMPO POR MATERIA (Minutos)")
-        # Gráfico de barras por materia
         df_g = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
-        # Mapear colores de las materias activas
         color_map = {m['nombre']: m['color'] for m in st.session_state['materias']}
-        
         bars = alt.Chart(df_g).mark_bar(cornerRadiusTop=4).encode(
             x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
             y=alt.Y("TIEMPO (min):Q", title=""),
@@ -220,10 +214,6 @@ def renderizar_analitica():
             tooltip=['MATERIA', 'TIEMPO (min)']
         ).properties(height=250)
         st.altair_chart(bars, use_container_width=True)
-        
-    with st.container(border=True):
-        st.caption("PATRONES DE EFICIENCIA (SEMANAL)")
-        st.info("💡 Gráfico de calor (Heatmap) en desarrollo. El motor registrará las horas de tu cronómetro por franja horaria.")
 
 # ==========================================
 # --- MODALES (DIALOGS) ---
@@ -395,12 +385,18 @@ if menu_opcion == "Plan de Estudios":
                         elif row['estado'] == "Cursando": color_clase = "badge-cursando"
                         elif row['estado'] == "Libre/Recursado": color_clase = "badge-libre"
                         
-                        st.markdown(f"<span class='{color_clase}'>{row['estado']}</span>", unsafe_allow_html=True)
-                        st.markdown(f"#### {row['nombre']}")
+                        # --- ACÁ REARMÉ LA TARJETA PARA QUE SEA SÚPER COMPACTA ---
+                        html_content = f"""
+                        <div style="margin-bottom: 6px;">
+                            <span class='{color_clase}' style='font-size: 10px; padding: 2px 6px;'>{row['estado']}</span>
+                        </div>
+                        <div style="font-size: 15px; font-weight: 700; line-height: 1.2; margin-bottom: 6px;">{row['nombre']}</div>
+                        """
+                        if row['req_regulares']: html_content += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
+                        if row['req_aprobadas']: html_content += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
                         
-                        if row['req_regulares']: st.caption(f"**Req. Regular:** {', '.join(row['req_regulares'])}")
-                        if row['req_aprobadas']: st.caption(f"**Req. Aprobada:** {', '.join(row['req_aprobadas'])}")
-                        
+                        st.markdown(html_content, unsafe_allow_html=True)
+                        st.write("") # Micro espacio
                         if st.button("🗑️", key=f"del_plan_{row['id']}", help="Eliminar del plan"):
                             st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != row['id']]
                             if guardar_datos(): st.rerun()
@@ -627,13 +623,13 @@ elif menu_opcion == "Página Principal":
         renderizar_analitica()
 
     with tabs[2]:
-        # FILTROS DE METAS
         materias_con_metas = list(set([m['materia'] for m in st.session_state['metas']]))
         
         c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
         with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
-        f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, label_visibility="collapsed")
-        f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], label_visibility="collapsed")
+        # Se agregaron Keys únicos a los filtros
+        f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, key="filtro_materias_metas", label_visibility="collapsed")
+        f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], key="filtro_estado_metas", label_visibility="collapsed")
         
         with c_btn3:
             st.write("<br>", unsafe_allow_html=True)
@@ -645,7 +641,6 @@ elif menu_opcion == "Página Principal":
         if not st.session_state['metas']:
             st.info("No tenés metas creadas. Tocá '+ Nueva Meta' para armar tu plan de examen.")
         else:
-            # Filtrar metas
             metas_filtradas = st.session_state['metas']
             if f_mat_metas != "Todas las materias":
                 metas_filtradas = [m for m in metas_filtradas if m['materia'] == f_mat_metas]
@@ -661,7 +656,6 @@ elif menu_opcion == "Página Principal":
             else:
                 cols = st.columns(3)
                 for i, meta in enumerate(metas_filtradas):
-                    # Encontrar el índice original para poder editar/borrar correctamente
                     original_idx = st.session_state['metas'].index(meta)
                     
                     with cols[i % 3]:
@@ -686,7 +680,6 @@ elif menu_opcion == "Página Principal":
                             pct = int(progreso * 100)
                             st.markdown(f"<div style='display:flex; justify-content:space-between; font-size: 13px; color: #94a3b8;'><span>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</span><span>{pct}%</span></div>", unsafe_allow_html=True)
                             
-                            # Si la fecha ya pasó
                             if is_pasada:
                                 if meta.get('nota'):
                                     st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 20px; font-weight: 800; color: white;'>{meta['nota']}</span></div>", unsafe_allow_html=True)

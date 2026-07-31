@@ -16,8 +16,6 @@ st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
     
-    [data-testid="collapsedControl"] { display: none; }
-    
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
@@ -46,7 +44,8 @@ st.markdown("""
     .req-cumplido { background-color: rgba(255, 255, 255, 0.12); padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.05); }
     .req-pendiente { padding: 6px 10px; margin-bottom: 4px; color: #94a3b8; }
     
-    div[role="radiogroup"] > label { padding: 10px; border-radius: 8px; transition: 0.3s; }
+    /* Estilo para que el menú fijo parezca una lista de navegación copada */
+    div[role="radiogroup"] > label { padding: 10px; border-radius: 8px; transition: 0.3s; margin-bottom: 5px; }
     div[role="radiogroup"] > label:hover { background-color: #1e293b; }
     </style>
 """, unsafe_allow_html=True)
@@ -341,7 +340,6 @@ def dialog_detalle_materia(mat_id):
             st.session_state['editando_plan_mat_id'] = mat_id
             st.rerun()
 
-
 @st.dialog("Agregar Materia al Plan de Estudios")
 def dialog_nueva_materia_plan():
     nombre = st.text_input("Nombre de la materia")
@@ -487,403 +485,398 @@ def dialog_agregar_sesion():
         if guardar_datos(): st.rerun()
 
 # ==========================================
-# --- MENÚ LATERAL (SIDEBAR) ---
+# --- LAYOUT PRINCIPAL (MENÚ FIJO) ---
 # ==========================================
-with st.sidebar:
-    st.markdown("## Menú")
-    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Plan de Estudios", "Organización"], label_visibility="collapsed")
+col_menu, col_contenido = st.columns([1, 4], gap="large")
 
-# ==========================================
-# --- VISTA: PLAN DE ESTUDIOS ---
-# ==========================================
-if menu_opcion == "Plan de Estudios":
-    c_head1, c_head2 = st.columns([4, 1])
-    with c_head1:
-        st.header("Plan de Estudios")
-        st.caption("Gestioná todas las materias de tu carrera y sus correlatividades.")
-    with c_head2:
-        if st.button("➕ Añadir Materia", type="primary", use_container_width=True):
-            dialog_nueva_materia_plan()
-            
-    st.divider()
-    
-    if not st.session_state['plan_carrera']:
-        st.info("Todavía no agregaste ninguna materia a tu plan de estudios.")
-    else:
-        df_plan = pd.DataFrame(st.session_state['plan_carrera'])
-        anios = sorted(df_plan['año'].unique())
-        
-        for anio in anios:
-            st.markdown(f"### Año {anio}")
-            materias_anio = df_plan[df_plan['año'] == anio]
-            
-            cols = st.columns(4)
-            for i, row in materias_anio.reset_index().iterrows():
-                with cols[i % 4]:
-                    with st.container(border=True):
-                        color_clase = "badge-pendiente"
-                        if row['estado'] == "Regular": color_clase = "badge-regular"
-                        elif row['estado'] == "Aprobada/Promocionada": color_clase = "badge-aprobada"
-                        elif row['estado'] == "Cursando": color_clase = "badge-cursando"
-                        elif row['estado'] == "Libre/Recursado": color_clase = "badge-libre"
-                        
-                        cuatri_abrev = ""
-                        cuatri_val = row.get('cuatrimestre', '')
-                        if cuatri_val == "1er Cuatrimestre": cuatri_abrev = "1C"
-                        elif cuatri_val == "2do Cuatrimestre": cuatri_abrev = "2C"
-                        elif cuatri_val == "Anual": cuatri_abrev = "Anual"
-                        
-                        cuatri_html = f"<span style='float:right; font-size: 11px; color: #94a3b8; font-weight: bold;'>{cuatri_abrev}</span>" if cuatri_abrev else ""
+with col_menu:
+    st.markdown("### Menú")
+    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios"], label_visibility="collapsed")
 
-                        html_badges = f"""
-                        <div style="margin-bottom: 8px;">
-                            <span class='{color_clase}'>{row['estado']}</span>
-                            {cuatri_html}
-                        </div>
-                        """
-                        st.markdown(html_badges, unsafe_allow_html=True)
-                        
-                        if st.button(row['nombre'], key=f"btn_info_{row['id']}", use_container_width=True):
-                            dialog_detalle_materia(row['id'])
-                            
-                        html_reqs = ""
-                        if isinstance(row.get('req_regulares'), list) and len(row['req_regulares']) > 0: 
-                            html_reqs += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
-                        if isinstance(row.get('req_aprobadas'), list) and len(row['req_aprobadas']) > 0: 
-                            html_reqs += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
-                        
-                        if html_reqs:
-                            st.markdown(html_reqs, unsafe_allow_html=True)
+with col_contenido:
+    if menu_opcion == "Carrera":
+        st.header("Carrera")
+        st.info("Espacio reservado. Acá vamos a agregar la información general de tu carrera más adelante.")
 
-# ==========================================
-# --- VISTA: RESUMEN (ANALÍTICA DIRECTA) ---
-# ==========================================
-elif menu_opcion == "Resumen":
-    st.header("Tus Estadísticas")
-    renderizar_analitica()
-
-# ==========================================
-# --- VISTA: ORGANIZACIÓN ---
-# ==========================================
-elif menu_opcion == "Organización":
-    with st.container(border=True):
+    elif menu_opcion == "Plan de Estudios":
         c_head1, c_head2 = st.columns([4, 1])
         with c_head1:
-            st.markdown("### Materias Activas (Cronómetro)")
-            st.caption("Añadí acá solo las materias de tu plan que estás cursando o rindiendo AHORA.")
+            st.header("Plan de Estudios")
+            st.caption("Gestioná todas las materias de tu carrera y sus correlatividades.")
         with c_head2:
-            if st.button("➕ Nueva Materia", type="secondary", use_container_width=True):
-                dialog_nueva_materia_activa()
-                
-        cols_mat = st.columns(3)
-        for i, mat in enumerate(st.session_state['materias']):
-            estado_badge = ""
-            for plan_mat in st.session_state['plan_carrera']:
-                if plan_mat['nombre'] == mat['nombre']:
-                    if plan_mat['estado'] == "Cursando":
-                        estado_badge = "<div style='margin-top: 8px;'><span class='badge-cursando'>Cursando</span></div>"
-                    elif plan_mat['estado'] == "Regular":
-                        estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
-                    break
-
-            with cols_mat[i % 3]:
-                st.markdown(f"""
-                <div style="border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; background-color: #1e293b; margin-bottom: 15px;">
-                    <div class="color-circle" style="background-color: {mat['color']};"></div>
-                    <div style="font-size: 16px; font-weight: 600;">{mat['nombre']}</div>
-                    {estado_badge}
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("🗑️ Eliminar", key=f"del_mat_{i}", use_container_width=True):
-                    st.session_state['materias'].pop(i)
-                    if guardar_datos(): st.rerun()
-                    
-    st.write("<br>", unsafe_allow_html=True)
-
-    with st.container(border=True):
-        c_dist1, c_dist2 = st.columns([4, 1])
-        with c_dist1: st.markdown("### Gestionar Distracciones")
-        with c_dist2:
-            nueva_dist = st.text_input("Nueva Distracción", label_visibility="collapsed", placeholder="Ej: Baño...")
-            if st.button("➕ Añadir", type="secondary", key="btn_dist", use_container_width=True):
-                if nueva_dist and nueva_dist not in st.session_state['distracciones']:
-                    st.session_state['distracciones'].append(nueva_dist)
-                    if guardar_datos(): st.rerun()
-
-        cols_dist = st.columns(4)
-        for i, dist in enumerate(st.session_state['distracciones']):
-            with cols_dist[i % 4]:
-                st.markdown(f"""
-                <div style="border: 1px solid #334155; border-radius: 12px; padding: 15px; text-align: center; background-color: #1e293b; margin-bottom: 10px;">
-                    <div style="color: #94a3b8; font-size: 14px;">⚫</div>
-                    <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{dist}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("🗑️", key=f"del_dist_{i}", use_container_width=True):
-                    st.session_state['distracciones'].pop(i)
-                    if guardar_datos(): st.rerun()
-
-    st.write("<br>", unsafe_allow_html=True)
-
-    with st.container(border=True):
-        c_met1, c_met2 = st.columns([4, 1])
-        with c_met1: st.markdown("### Gestionar Métodos")
-        with c_met2:
-            nuevo_met = st.text_input("Nuevo Método", label_visibility="collapsed", placeholder="Ej: Mapa mental...")
-            if st.button("➕ Añadir", type="secondary", key="btn_met", use_container_width=True):
-                if nuevo_met and nuevo_met not in st.session_state['metodos']:
-                    st.session_state['metodos'].append(nuevo_met)
-                    if guardar_datos(): st.rerun()
-
-        cols_met = st.columns(4)
-        for i, met in enumerate(st.session_state['metodos']):
-            with cols_met[i % 4]:
-                st.markdown(f"""
-                <div style="border: 1px solid #334155; border-radius: 12px; padding: 15px; text-align: center; background-color: #1e293b; margin-bottom: 10px;">
-                    <div style="color: #94a3b8; font-size: 14px;">⚫</div>
-                    <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{met}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button("🗑️", key=f"del_met_{i}", use_container_width=True):
-                    st.session_state['metodos'].pop(i)
-                    if guardar_datos(): st.rerun()
-
-# ==========================================
-# --- VISTA: PÁGINA PRINCIPAL ---
-# ==========================================
-elif menu_opcion == "Página Principal":
-    tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
-
-    with tabs[0]:
-        if st.session_state['timer_state'] == 'IDLE':
-            col_izq, col_der = st.columns([1, 1.5], gap="large")
-            with col_izq:
-                st.markdown("### Metas actuales")
-                st.caption("Progreso de tus metas vigentes.")
-                
-                hoy = date.today()
-                metas_actuales = []
-                for m in st.session_state['metas']:
-                    try:
-                        if date.fromisoformat(m['fecha_examen']) >= hoy:
-                            metas_actuales.append(m)
-                    except: pass
-                    
-                if not metas_actuales:
-                    st.info("No tenés metas de exámenes próximas. ¡Todo al día!")
-                else:
-                    for meta in metas_actuales:
-                        with st.container(border=True):
-                            try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
-                            except: fecha_str = ""
-                            
-                            st.markdown(f"<div style='color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 2px;'>{meta['materia']} - Fecha: {fecha_str}</div>", unsafe_allow_html=True)
-                            st.markdown(f"<div style='font-size: 18px; font-weight: bold; margin-bottom: 8px;'>{meta['nombre']}</div>", unsafe_allow_html=True)
-                            
-                            progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
-                            st.progress(progreso)
-                            
-                            h_acum = int(meta['horas_acumuladas'])
-                            m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
-                            st.markdown(f"<div style='font-size: 12px; color: #94a3b8; margin-top: 5px;'>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
-
-            with col_der:
-                st.write("<br>", unsafe_allow_html=True)
-                st.radio("Modo de Estudio", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
-                if st.button("▶ INICIAR ESTUDIO", type="primary", use_container_width=True):
-                    st.session_state['study_start'] = time.time()
-                    st.session_state['timer_state'] = 'RUNNING'
-                    st.rerun()
-
-        elif st.session_state['timer_state'] == 'RUNNING':
-            st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Cronómetro Libre</p>", unsafe_allow_html=True)
-            current_elapsed = st.session_state['study_elapsed'] + (time.time() - st.session_state['study_start'])
-            render_live_timer(current_elapsed, True)
-            c1, c2, c3 = st.columns([1, 2, 2])
-            with c1:
-                if st.button("❌", use_container_width=True):
-                    st.session_state['timer_state'] = 'IDLE'
-                    st.session_state['study_elapsed'] = 0.0
-                    st.rerun()
-            with c2:
-                if st.button("⏸ Pausar", use_container_width=True):
-                    st.session_state['study_elapsed'] += time.time() - st.session_state['study_start']
-                    st.session_state['timer_state'] = 'INTERRUPT'
-                    st.rerun()
-            with c3:
-                if st.button("⏹ Terminar", type="primary", use_container_width=True):
-                    st.session_state['study_elapsed'] += time.time() - st.session_state['study_start']
-                    st.session_state['timer_state'] = 'FINISHED'
-                    st.rerun()
-
-        elif st.session_state['timer_state'] == 'INTERRUPT':
-            st.markdown("<h2 style='text-align: center;'>Interrupción</h2>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: #94a3b8;'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
-            st.write("<br>", unsafe_allow_html=True)
-            c1, c2 = st.columns(2)
-            for i, motivo in enumerate(st.session_state['distracciones']):
-                col = c1 if i % 2 == 0 else c2
-                if col.button(motivo, use_container_width=True):
-                    st.session_state['interruption_reason'] = motivo
-                    st.session_state['pause_start'] = time.time()
-                    st.session_state['pause_elapsed'] = 0.0
-                    st.session_state['timer_state'] = 'PAUSED'
-                    st.rerun()
-            st.divider()
-            if st.button("CANCELAR", use_container_width=True):
-                st.session_state['timer_state'] = 'RUNNING'
-                st.session_state['study_start'] = time.time()
-                st.rerun()
-
-        elif st.session_state['timer_state'] == 'PAUSED':
-            st.markdown("<h1 style='text-align: center; color: #0ea5e9;'>⏸ PAUSA</h1>", unsafe_allow_html=True)
-            st.markdown(f"<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Motivo: {st.session_state['interruption_reason']}</p>", unsafe_allow_html=True)
-            current_pause = st.session_state['pause_elapsed'] + (time.time() - st.session_state['pause_start'])
-            render_live_timer(current_pause, True)
-            c1, c2, c3 = st.columns([1, 2, 1])
-            with c2:
-                if st.button("REANUDAR", type="primary", use_container_width=True):
-                    st.session_state['study_start'] = time.time()
-                    st.session_state['timer_state'] = 'RUNNING'
-                    st.rerun()
-
-        elif st.session_state['timer_state'] == 'FINISHED':
-            c_back, c_title, c_empty = st.columns([1, 10, 1])
-            with c_back:
-                if st.button("⬅️ Volver", help="Regresar a Pausa"):
-                    st.session_state['timer_state'] = 'PAUSED'
-                    st.rerun()
-            with c_title:
-                st.markdown("<h2 style='text-align: center; margin-top: -10px;'>Sesión Finalizada</h2>", unsafe_allow_html=True)
-            
-            nombres_materias = [m["nombre"] for m in st.session_state['materias']]
-            if not nombres_materias or not st.session_state['metodos']:
-                st.error("No hay materias o métodos cargados. Andá al menú 'Organización' para agregarlos.")
-            else:
-                with st.container(border=True):
-                    st.caption("MATERIA")
-                    materia_sel = st.radio("MATERIA", nombres_materias, horizontal=True, label_visibility="collapsed")
-                    st.divider()
-                    
-                    st.caption("VINCULAR OBJETIVO")
-                    metas_filtradas = [m for m in st.session_state['metas'] if m['materia'] == materia_sel]
-                    opciones_meta = {"-- Sin vincular --": None}
-                    for m in metas_filtradas: opciones_meta[m['nombre']] = m['id']
-                    meta_sel = st.selectbox("VINCULAR OBJETIVO", list(opciones_meta.keys()), label_visibility="collapsed")
-                    st.divider()
-                    
-                    st.caption("MÉTODO")
-                    metodo_sel = st.radio("MÉTODO", st.session_state['metodos'], horizontal=True, label_visibility="collapsed")
-                    
-                st.write("")
-                if st.button("GUARDAR SESIÓN ➔", type="primary", use_container_width=True):
-                    minutos_estudio = round(st.session_state['study_elapsed'] / 60)
-                    nueva_sesion = {
-                        "FECHA": datetime.now().strftime("%d/%m/%Y"),
-                        "MATERIA": materia_sel, "MÉTODO": metodo_sel,
-                        "TIEMPO (min)": minutos_estudio, "EFIC.": "100%" 
-                    }
-                    st.session_state['historial'].append(nueva_sesion)
-                    
-                    id_meta = opciones_meta[meta_sel]
-                    if id_meta:
-                        for m in st.session_state['metas']:
-                            if m['id'] == id_meta:
-                                m['horas_acumuladas'] += (minutos_estudio / 60)
-                                break
-                    
-                    if guardar_datos():
-                        st.toast(f"¡{minutos_estudio} minutos guardados!")
-                        st.session_state['timer_state'] = 'IDLE'
-                        st.session_state['study_elapsed'] = 0.0
-                        st.session_state['pause_elapsed'] = 0.0
-                        time.sleep(1)
-                        st.rerun()
-
-    with tabs[1]:
-        renderizar_analitica()
-
-    with tabs[2]:
-        materias_con_metas = list(set([m['materia'] for m in st.session_state['metas']]))
-        
-        c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
-        with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
-        f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, key="filtro_materias_metas", label_visibility="collapsed")
-        f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], key="filtro_estado_metas", label_visibility="collapsed")
-        
-        with c_btn3:
-            st.write("<br>", unsafe_allow_html=True)
-            if st.button("➕ Nueva Meta", type="primary", use_container_width=True):
-                dialog_nueva_meta()
+            if st.button("➕ Añadir Materia", type="primary", use_container_width=True):
+                dialog_nueva_materia_plan()
                 
         st.divider()
-                
-        if not st.session_state['metas']:
-            st.info("No tenés metas creadas. Tocá '+ Nueva Meta' para armar tu plan de examen.")
+        
+        if not st.session_state['plan_carrera']:
+            st.info("Todavía no agregaste ninguna materia a tu plan de estudios.")
         else:
-            metas_filtradas = st.session_state['metas']
-            if f_mat_metas != "Todas las materias":
-                metas_filtradas = [m for m in metas_filtradas if m['materia'] == f_mat_metas]
+            df_plan = pd.DataFrame(st.session_state['plan_carrera'])
+            anios = sorted(df_plan['año'].unique())
+            
+            for anio in anios:
+                st.markdown(f"### Año {anio}")
+                materias_anio = df_plan[df_plan['año'] == anio]
                 
-            hoy = date.today()
-            if f_est_metas == "Actuales":
-                metas_filtradas = [m for m in metas_filtradas if date.fromisoformat(m['fecha_examen']) >= hoy]
-            elif f_est_metas == "Pasadas":
-                metas_filtradas = [m for m in metas_filtradas if date.fromisoformat(m['fecha_examen']) < hoy]
-
-            if not metas_filtradas:
-                st.warning("No hay metas que coincidan con los filtros seleccionados.")
-            else:
-                cols = st.columns(3)
-                for i, meta in enumerate(metas_filtradas):
-                    original_idx = st.session_state['metas'].index(meta)
-                    
-                    with cols[i % 3]:
+                cols = st.columns(4)
+                for i, row in materias_anio.reset_index().iterrows():
+                    with cols[i % 4]:
                         with st.container(border=True):
-                            try: fecha_obj = date.fromisoformat(meta['fecha_examen'])
-                            except: fecha_obj = date.today()
-                            fecha_str = fecha_obj.strftime('%d/%m/%Y')
+                            color_clase = "badge-pendiente"
+                            if row['estado'] == "Regular": color_clase = "badge-regular"
+                            elif row['estado'] == "Aprobada/Promocionada": color_clase = "badge-aprobada"
+                            elif row['estado'] == "Cursando": color_clase = "badge-cursando"
+                            elif row['estado'] == "Libre/Recursado": color_clase = "badge-libre"
                             
-                            is_pasada = fecha_obj < hoy
-                            etiqueta_estado = "<span style='color: #3b82f6; float:right; font-size: 14px;'>Examen pasado</span>" if is_pasada else ""
+                            cuatri_abrev = ""
+                            cuatri_val = row.get('cuatrimestre', '')
+                            if cuatri_val == "1er Cuatrimestre": cuatri_abrev = "1C"
+                            elif cuatri_val == "2do Cuatrimestre": cuatri_abrev = "2C"
+                            elif cuatri_val == "Anual": cuatri_abrev = "Anual"
                             
-                            st.markdown(f"<div style='color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase;'>{meta['materia']} {etiqueta_estado}</div>", unsafe_allow_html=True)
-                            st.markdown(f"### {meta['nombre']}")
-                            st.caption(f"📅 {fecha_str}")
-                            
-                            progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
-                            st.progress(progreso)
-                            
-                            h_acum = int(meta['horas_acumuladas'])
-                            m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
-                            
-                            pct = int(progreso * 100)
-                            st.markdown(f"<div style='display:flex; justify-content:space-between; font-size: 13px; color: #94a3b8;'><span>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</span><span>{pct}%</span></div>", unsafe_allow_html=True)
-                            
-                            if is_pasada:
-                                if meta.get('nota'):
-                                    st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 20px; font-weight: 800; color: white;'>{meta['nota']}</span></div>", unsafe_allow_html=True)
-                                else:
-                                    st.write("<br>", unsafe_allow_html=True)
-                                    if st.button("🎖️ Asignar Nota", key=f"nota_{original_idx}", use_container_width=True):
-                                        dialog_asignar_nota(original_idx)
-                            
-                            st.write("<br>", unsafe_allow_html=True)
-                            c_ed1, c_ed2 = st.columns(2)
-                            if c_ed1.button("✏️ Editar", key=f"edit_meta_{original_idx}", use_container_width=True):
-                                dialog_editar_meta(original_idx)
-                            if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{original_idx}", use_container_width=True):
-                                st.session_state['metas'].pop(original_idx)
-                                if guardar_datos(): st.rerun()
+                            cuatri_html = f"<span style='float:right; font-size: 11px; color: #94a3b8; font-weight: bold;'>{cuatri_abrev}</span>" if cuatri_abrev else ""
 
-    with tabs[3]:
-        c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
-        with c_btn3:
-            if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):
-                dialog_agregar_sesion()
+                            html_badges = f"""
+                            <div style="margin-bottom: 8px;">
+                                <span class='{color_clase}'>{row['estado']}</span>
+                                {cuatri_html}
+                            </div>
+                            """
+                            st.markdown(html_badges, unsafe_allow_html=True)
+                            
+                            if st.button(row['nombre'], key=f"btn_info_{row['id']}", use_container_width=True):
+                                dialog_detalle_materia(row['id'])
+                                
+                            html_reqs = ""
+                            if isinstance(row.get('req_regulares'), list) and len(row['req_regulares']) > 0: 
+                                html_reqs += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Reg:</b> {', '.join(row['req_regulares'])}</div>"
+                            if isinstance(row.get('req_aprobadas'), list) and len(row['req_aprobadas']) > 0: 
+                                html_reqs += f"<div style='font-size: 11px; color: #94a3b8; margin-bottom: 2px;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
+                            
+                            if html_reqs:
+                                st.markdown(html_reqs, unsafe_allow_html=True)
+
+    elif menu_opcion == "Resumen":
+        st.header("Tus Estadísticas")
+        renderizar_analitica()
+
+    elif menu_opcion == "Organización":
+        with st.container(border=True):
+            c_head1, c_head2 = st.columns([4, 1])
+            with c_head1:
+                st.markdown("### Materias Activas (Cronómetro)")
+                st.caption("Añadí acá solo las materias de tu plan que estás cursando o rindiendo AHORA.")
+            with c_head2:
+                if st.button("➕ Nueva Materia", type="secondary", use_container_width=True):
+                    dialog_nueva_materia_activa()
+                    
+            cols_mat = st.columns(3)
+            for i, mat in enumerate(st.session_state['materias']):
+                estado_badge = ""
+                for plan_mat in st.session_state['plan_carrera']:
+                    if plan_mat['nombre'] == mat['nombre']:
+                        if plan_mat['estado'] == "Cursando":
+                            estado_badge = "<div style='margin-top: 8px;'><span class='badge-cursando'>Cursando</span></div>"
+                        elif plan_mat['estado'] == "Regular":
+                            estado_badge = "<div style='margin-top: 8px;'><span class='badge-regular'>Regular</span></div>"
+                        break
+
+                with cols_mat[i % 3]:
+                    st.markdown(f"""
+                    <div style="border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; background-color: #1e293b; margin-bottom: 15px;">
+                        <div class="color-circle" style="background-color: {mat['color']};"></div>
+                        <div style="font-size: 16px; font-weight: 600;">{mat['nombre']}</div>
+                        {estado_badge}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("🗑️ Eliminar", key=f"del_mat_{i}", use_container_width=True):
+                        st.session_state['materias'].pop(i)
+                        if guardar_datos(): st.rerun()
+                        
+        st.write("<br>", unsafe_allow_html=True)
+
+        with st.container(border=True):
+            c_dist1, c_dist2 = st.columns([4, 1])
+            with c_dist1: st.markdown("### Gestionar Distracciones")
+            with c_dist2:
+                nueva_dist = st.text_input("Nueva Distracción", label_visibility="collapsed", placeholder="Ej: Baño...")
+                if st.button("➕ Añadir", type="secondary", key="btn_dist", use_container_width=True):
+                    if nueva_dist and nueva_dist not in st.session_state['distracciones']:
+                        st.session_state['distracciones'].append(nueva_dist)
+                        if guardar_datos(): st.rerun()
+
+            cols_dist = st.columns(4)
+            for i, dist in enumerate(st.session_state['distracciones']):
+                with cols_dist[i % 4]:
+                    st.markdown(f"""
+                    <div style="border: 1px solid #334155; border-radius: 12px; padding: 15px; text-align: center; background-color: #1e293b; margin-bottom: 10px;">
+                        <div style="color: #94a3b8; font-size: 14px;">⚫</div>
+                        <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{dist}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("🗑️", key=f"del_dist_{i}", use_container_width=True):
+                        st.session_state['distracciones'].pop(i)
+                        if guardar_datos(): st.rerun()
+
+        st.write("<br>", unsafe_allow_html=True)
+
+        with st.container(border=True):
+            c_met1, c_met2 = st.columns([4, 1])
+            with c_met1: st.markdown("### Gestionar Métodos")
+            with c_met2:
+                nuevo_met = st.text_input("Nuevo Método", label_visibility="collapsed", placeholder="Ej: Mapa mental...")
+                if st.button("➕ Añadir", type="secondary", key="btn_met", use_container_width=True):
+                    if nuevo_met and nuevo_met not in st.session_state['metodos']:
+                        st.session_state['metodos'].append(nuevo_met)
+                        if guardar_datos(): st.rerun()
+
+            cols_met = st.columns(4)
+            for i, met in enumerate(st.session_state['metodos']):
+                with cols_met[i % 4]:
+                    st.markdown(f"""
+                    <div style="border: 1px solid #334155; border-radius: 12px; padding: 15px; text-align: center; background-color: #1e293b; margin-bottom: 10px;">
+                        <div style="color: #94a3b8; font-size: 14px;">⚫</div>
+                        <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{met}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("🗑️", key=f"del_met_{i}", use_container_width=True):
+                        st.session_state['metodos'].pop(i)
+                        if guardar_datos(): st.rerun()
+
+    elif menu_opcion == "Página Principal":
+        tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
+
+        with tabs[0]:
+            if st.session_state['timer_state'] == 'IDLE':
+                col_izq, col_der = st.columns([1, 1.5], gap="large")
+                with col_izq:
+                    st.markdown("### Metas actuales")
+                    st.caption("Progreso de tus metas vigentes.")
+                    
+                    hoy = date.today()
+                    metas_actuales = []
+                    for m in st.session_state['metas']:
+                        try:
+                            if date.fromisoformat(m['fecha_examen']) >= hoy:
+                                metas_actuales.append(m)
+                        except: pass
+                        
+                    if not metas_actuales:
+                        st.info("No tenés metas de exámenes próximas. ¡Todo al día!")
+                    else:
+                        for meta in metas_actuales:
+                            with st.container(border=True):
+                                try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
+                                except: fecha_str = ""
+                                
+                                st.markdown(f"<div style='color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 2px;'>{meta['materia']} - Fecha: {fecha_str}</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div style='font-size: 18px; font-weight: bold; margin-bottom: 8px;'>{meta['nombre']}</div>", unsafe_allow_html=True)
+                                
+                                progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
+                                st.progress(progreso)
+                                
+                                h_acum = int(meta['horas_acumuladas'])
+                                m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
+                                st.markdown(f"<div style='font-size: 12px; color: #94a3b8; margin-top: 5px;'>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
+
+                with col_der:
+                    st.write("<br>", unsafe_allow_html=True)
+                    st.radio("Modo de Estudio", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
+                    if st.button("▶ INICIAR ESTUDIO", type="primary", use_container_width=True):
+                        st.session_state['study_start'] = time.time()
+                        st.session_state['timer_state'] = 'RUNNING'
+                        st.rerun()
+
+            elif st.session_state['timer_state'] == 'RUNNING':
+                st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Cronómetro Libre</p>", unsafe_allow_html=True)
+                current_elapsed = st.session_state['study_elapsed'] + (time.time() - st.session_state['study_start'])
+                render_live_timer(current_elapsed, True)
+                c1, c2, c3 = st.columns([1, 2, 2])
+                with c1:
+                    if st.button("❌", use_container_width=True):
+                        st.session_state['timer_state'] = 'IDLE'
+                        st.session_state['study_elapsed'] = 0.0
+                        st.rerun()
+                with c2:
+                    if st.button("⏸ Pausar", use_container_width=True):
+                        st.session_state['study_elapsed'] += time.time() - st.session_state['study_start']
+                        st.session_state['timer_state'] = 'INTERRUPT'
+                        st.rerun()
+                with c3:
+                    if st.button("⏹ Terminar", type="primary", use_container_width=True):
+                        st.session_state['study_elapsed'] += time.time() - st.session_state['study_start']
+                        st.session_state['timer_state'] = 'FINISHED'
+                        st.rerun()
+
+            elif st.session_state['timer_state'] == 'INTERRUPT':
+                st.markdown("<h2 style='text-align: center;'>Interrupción</h2>", unsafe_allow_html=True)
+                st.markdown("<p style='text-align: center; color: #94a3b8;'>¿Cuál fue el motivo?</p>", unsafe_allow_html=True)
+                st.write("<br>", unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                for i, motivo in enumerate(st.session_state['distracciones']):
+                    col = c1 if i % 2 == 0 else c2
+                    if col.button(motivo, use_container_width=True):
+                        st.session_state['interruption_reason'] = motivo
+                        st.session_state['pause_start'] = time.time()
+                        st.session_state['pause_elapsed'] = 0.0
+                        st.session_state['timer_state'] = 'PAUSED'
+                        st.rerun()
+                st.divider()
+                if st.button("CANCELAR", use_container_width=True):
+                    st.session_state['timer_state'] = 'RUNNING'
+                    st.session_state['study_start'] = time.time()
+                    st.rerun()
+
+            elif st.session_state['timer_state'] == 'PAUSED':
+                st.markdown("<h1 style='text-align: center; color: #0ea5e9;'>⏸ PAUSA</h1>", unsafe_allow_html=True)
+                st.markdown(f"<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Motivo: {st.session_state['interruption_reason']}</p>", unsafe_allow_html=True)
+                current_pause = st.session_state['pause_elapsed'] + (time.time() - st.session_state['pause_start'])
+                render_live_timer(current_pause, True)
+                c1, c2, c3 = st.columns([1, 2, 1])
+                with c2:
+                    if st.button("REANUDAR", type="primary", use_container_width=True):
+                        st.session_state['study_start'] = time.time()
+                        st.session_state['timer_state'] = 'RUNNING'
+                        st.rerun()
+
+            elif st.session_state['timer_state'] == 'FINISHED':
+                c_back, c_title, c_empty = st.columns([1, 10, 1])
+                with c_back:
+                    if st.button("⬅️ Volver", help="Regresar a Pausa"):
+                        st.session_state['timer_state'] = 'PAUSED'
+                        st.rerun()
+                with c_title:
+                    st.markdown("<h2 style='text-align: center; margin-top: -10px;'>Sesión Finalizada</h2>", unsafe_allow_html=True)
                 
-        if not st.session_state['historial']:
-            st.write("Tu historial está vacío.")
-        else:
-            df_mostrar = pd.DataFrame(st.session_state['historial']).iloc[::-1]
-            st.dataframe(df_mostrar, hide_index=True, use_container_width=True)
+                nombres_materias = [m["nombre"] for m in st.session_state['materias']]
+                if not nombres_materias or not st.session_state['metodos']:
+                    st.error("No hay materias o métodos cargados. Andá al menú 'Organización' para agregarlos.")
+                else:
+                    with st.container(border=True):
+                        st.caption("MATERIA")
+                        materia_sel = st.radio("MATERIA", nombres_materias, horizontal=True, label_visibility="collapsed")
+                        st.divider()
+                        
+                        st.caption("VINCULAR OBJETIVO")
+                        metas_filtradas = [m for m in st.session_state['metas'] if m['materia'] == materia_sel]
+                        opciones_meta = {"-- Sin vincular --": None}
+                        for m in metas_filtradas: opciones_meta[m['nombre']] = m['id']
+                        meta_sel = st.selectbox("VINCULAR OBJETIVO", list(opciones_meta.keys()), label_visibility="collapsed")
+                        st.divider()
+                        
+                        st.caption("MÉTODO")
+                        metodo_sel = st.radio("MÉTODO", st.session_state['metodos'], horizontal=True, label_visibility="collapsed")
+                        
+                    st.write("")
+                    if st.button("GUARDAR SESIÓN ➔", type="primary", use_container_width=True):
+                        minutos_estudio = round(st.session_state['study_elapsed'] / 60)
+                        nueva_sesion = {
+                            "FECHA": datetime.now().strftime("%d/%m/%Y"),
+                            "MATERIA": materia_sel, "MÉTODO": metodo_sel,
+                            "TIEMPO (min)": minutos_estudio, "EFIC.": "100%" 
+                        }
+                        st.session_state['historial'].append(nueva_sesion)
+                        
+                        id_meta = opciones_meta[meta_sel]
+                        if id_meta:
+                            for m in st.session_state['metas']:
+                                if m['id'] == id_meta:
+                                    m['horas_acumuladas'] += (minutos_estudio / 60)
+                                    break
+                        
+                        if guardar_datos():
+                            st.toast(f"¡{minutos_estudio} minutos guardados!")
+                            st.session_state['timer_state'] = 'IDLE'
+                            st.session_state['study_elapsed'] = 0.0
+                            st.session_state['pause_elapsed'] = 0.0
+                            time.sleep(1)
+                            st.rerun()
+
+        with tabs[1]:
+            renderizar_analitica()
+
+        with tabs[2]:
+            materias_con_metas = list(set([m['materia'] for m in st.session_state['metas']]))
+            
+            c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
+            with c_filt1: st.markdown("<div style='margin-top: 30px; color:#94a3b8;'>⚙️ <b>Filtros</b></div>", unsafe_allow_html=True)
+            f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, key="filtro_materias_metas", label_visibility="collapsed")
+            f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], key="filtro_estado_metas", label_visibility="collapsed")
+            
+            with c_btn3:
+                st.write("<br>", unsafe_allow_html=True)
+                if st.button("➕ Nueva Meta", type="primary", use_container_width=True):
+                    dialog_nueva_meta()
+                    
+            st.divider()
+                    
+            if not st.session_state['metas']:
+                st.info("No tenés metas creadas. Tocá '+ Nueva Meta' para armar tu plan de examen.")
+            else:
+                metas_filtradas = st.session_state['metas']
+                if f_mat_metas != "Todas las materias":
+                    metas_filtradas = [m for m in metas_filtradas if m['materia'] == f_mat_metas]
+                    
+                hoy = date.today()
+                if f_est_metas == "Actuales":
+                    metas_filtradas = [m for m in metas_filtradas if date.fromisoformat(m['fecha_examen']) >= hoy]
+                elif f_est_metas == "Pasadas":
+                    metas_filtradas = [m for m in metas_filtradas if date.fromisoformat(m['fecha_examen']) < hoy]
+
+                if not metas_filtradas:
+                    st.warning("No hay metas que coincidan con los filtros seleccionados.")
+                else:
+                    cols = st.columns(3)
+                    for i, meta in enumerate(metas_filtradas):
+                        original_idx = st.session_state['metas'].index(meta)
+                        
+                        with cols[i % 3]:
+                            with st.container(border=True):
+                                try: fecha_obj = date.fromisoformat(meta['fecha_examen'])
+                                except: fecha_obj = date.today()
+                                fecha_str = fecha_obj.strftime('%d/%m/%Y')
+                                
+                                is_pasada = fecha_obj < hoy
+                                etiqueta_estado = "<span style='color: #3b82f6; float:right; font-size: 14px;'>Examen pasado</span>" if is_pasada else ""
+                                
+                                st.markdown(f"<div style='color: #94a3b8; font-size: 12px; font-weight: bold; text-transform: uppercase;'>{meta['materia']} {etiqueta_estado}</div>", unsafe_allow_html=True)
+                                st.markdown(f"### {meta['nombre']}")
+                                st.caption(f"📅 {fecha_str}")
+                                
+                                progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
+                                st.progress(progreso)
+                                
+                                h_acum = int(meta['horas_acumuladas'])
+                                m_acum = int((meta['horas_acumuladas'] - h_acum) * 60)
+                                
+                                pct = int(progreso * 100)
+                                st.markdown(f"<div style='display:flex; justify-content:space-between; font-size: 13px; color: #94a3b8;'><span>{h_acum}h {m_acum}m / {meta['meta_horas']}h 00m</span><span>{pct}%</span></div>", unsafe_allow_html=True)
+                                
+                                if is_pasada:
+                                    if meta.get('nota'):
+                                        st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 20px; font-weight: 800; color: white;'>{meta['nota']}</span></div>", unsafe_allow_html=True)
+                                    else:
+                                        st.write("<br>", unsafe_allow_html=True)
+                                        if st.button("🎖️ Asignar Nota", key=f"nota_{original_idx}", use_container_width=True):
+                                            dialog_asignar_nota(original_idx)
+                                
+                                st.write("<br>", unsafe_allow_html=True)
+                                c_ed1, c_ed2 = st.columns(2)
+                                if c_ed1.button("✏️ Editar", key=f"edit_meta_{original_idx}", use_container_width=True):
+                                    dialog_editar_meta(original_idx)
+                                if c_ed2.button("🗑️ Eliminar", key=f"del_meta_{original_idx}", use_container_width=True):
+                                    st.session_state['metas'].pop(original_idx)
+                                    if guardar_datos(): st.rerun()
+
+        with tabs[3]:
+            c_btn1, c_btn2, c_btn3 = st.columns([1, 2, 1])
+            with c_btn3:
+                if st.button("➕ Agregar Sesión", type="primary", use_container_width=True):
+                    dialog_agregar_sesion()
+                    
+            if not st.session_state['historial']:
+                st.write("Tu historial está vacío.")
+            else:
+                df_mostrar = pd.DataFrame(st.session_state['historial']).iloc[::-1]
+                st.dataframe(df_mostrar, hide_index=True, use_container_width=True)

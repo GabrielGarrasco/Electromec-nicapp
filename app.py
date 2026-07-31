@@ -11,14 +11,10 @@ import altair as alt
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide", page_icon="📚", initial_sidebar_state="expanded")
 
-# --- CSS MEJORADO ---
+# --- CSS MEJORADO (Tarjetas ultra compactas y botón de menú visible) ---
 st.markdown("""
     <style>
     .stApp { background-color: #0f172a; color: #f8fafc; }
-    
-    /* Ocultar el botón para colapsar el menú lateral y hacerlo fijo */
-    [data-testid="collapsedControl"] { display: none; }
-    
     .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 20px; border-bottom: 1px solid #1e293b; }
     .stTabs [data-baseweb="tab"] { color: #94a3b8; font-weight: 600; font-size: 16px; padding-bottom: 10px; }
     .stTabs [aria-selected="true"] { color: #0ea5e9 !important; border-bottom: 3px solid #0ea5e9 !important; }
@@ -34,7 +30,6 @@ st.markdown("""
     [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2.2rem; font-weight: 700; }
     [data-testid="stMetricLabel"] { color: #94a3b8; font-size: 0.9rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
     header {visibility: hidden;}
-    
     .color-circle { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 10px auto; border: 2px solid #334155; }
     
     /* Etiquetas de estado */
@@ -45,7 +40,7 @@ st.markdown("""
     .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; }
     .nota-box { background-color: #1e293b; border: 1px solid #475569; border-radius: 8px; padding: 15px; text-align: center; margin-top: 15px; }
     
-    /* Efecto para requisitos cumplidos/pendientes */
+    /* Efecto hover para requisitos cumplidos */
     .req-cumplido { background-color: rgba(255, 255, 255, 0.12); padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; border: 1px solid rgba(255,255,255,0.05); }
     .req-pendiente { padding: 6px 10px; margin-bottom: 4px; color: #94a3b8; }
     </style>

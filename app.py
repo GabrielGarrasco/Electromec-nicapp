@@ -438,11 +438,28 @@ def dialog_nueva_materia_activa():
     materias_validas = [m['nombre'] for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
     materias_ya_activas = [m['nombre'] for m in st.session_state['materias']]
     opciones_disponibles = [m for m in materias_validas if m not in materias_ya_activas]
+    
     if not opciones_disponibles:
         st.warning("No tenés materias en estado 'Cursando' o 'Regular' disponibles para agregar. Modificá tu Plan de Estudios primero.")
         return
+        
     n = st.selectbox("Seleccionar Materia", opciones_disponibles)
-    c = st.color_picker("Color Distintivo", "#0ea5e9")
+    
+    # Lista de colores predefinidos para evitar el bug del selector nativo
+    colores = {
+        "🔵 Celeste": "#0ea5e9",
+        "🔴 Rojo": "#ef4444",
+        "🟢 Verde": "#22c55e",
+        "🟡 Amarillo": "#eab308",
+        "🟣 Violeta": "#a855f7",
+        "🟠 Naranja": "#f97316",
+        "🩷 Rosa": "#ec4899",
+        "⚪ Gris": "#94a3b8"
+    }
+    
+    color_elegido = st.selectbox("Color Distintivo", list(colores.keys()))
+    c = colores[color_elegido]
+    
     if st.button("Activar Materia", type="primary", use_container_width=True):
         st.session_state['materias'].append({"nombre": n, "color": c})
         if guardar_datos(): st.rerun()

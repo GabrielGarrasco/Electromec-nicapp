@@ -1111,18 +1111,30 @@ with col_contenido:
                     if m['estado'] == "Cursando" and 'horarios_clase' in m:
                         for hc in m['horarios_clase']:
                             if hc.get('dia') != "---" and hc.get('inicio'):
+                                # Arreglo mágico: si ponés "19", lo transforma en "19:00" para que no se rompa
+                                ini_c = hc['inicio'].strip()
+                                if ":" not in ini_c: ini_c += ":00"
+                                if len(ini_c.split(":")[0]) == 1: ini_c = "0" + ini_c
+                                
+                                fin_c = hc.get('fin', '').strip()
+                                if fin_c:
+                                    if ":" not in fin_c: fin_c += ":00"
+                                    if len(fin_c.split(":")[0]) == 1: fin_c = "0" + fin_c
+                                
                                 horarios_completos.append({
                                     "materia": m['nombre'],
                                     "dia": hc['dia'],
-                                    "inicio": hc['inicio'],
-                                    "fin": hc.get('fin', '')
+                                    "inicio": ini_c,
+                                    "fin": fin_c,
+                                    "inicio_orig": hc['inicio'],
+                                    "fin_orig": hc.get('fin', '')
                                 })
                 
                 def get_sortable_time(t_str):
                     try: return datetime.strptime(t_str, "%H:%M").time()
-                    except: return datetime.strptime("00:00", "%H:%M").time()
+                    except: return datetime.strptime("23:59", "%H:%M").time()
 
-                # Extraer todos los horarios únicos (tanto de inicio como de fin)
+                # Extraer todos los horarios únicos (inicios y fines)
                 time_points = set()
                 for hc in horarios_completos:
                     time_points.add(hc['inicio'])
@@ -1136,7 +1148,7 @@ with col_contenido:
                 else:
                     dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
                     
-                    # Quitamos el último horario de la lista de filas, ya que representa un tope final donde no inicia ninguna clase
+                    # El último horario es solo de "cierre", no arranca ninguna clase ahí
                     filas_horario = sorted_times[:-1] if len(sorted_times) > 1 else sorted_times
                     
                     matriz = {t: {d: [] for d in dias_semana} for t in filas_horario}
@@ -1146,7 +1158,6 @@ with col_contenido:
                             t_ini = get_sortable_time(hc['inicio'])
                             t_fin = get_sortable_time(hc['fin']) if hc['fin'] else get_sortable_time("23:59")
                             
-                            # La materia se coloca en toda fila que esté dentro de su rango de duración
                             for t_row in filas_horario:
                                 t_actual = get_sortable_time(t_row)
                                 if t_ini <= t_actual < t_fin:
@@ -1157,21 +1168,39 @@ with col_contenido:
                     for d in dias_semana: html_tabla += f"<th>{d.upper()}</th>"
                     html_tabla += "</tr>"
                     
-                    for t_row in filas_horario:
+                    # Diccionario para saber si tenemos que "saltar" celdas fucionadas
+                    skip_cells = {d: 0 for d in dias_semana}
+                    
+                    for i, t_row in enumerate(filas_horario):
                         html_tabla += f"<tr><td>{t_row}</td>"
                         for d in dias_semana:
+                            if skip_cells[d] > 0:
+                                skip_cells[d] -= 1
+                                continue
+                                
                             items = matriz[t_row][d]
                             if items:
-                                bloques = []
-                                for mat in items:
-                                    # Formato limpio con hora arriba y abajo
-                                    texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio']}</span><br>"
-                                    texto += f"{mat['materia']}"
-                                    if mat['fin']: 
-                                        texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin']}</span>"
-                                    
-                                    bloques.append(f"<div class='materia-bloque' style='margin-bottom: 5px;'>{texto}</div>")
-                                html_tabla += f"<td>{''.join(bloques)}</td>"
+                                mat = items[0]
+                                
+                                # Calcular cuántas filas abarca esta materia (Fusión)
+                                span = 1
+                                for j in range(i + 1, len(filas_horario)):
+                                    next_t = filas_horario[j]
+                                    next_items = matriz[next_t][d]
+                                    if next_items and next_items[0]['materia'] == mat['materia']:
+                                        span += 1
+                                    else:
+                                        break
+                                
+                                skip_cells[d] = span - 1
+                                
+                                # Diseño del bloque: hora arriba, nombre en el medio, hora abajo
+                                texto = f"<span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['inicio_orig']}</span><br>"
+                                texto += f"{mat['materia']}"
+                                if mat['fin_orig']: 
+                                    texto += f"<br><span style='font-size: 11px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
+                                
+                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 70px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"

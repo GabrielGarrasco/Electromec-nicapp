@@ -6,13 +6,13 @@ from datetime import datetime, date
 import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import altair as alt
 import plotly.express as px
+import plotly.graph_objects as go
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide")
 
-# --- CSS MEJORADO (Estética Dark Blue + Verde Menta Acento) ---
+# --- CSS MEJORADO (Dark Blue + Acentos controlados) ---
 st.markdown("""
     <style>
     /* Fondo general oscuro: #000a23 */
@@ -30,23 +30,17 @@ st.markdown("""
         background-color: #02152b; border-radius: 12px; padding: 12px; border: 1px solid #153f59; 
     }
     
-    /* Botones primarios (Verde Menta - Acento vibrante) */
-    [data-testid="baseButton-primary"] { 
-        background-color: #10b981; border-color: #10b981; color: #000a23; border-radius: 8px; font-weight: bold; padding: 8px;
+    /* Botones primarios (Forzamos Verde Menta contra el rojo de Streamlit) */
+    button[kind="primary"] { 
+        background-color: #10b981 !important; border-color: #10b981 !important; color: #000a23 !important; border-radius: 8px !important; font-weight: bold !important; padding: 8px !important;
     }
-    [data-testid="baseButton-primary"]:hover { background-color: #059669; border-color: #059669; color: white;}
+    button[kind="primary"]:hover { background-color: #059669 !important; border-color: #059669 !important; color: white !important;}
     
-    /* Botones secundarios (Azul más oscuro) */
-    [data-testid="baseButton-secondary"] { 
-        background-color: #021d34; border-color: #153f59; color: #94b8d7; border-radius: 8px; font-weight: 600; padding: 8px;
+    /* Botones secundarios */
+    button[kind="secondary"] { 
+        background-color: #021d34 !important; border-color: #153f59 !important; color: #94b8d7 !important; border-radius: 8px !important; font-weight: 600 !important; padding: 8px !important;
     }
-    [data-testid="baseButton-secondary"]:hover { border-color: #365b77; color: white; }
-    
-    /* Botón Racha (Especial) */
-    button[kind="secondary"] {
-        background-color: transparent; border: 1px solid #153f59; border-radius: 20px; color: #10b981; font-weight: 800; font-size: 15px; padding: 5px 15px;
-    }
-    button[kind="secondary"]:hover { border-color: #10b981; color: white; }
+    button[kind="secondary"]:hover { border-color: #365b77 !important; color: white !important; }
     
     /* Métricas */
     [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2rem; font-weight: 800; }
@@ -62,14 +56,9 @@ st.markdown("""
     .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
     .nota-box { background-color: #021d34; border: 1px solid #153f59; border-radius: 8px; padding: 10px; text-align: center; margin-top: 10px; }
     
-    /* Radio buttons tipo Pill para Libre/Pomodoro */
-    div[role="radiogroup"] { display: flex; justify-content: center; background-color: #021d34; border-radius: 12px; padding: 4px; width: max-content; margin: 0 auto; border: 1px solid #153f59;}
-    div[role="radiogroup"] > label { padding: 6px 15px; border-radius: 8px; transition: 0.3s; margin-bottom: 0px; border: none; font-weight: bold; color: #7498b6; }
-    div[role="radiogroup"] > label[data-checked="true"] { background-color: #10b981; color: #000a23; }
-    
     /* Horario Automático */
     .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 13px; margin-top: 10px; background-color: #000a23; table-layout: fixed; }
-    .tabla-horario th { background-color: #02152b; color: #10b981; padding: 10px 5px; border: 1px solid #153f59; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .tabla-horario th { background-color: #02152b; color: #94b8d7; padding: 10px 5px; border: 1px solid #153f59; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
     .tabla-horario th:first-child { color: #7498b6; width: 10%; }
     .tabla-horario td { padding: 0; border: 1px solid #153f59; vertical-align: top; height: 60px; }
     .tabla-horario td:first-child { font-weight: 700; color: #7498b6; background-color: #02152b; padding-top: 10px; text-align: center; }
@@ -102,7 +91,7 @@ def get_gspread_client():
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
 
-@st.cache_data(ttl=600) # Cachea los datos por 10 min o hasta que se limpie manualmente
+@st.cache_data(ttl=600)
 def cargar_datos_sheet():
     try:
         client = get_gspread_client()
@@ -124,7 +113,6 @@ def guardar_datos():
         sheet = client.open('StudyMeterDB').worksheet('database')
         sheet.update_acell('A2', json.dumps(datos))
         
-        # Limpiar caché para que la próxima lectura sea fresca
         cargar_datos_sheet.clear()
         st.toast("Datos guardados correctamente.")
         return True
@@ -226,7 +214,7 @@ with col_hdr2:
 def dialog_racha():
     st.markdown(f"""
     <div style='text-align: center;'>
-        <h1 style='font-size: 40px; margin-bottom: 0px; color: #10b981;'>{racha_actual} días</h1>
+        <h1 style='font-size: 40px; margin-bottom: 0px; color: #f8fafc;'>{racha_actual} días</h1>
         <p style='color: #7498b6; font-weight: bold; margin-top: 0px;'>Racha actual</p>
     </div>
     """, unsafe_allow_html=True)
@@ -328,15 +316,25 @@ def renderizar_analitica():
     with c1:
         with st.container(border=True):
             st.markdown("<div class='analitica-title'>EFICIENCIA</div>", unsafe_allow_html=True)
-            source_efic = pd.DataFrame({"Cat": ["Eficiencia", "Falta"], "Valor": [efic_promedio, max(0, 100-efic_promedio)]})
+            
             donut_color = "#10b981" if efic_promedio > 0 else "#021d34"
-            chart_efic = alt.Chart(source_efic).mark_arc(innerRadius=50).encode(
-                theta=alt.Theta(field="Valor", type="quantitative"),
-                color=alt.Color(field="Cat", type="nominal", scale=alt.Scale(domain=["Eficiencia", "Falta"], range=[donut_color, "#021d34"]), legend=None),
-                tooltip=['Cat', 'Valor']
-            ).properties(height=180)
-            st.altair_chart(chart_efic, use_container_width=True)
-            st.markdown(f"<div style='text-align:center; margin-top:-125px; font-size:28px; font-weight:900;'>{efic_promedio}%</div><div style='height:85px;'></div>", unsafe_allow_html=True)
+            fig_efic = go.Figure(data=[go.Pie(
+                labels=["Eficiencia", "Falta"], 
+                values=[efic_promedio, max(0, 100-efic_promedio)],
+                hole=.75,
+                marker_colors=[donut_color, "#021d34"],
+                textinfo='none',
+                hoverinfo='label+percent'
+            )])
+            fig_efic.update_layout(
+                showlegend=False,
+                margin=dict(t=0, b=0, l=0, r=0),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                height=180,
+                annotations=[dict(text=f"{efic_promedio}%", x=0.5, y=0.5, font_size=28, showarrow=False, fontcolor="#f8fafc", fontweight="bold")]
+            )
+            st.plotly_chart(fig_efic, use_container_width=True, config={'displayModeBar': False})
             
     with c2:
         with st.container(border=True):
@@ -346,11 +344,19 @@ def renderizar_analitica():
             else:
                 df_barras = df_7d.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
                 df_barras['Horas'] = df_barras['TIEMPO (min)'] / 60
-                bars = alt.Chart(df_barras).mark_bar(color="#365b77").encode(
-                    x=alt.X("Horas:Q", title="", axis=alt.Axis(grid=True, gridColor="#153f59", labelColor="#7498b6")),
-                    y=alt.Y("MATERIA:N", title="", sort="-x", axis=alt.Axis(labelColor="#94b8d7", labelFontWeight="bold"))
-                ).properties(height=180)
-                st.altair_chart(bars, use_container_width=True)
+                
+                fig_bars = px.bar(df_barras, x='Horas', y='MATERIA', orientation='h')
+                fig_bars.update_traces(marker_color='#365b77')
+                fig_bars.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='#7498b6',
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    height=180,
+                    xaxis=dict(gridcolor='#153f59', title=""),
+                    yaxis=dict(title="", categoryorder='total ascending')
+                )
+                st.plotly_chart(fig_bars, use_container_width=True, config={'displayModeBar': False})
                 
     # --- GRÁFICO DE RADAR ---
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>DESEMPEÑO POR AÑO (PROMEDIOS)</div>", unsafe_allow_html=True)
@@ -393,7 +399,7 @@ def renderizar_analitica():
             angularaxis=dict(color='#f8fafc', gridcolor='#153f59')
         )
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>HISTÓRICO</div>", unsafe_allow_html=True)
     ch1, ch2, ch3, ch4 = st.columns(4)
@@ -1179,7 +1185,6 @@ with col_contenido:
                 st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>Motivo: {st.session_state['timer']['interruption_reason']}</p>", unsafe_allow_html=True)
                 current_pause = st.session_state['timer']['pause_elapsed'] + (time.time() - st.session_state['timer']['pause_start'])
                 
-                # Para la pausa mostramos reloj normal libre
                 html_pause = f"""
                 <div id="pause_clock" style="font-size: 75px; font-weight: 700; text-align: center; color: #f8fafc; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; margin: 15px 0;">00:00:00</div>
                 <script>

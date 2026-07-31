@@ -49,13 +49,13 @@ st.markdown("""
     div[role="radiogroup"] > label { padding: 10px; border-radius: 8px; transition: 0.3s; margin-bottom: 5px; }
     div[role="radiogroup"] > label:hover { background-color: #1e293b; }
     
-    /* CSS para el horario automático */
-    .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 10px; }
-    .tabla-horario th { background-color: #0f172a; color: #0ea5e9; padding: 15px; border: 1px solid #334155; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-    .tabla-horario th:first-child { color: #94a3b8; }
-    .tabla-horario td { background-color: #162032; padding: 10px; border: 1px solid #334155; vertical-align: middle; }
-    .tabla-horario td:first-child { font-weight: bold; color: #94a3b8; background-color: #0f172a; width: 120px; }
-    .materia-bloque { background-color: #3b82f6; color: white; padding: 8px; border-radius: 6px; font-weight: bold; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); line-height: 1.3; }
+    /* CSS para el horario automático (Estilo Bloques) */
+    .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 14px; margin-top: 15px; background-color: #0f172a; table-layout: fixed; }
+    .tabla-horario th { background-color: #121b29; color: #0ea5e9; padding: 15px 5px; border: 1px solid #2a3441; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+    .tabla-horario th:first-child { color: #94a3b8; width: 15%; }
+    .tabla-horario td { padding: 10px; border: 1px solid #2a3441; vertical-align: middle; height: 100px; }
+    .tabla-horario td:first-child { font-weight: 700; color: #94a3b8; background-color: #121b29; }
+    .materia-bloque { background-color: #3b82f6; color: #ffffff; padding: 10px; border-radius: 6px; font-weight: 800; line-height: 1.3; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); margin: auto; word-wrap: break-word; width: 95%; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -73,7 +73,8 @@ def guardar_datos():
         datos = {
             'materias': st.session_state['materias'], 'metodos': st.session_state['metodos'],
             'distracciones': st.session_state['distracciones'], 'historial': st.session_state['historial'],
-            'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera']
+            'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera'],
+            'horarios': st.session_state.get('horarios', [])
         }
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
@@ -111,6 +112,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['historial'] = datos_guardados.get('historial', [])
         st.session_state['metas'] = datos_guardados.get('metas', [])
         st.session_state['plan_carrera'] = datos_guardados.get('plan_carrera', [])
+        st.session_state['horarios'] = datos_guardados.get('horarios', [])
         for m in st.session_state['metas']:
             if 'nota' not in m: m['nota'] = None
     else:
@@ -120,6 +122,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['historial'] = []
         st.session_state['metas'] = [] 
         st.session_state['plan_carrera'] = []
+        st.session_state['horarios'] = []
     st.session_state['datos_cargados'] = True
 
 if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materias'][0], str):
@@ -215,7 +218,6 @@ def renderizar_analitica():
     with c4:
         with st.container(border=True):
             st.caption("INTERRUPCIONES COMUNES")
-            # Extraemos las interrupciones reales guardadas en el historial
             todas_interrupciones = []
             if 'INTERRUPCIONES' in df_hist.columns:
                 for inter_list in df_hist['INTERRUPCIONES'].dropna():
@@ -247,23 +249,26 @@ def renderizar_analitica():
         df_g = df_hist.groupby('MATERIA')['TIEMPO (min)'].sum().reset_index()
         color_map = {m['nombre']: m['color'] for m in st.session_state['materias']}
         
-        if df_g.empty:
-            st.info("No hay datos suficientes para graficar.")
-        elif color_map:
-            bars = alt.Chart(df_g).mark_bar().encode(
-                x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
-                y=alt.Y("TIEMPO (min):Q", title=""),
-                color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
-                tooltip=['MATERIA', 'TIEMPO (min)']
-            ).properties(height=250)
-            st.altair_chart(bars, use_container_width=True)
-        else:
+        if len(df_g) > 0 and len(color_map) > 0:
+            try:
+                bars = alt.Chart(df_g).mark_bar().encode(
+                    x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
+                    y=alt.Y("TIEMPO (min):Q", title=""),
+                    color=alt.Color("MATERIA:N", scale=alt.Scale(domain=list(color_map.keys()), range=list(color_map.values())), legend=None),
+                    tooltip=['MATERIA', 'TIEMPO (min)']
+                ).properties(height=250)
+                st.altair_chart(bars, use_container_width=True)
+            except:
+                st.bar_chart(df_g.set_index('MATERIA'), color="#0ea5e9") 
+        elif len(df_g) > 0:
             bars = alt.Chart(df_g).mark_bar(color="#0ea5e9").encode(
                 x=alt.X("MATERIA:N", title="", axis=alt.Axis(labelAngle=0, labelColor="#f8fafc")),
                 y=alt.Y("TIEMPO (min):Q", title=""),
                 tooltip=['MATERIA', 'TIEMPO (min)']
             ).properties(height=250)
             st.altair_chart(bars, use_container_width=True)
+        else:
+            st.info("No hay datos para mostrar el gráfico.")
 
 # ==========================================
 # --- MODALES (DIALOGS) ---
@@ -475,7 +480,7 @@ def dialog_nueva_materia_plan():
             c_d, c_i, c_f = st.columns([2, 1.5, 1.5])
             sel_d = c_d.selectbox(f"Día {i+1}", OPCIONES_DIAS, key=f"nvo_d_{i}")
             val_i = c_i.text_input("Inicio", placeholder="Ej: 13:45", key=f"nvo_i_{i}")
-            val_f = c_f.text_input("Fin", placeholder="Ej: 15:30", key=f"nvo_f_{i}")
+            val_f = c_f.text_input("Fin", placeholder="Ej: 16:00", key=f"nvo_f_{i}")
             
             if sel_d != "---" and val_i.strip():
                 nuevos_horarios.append({"dia": sel_d, "inicio": val_i.strip(), "fin": val_f.strip()})
@@ -942,6 +947,7 @@ with col_contenido:
                 col_izq, col_der = st.columns([1, 1.5], gap="large")
                 
                 with col_izq:
+                    # --- SECCIÓN: METAS ACTUALES ---
                     st.markdown("### Metas actuales")
                     st.caption("Progreso de tus metas vigentes.")
                     
@@ -1132,8 +1138,8 @@ with col_contenido:
                                 matriz[slot][hc['dia']] = hc['materia']
                                 
                     html_tabla = "<table class='tabla-horario'>"
-                    html_tabla += "<tr><th>Horario</th>"
-                    for d in dias_semana: html_tabla += f"<th>{d}</th>"
+                    html_tabla += "<tr><th>HORARIO</th>"
+                    for d in dias_semana: html_tabla += f"<th>{d.upper()}</th>"
                     html_tabla += "</tr>"
                     
                     for slot in sorted_slots:

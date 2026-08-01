@@ -34,3 +34,22 @@ def calcular_datos_racha(historial):
         fecha_iter += pd.Timedelta(days=1)
         
     return racha_actual, mejor_racha, protectores, dias_para_protector
+
+def calcular_proximo_repaso(confianza, nivel_actual):
+    # Lógica SM-2 simplificada para repetición espaciada
+    if confianza <= 2:
+        nuevo_nivel = 0
+        dias = 1
+    elif confianza == 3:
+        nuevo_nivel = max(1, nivel_actual)
+        dias = 2
+    else: # 4 o 5
+        nuevo_nivel = nivel_actual + 1
+        if nuevo_nivel == 1: dias = 1
+        elif nuevo_nivel == 2: dias = 3
+        elif nuevo_nivel == 3: dias = 7
+        elif nuevo_nivel == 4: dias = 15
+        else: dias = 30
+        
+    prox_fecha = (date.today() + pd.Timedelta(days=dias)).isoformat()
+    return nuevo_nivel, prox_fecha

@@ -6,8 +6,8 @@ def cargar_css():
         /* Fondo general oscuro: #000a23 */
         .stApp { background-color: #000a23; color: #f8fafc; font-family: 'Inter', sans-serif; }
         
-        /* ELIMINAR ESPACIO VACÍO ARRIBA */
-        .block-container { padding-top: 2rem !important; padding-bottom: 1rem !important; }
+        /* Ajuste de margen superior para que respire */
+        .block-container { padding-top: 3rem !important; padding-bottom: 1rem !important; }
         header { display: none !important; }
         
         [data-testid="collapsedControl"] { display: none; }

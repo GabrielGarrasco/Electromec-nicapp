@@ -22,6 +22,9 @@ def cargar_css():
             background-color: #02152b; border-radius: 12px; padding: 12px; border: 1px solid #153f59; 
         }
         
+        /* Divisores ultra finos para ahorrar espacio */
+        .custom-hr { margin: 12px 0; border: none; border-top: 1px solid #153f59; }
+        
         /* Botones primarios (Forzamos Verde Menta contra el rojo de Streamlit) */
         button[kind="primary"] { 
             background-color: #10b981 !important; border-color: #10b981 !important; color: #000a23 !important; border-radius: 8px !important; font-weight: bold !important; padding: 8px !important;

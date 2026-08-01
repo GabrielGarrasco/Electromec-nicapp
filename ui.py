@@ -6,6 +6,10 @@ def cargar_css():
         /* Fondo general oscuro: #000a23 */
         .stApp { background-color: #000a23; color: #f8fafc; font-family: 'Inter', sans-serif; }
         
+        /* ELIMINAR ESPACIO VACÍO ARRIBA */
+        .block-container { padding-top: 2rem !important; padding-bottom: 1rem !important; }
+        header { display: none !important; }
+        
         [data-testid="collapsedControl"] { display: none; }
         
         /* Pestañas (Tabs) */
@@ -33,7 +37,6 @@ def cargar_css():
         /* Métricas */
         [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2rem; font-weight: 800; }
         [data-testid="stMetricLabel"] { color: #7498b6; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-        header {visibility: hidden;}
         
         /* Badges */
         .color-circle { width: 16px; height: 16px; border-radius: 50%; margin: 0 auto 5px auto; border: 2px solid #153f59; display: inline-block; vertical-align: middle;}

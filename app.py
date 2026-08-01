@@ -267,25 +267,31 @@ def renderizar_analitica():
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>CONSTANCIA (MAPA DE CALOR)</div>", unsafe_allow_html=True)
     if not df_hist.empty:
         df_cal = df_hist[['FECHA_OBJ', 'TIEMPO (min)']].copy()
-        df_cal['Semana'] = df_cal['FECHA_OBJ'].dt.isocalendar().week
+        # Convertimos la semana a texto para que Plotly no invente decimales
+        df_cal['Semana'] = df_cal['FECHA_OBJ'].dt.isocalendar().week.astype(str)
         df_cal['Día'] = df_cal['FECHA_OBJ'].dt.dayofweek
         mapa_datos = df_cal.groupby(['Semana', 'Día'])['TIEMPO (min)'].sum().reset_index()
         
         matriz_calor = mapa_datos.pivot(index='Día', columns='Semana', values='TIEMPO (min)').fillna(0)
         
-        # EL TRUCO: Forzamos a que siempre existan los 7 días de la semana (del 0 al 6)
+        # Forzamos que siempre existan las 7 filas (días del 0 al 6)
         matriz_calor = matriz_calor.reindex(range(7), fill_value=0)
         
         fig_heat = px.imshow(
             matriz_calor, 
             labels=dict(x="Semanas del Año", y="Día", color="Minutos"),
             y=['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+            x=matriz_calor.columns,
             color_continuous_scale=["#021d34", "#10b981"]
         )
+        
+        # MAGIA: xgap y ygap hacen las separaciones para que parezcan cuadraditos
+        fig_heat.update_traces(xgap=3, ygap=3) 
         fig_heat.update_layout(
             paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
             font_color='#7498b6', margin=dict(l=0, r=0, t=20, b=0),
-            height=250
+            height=220,
+            xaxis=dict(type='category', title="") # Forza la vista discreta
         )
         st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
     else:

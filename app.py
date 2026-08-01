@@ -696,6 +696,12 @@ with col_menu:
         '"La curiosidad es más importante que el conocimiento."<br>- Albert Einstein',
         '"La educación consiste en enseñar a pensar por uno mismo y no en memorizar datos."<br>- Noam Chomsky',
         '"El hombre no es nada más que lo que la educación hace de él."<br>- Immanuel Kant',
+        '"Los científicos investigan lo que ya es; los ingenieros crean lo que nunca ha existido."<br>- Theodore von Kármán',
+        '"En las matemáticas no hay caminos reales; y los caminos polvorientos y empinados son los que llevan a la cima."<br>- Euclides',
+        '"La física es la poesía de la naturaleza."<br>- Richard Feynman',
+        '"Hay que demostrar nuestras equivocaciones lo más rápido posible, es la única manera de avanzar."<br>- Richard Feynman',
+        '"No confundas educación con inteligencia, puedes tener un doctorado y seguir siendo un idiota."<br>- Richard Feynman',
+        '"La vida es y seguirá siendo una ecuación sin solución, pero contiene algunos factores conocidos."<br>- Nikola Tesla',
         '"La educación es el pasaporte hacia el futuro."<br>- Malcolm X'
     ]
     frase_diaria = random.choice(frases)

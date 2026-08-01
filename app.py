@@ -33,15 +33,16 @@ if 'timer' not in st.session_state:
 if 'editando_plan_mat_id' not in st.session_state: st.session_state['editando_plan_mat_id'] = None
 
 if 'datos_cargados' not in st.session_state:
-    datos_guardados = cargar_datos_sheet()
-    if datos_guardados:
-        st.session_state['materias'] = datos_guardados.get('materias', [])
-        st.session_state['metodos'] = datos_guardados.get('metodos', [])
-        st.session_state['distracciones'] = datos_guardados.get('distracciones', [])
-        st.session_state['historial'] = datos_guardados.get('historial', [])
-        st.session_state['metas'] = datos_guardados.get('metas', [])
-        st.session_state['plan_carrera'] = datos_guardados.get('plan_carrera', [])
-        st.session_state['horarios'] = datos_guardados.get('horarios', [])
+    datos_generales, temarios_guardados = cargar_datos_sheet()
+    
+    if datos_generales:
+        st.session_state['materias'] = datos_generales.get('materias', [])
+        st.session_state['metodos'] = datos_generales.get('metodos', [])
+        st.session_state['distracciones'] = datos_generales.get('distracciones', [])
+        st.session_state['historial'] = datos_generales.get('historial', [])
+        st.session_state['metas'] = datos_generales.get('metas', [])
+        st.session_state['plan_carrera'] = datos_generales.get('plan_carrera', [])
+        st.session_state['horarios'] = datos_generales.get('horarios', [])
         for m in st.session_state['metas']:
             if 'nota' not in m: m['nota'] = None
     else:
@@ -52,6 +53,8 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['metas'] = [] 
         st.session_state['plan_carrera'] = []
         st.session_state['horarios'] = []
+        
+    st.session_state['temarios'] = temarios_guardados if temarios_guardados else {}
     st.session_state['datos_cargados'] = True
 
 if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materias'][0], str):
@@ -263,40 +266,6 @@ def renderizar_analitica():
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-    # --- MAPA DE CALOR (CONSTANCIA) ---
-    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>CONSTANCIA (MAPA DE CALOR)</div>", unsafe_allow_html=True)
-    if not df_hist.empty:
-        df_cal = df_hist[['FECHA_OBJ', 'TIEMPO (min)']].copy()
-        # Convertimos la semana a texto para que Plotly no invente decimales
-        df_cal['Semana'] = df_cal['FECHA_OBJ'].dt.isocalendar().week.astype(str)
-        df_cal['Día'] = df_cal['FECHA_OBJ'].dt.dayofweek
-        mapa_datos = df_cal.groupby(['Semana', 'Día'])['TIEMPO (min)'].sum().reset_index()
-        
-        matriz_calor = mapa_datos.pivot(index='Día', columns='Semana', values='TIEMPO (min)').fillna(0)
-        
-        # Forzamos que siempre existan las 7 filas (días del 0 al 6)
-        matriz_calor = matriz_calor.reindex(range(7), fill_value=0)
-        
-        fig_heat = px.imshow(
-            matriz_calor, 
-            labels=dict(x="Semanas del Año", y="Día", color="Minutos"),
-            y=['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
-            x=matriz_calor.columns,
-            color_continuous_scale=["#021d34", "#10b981"]
-        )
-        
-        # MAGIA: xgap y ygap hacen las separaciones para que parezcan cuadraditos
-        fig_heat.update_traces(xgap=3, ygap=3) 
-        fig_heat.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
-            font_color='#7498b6', margin=dict(l=0, r=0, t=20, b=0),
-            height=220,
-            xaxis=dict(type='category', title="") # Forza la vista discreta
-        )
-        st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
-    else:
-        st.info("Aún no hay suficientes datos para armar tu mapa de calor.")
-
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>HISTÓRICO</div>", unsafe_allow_html=True)
     ch1, ch2, ch3, ch4 = st.columns(4)
     with ch1:
@@ -320,7 +289,7 @@ def renderizar_analitica():
     # --- EXPORTAR DATA ---
     st.write("<br>", unsafe_allow_html=True)
     if not df_hist.empty:
-        csv = df_hist.drop(columns=['FECHA_OBJ']).to_csv(index=False).encode('utf-8')
+        csv = df_hist.drop(columns=['FECHA_OBJ'], errors='ignore').to_csv(index=False).encode('utf-8')
         st.download_button(
             label="📥 Exportar Historial (CSV)",
             data=csv,
@@ -393,6 +362,16 @@ def dialog_detalle_materia(mat_id):
         nuevas_reg = st.multiselect("Para cursar necesito REGULAR:", opciones_materias, default=def_reg)
         nuevas_apr = st.multiselect("Para cursar necesito APROBADA:", opciones_materias, default=def_apr)
         
+        st.divider()
+        st.caption("📖 TEMARIO")
+        nombre_mat_actual = mat['nombre']
+        temario_actual = st.session_state.get('temarios', {}).get(nombre_mat_actual, [])
+        texto_temario_default = "\n".join([t['tema'] for t in temario_actual])
+        
+        with st.expander("Ver / Editar Temario"):
+            st.info("Pegá acá la lista de temas (uno por renglón).")
+            texto_temario_nuevo = st.text_area("Temas", value=texto_temario_default, height=150, label_visibility="collapsed")
+        
         st.write("<br>", unsafe_allow_html=True)
         c_btn1, c_btn2 = st.columns(2)
         if c_btn1.button("Cancelar", use_container_width=True):
@@ -427,6 +406,21 @@ def dialog_detalle_materia(mat_id):
                 mat['nota'] = nota_definitiva
                 mat['intentos'] = nuevos_intentos
                 mat['horarios_clase'] = nuevos_horarios
+                
+                # Guardar el temario
+                temas_list = [t.strip() for t in texto_temario_nuevo.split('\n') if t.strip()]
+                temario_guardar = []
+                for t_nombre in temas_list:
+                    tema_previo = next((t for t in temario_actual if t['tema'] == t_nombre), None)
+                    if tema_previo:
+                        temario_guardar.append(tema_previo)
+                    else:
+                        temario_guardar.append({'tema': t_nombre, 'nivel': 0, 'proximo_repaso': None})
+                        
+                if nuevo_nombre != nombre_mat_actual and nombre_mat_actual in st.session_state['temarios']:
+                    del st.session_state['temarios'][nombre_mat_actual]
+                    
+                st.session_state['temarios'][nuevo_nombre] = temario_guardar
                 
                 st.session_state['editando_plan_mat_id'] = None
                 if guardar_datos(): st.rerun()
@@ -1045,7 +1039,6 @@ with col_contenido:
                         st.write("<br>", unsafe_allow_html=True)
 
             elif st.session_state['timer']['state'] == 'RUNNING':
-                # MODO ENFOQUE: Oculta la barra lateral para evitar distracciones
                 st.markdown("""
                     <style>
                     [data-testid="stSidebarNav"], [data-testid="stSidebar"] { display: none !important; }

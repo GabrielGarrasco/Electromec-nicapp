@@ -102,7 +102,7 @@ def dialog_racha():
 if st.session_state.get('show_racha_modal', False):
     dialog_racha()
 
-# --- RELOJ EN VIVO ---
+# --- RELOJ EN VIVO (CON ALARMA) ---
 def render_live_timer(elapsed_seconds, is_running):
     mode = st.session_state['timer']['mode']
     target_ms = st.session_state['timer']['focus_time'] * 60000 if mode == 'Pomodoro' else 0
@@ -115,6 +115,7 @@ def render_live_timer(elapsed_seconds, is_running):
         var mode = "{mode}";
         var targetMs = {target_ms};
         var start = Date.now() - elapsedMs;
+        var audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
         
         function updateClock() {{
             var delta = isRunning ? (Date.now() - start) : elapsedMs;
@@ -122,6 +123,7 @@ def render_live_timer(elapsed_seconds, is_running):
             if (mode === 'Pomodoro') {{
                 var remaining = targetMs - delta;
                 if (remaining <= 0) {{
+                    if (!window.audioPlayed) {{ audio.play(); window.audioPlayed = true; }}
                     document.getElementById("clock").innerHTML = "¡TIEMPO!";
                     document.getElementById("clock").style.color = "#10b981";
                     return;
@@ -261,6 +263,31 @@ def renderizar_analitica():
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
+    # --- MAPA DE CALOR (CONSTANCIA) ---
+    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>CONSTANCIA (MAPA DE CALOR)</div>", unsafe_allow_html=True)
+    if not df_hist.empty:
+        df_cal = df_hist[['FECHA_OBJ', 'TIEMPO (min)']].copy()
+        df_cal['Semana'] = df_cal['FECHA_OBJ'].dt.isocalendar().week
+        df_cal['Día'] = df_cal['FECHA_OBJ'].dt.dayofweek
+        mapa_datos = df_cal.groupby(['Semana', 'Día'])['TIEMPO (min)'].sum().reset_index()
+        
+        matriz_calor = mapa_datos.pivot(index='Día', columns='Semana', values='TIEMPO (min)').fillna(0)
+        
+        fig_heat = px.imshow(
+            matriz_calor, 
+            labels=dict(x="Semanas del Año", y="Día", color="Minutos"),
+            y=['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+            color_continuous_scale=["#021d34", "#10b981"]
+        )
+        fig_heat.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
+            font_color='#7498b6', margin=dict(l=0, r=0, t=20, b=0),
+            height=250
+        )
+        st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.info("Aún no hay suficientes datos para armar tu mapa de calor.")
+
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>HISTÓRICO</div>", unsafe_allow_html=True)
     ch1, ch2, ch3, ch4 = st.columns(4)
     with ch1:
@@ -281,6 +308,17 @@ def renderizar_analitica():
             h_tot = int(total_minutos // 60)
             st.markdown(f"<div class='historico-val'>{h_tot}h</div></div>", unsafe_allow_html=True)
 
+    # --- EXPORTAR DATA ---
+    st.write("<br>", unsafe_allow_html=True)
+    if not df_hist.empty:
+        csv = df_hist.drop(columns=['FECHA_OBJ']).to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Exportar Historial (CSV)",
+            data=csv,
+            file_name='historial_estudio.csv',
+            mime='text/csv',
+            use_container_width=True
+        )
 
 @st.dialog("Detalle de la Materia")
 def dialog_detalle_materia(mat_id):
@@ -998,6 +1036,13 @@ with col_contenido:
                         st.write("<br>", unsafe_allow_html=True)
 
             elif st.session_state['timer']['state'] == 'RUNNING':
+                # MODO ENFOQUE: Oculta la barra lateral para evitar distracciones
+                st.markdown("""
+                    <style>
+                    [data-testid="stSidebarNav"], [data-testid="stSidebar"] { display: none !important; }
+                    </style>
+                """, unsafe_allow_html=True)
+                
                 titulo = "Cronómetro Libre" if st.session_state['timer']['mode'] == "Libre" else "Modo Pomodoro (Enfoque)"
                 st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>{titulo}</p>", unsafe_allow_html=True)
                 current_elapsed = st.session_state['timer']['elapsed'] + (time.time() - st.session_state['timer']['start'])

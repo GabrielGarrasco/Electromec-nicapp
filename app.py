@@ -671,7 +671,7 @@ with col_menu:
     
     hoy_str = date.today().strftime("%d/%m/%Y")
     mins_hoy = sum([h['TIEMPO (min)'] for h in st.session_state['historial'] if h['FECHA'] == hoy_str])
-    meta_diaria = 120 # Meta de 2 horas (editable a futuro si querés)
+    meta_diaria = 120 # Meta de 2 horas
     progreso = min(mins_hoy / meta_diaria, 1.0)
     
     st.markdown(f"<div style='font-size: 13px; color: #f8fafc; font-weight: bold; margin-bottom: 5px;'>Estudiado: {mins_hoy} min</div>", unsafe_allow_html=True)
@@ -961,14 +961,15 @@ with col_contenido:
     elif menu_opcion == "Página Principal":
         
         # --- ALINEACIÓN BOTÓN DE RACHA (FLOTANTE JUNTO A PESTAÑAS) ---
-        c_tabs, c_racha, c_spacer = st.columns([3.5, 1, 1.5])
+        c_empty, c_racha = st.columns([6, 1])
         with c_racha:
-            st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
             if st.button(f"🔥 Racha: {racha_actual} días", help="Ver detalles", use_container_width=True):
                 st.session_state['show_racha_modal'] = True
+                
+        # Subimos las pestañas para que queden en la misma línea visual que el botón
+        st.markdown("<style>div[data-testid='stTabs'] { margin-top: -45px; }</style>", unsafe_allow_html=True)
         
-        with c_tabs:
-            tabs = st.tabs(["Cronómetro", "Temario", "Analítica", "Metas", "Historial"])
+        tabs = st.tabs(["Cronómetro", "Temario", "Analítica", "Metas", "Historial"])
 
         def render_meta_card(meta, original_idx, is_pasada, hoy, prefijo_key):
             try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')

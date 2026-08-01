@@ -5,6 +5,7 @@ import pandas as pd
 from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
+import random
 
 # --- IMPORTACIÓN DE MÓDULOS PROPIOS ---
 from db import cargar_datos_sheet, guardar_datos
@@ -664,18 +665,30 @@ with col_menu:
     st.markdown("### Navegación")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios"], label_visibility="collapsed")
     
-    # --- NUEVA FUNCIÓN: PROGRESO DIARIO ---
-    st.markdown("<br><hr class='custom-hr'><br>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size: 13px; color: #7498b6; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;'>Progreso Diario</div>", unsafe_allow_html=True)
+    # --- NUEVA FUNCIÓN: PROGRESO DIARIO (MÁS COMPACTO Y ARRIBA) ---
+    st.markdown("<hr class='custom-hr' style='margin: 10px 0;'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 11px; color: #7498b6; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;'>Progreso Diario</div>", unsafe_allow_html=True)
     
     hoy_str = date.today().strftime("%d/%m/%Y")
     mins_hoy = sum([h['TIEMPO (min)'] for h in st.session_state['historial'] if h['FECHA'] == hoy_str])
     meta_diaria = 120 # Meta de 2 horas (editable a futuro si querés)
     progreso = min(mins_hoy / meta_diaria, 1.0)
     
-    st.markdown(f"<div style='font-size: 14px; color: #f8fafc; font-weight: bold; margin-bottom: 5px;'>Estudiado: {mins_hoy} min</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='font-size: 13px; color: #f8fafc; font-weight: bold; margin-bottom: 5px;'>Estudiado: {mins_hoy} min</div>", unsafe_allow_html=True)
     st.progress(progreso)
     st.caption(f"Meta: {meta_diaria} min")
+    
+    # --- FRASES MOTIVACIONALES (FONDO DEL MENÚ) ---
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    frases = [
+        '"El éxito es la suma de pequeños esfuerzos repetidos día tras día."<br>- Robert Collier',
+        '"No te detengas hasta que te sientas orgulloso."<br>- Anónimo',
+        '"Estudia no para saber una cosa más, sino para saberla mejor."<br>- Séneca',
+        '"La disciplina es el puente entre tus metas y tus logros."<br>- Jim Rohn',
+        '"La educación es el pasaporte hacia el futuro."<br>- Malcolm X'
+    ]
+    frase_diaria = random.choice(frases)
+    st.markdown(f"<div style='background-color: #02152b; padding: 10px; border-radius: 8px; border: 1px solid #153f59; font-size: 11px; color: #94b8d7; font-style: italic; text-align: center; line-height: 1.4;'>{frase_diaria}</div>", unsafe_allow_html=True)
 
 with col_contenido:
     if menu_opcion == "Carrera":
@@ -947,8 +960,8 @@ with col_contenido:
 
     elif menu_opcion == "Página Principal":
         
-        # --- ALINEACIÓN BOTÓN DE RACHA (FLOTANTE SOBRE LAS PESTAÑAS) ---
-        c_tabs, c_racha = st.columns([5, 1])
+        # --- ALINEACIÓN BOTÓN DE RACHA (FLOTANTE JUNTO A PESTAÑAS) ---
+        c_tabs, c_racha, c_spacer = st.columns([3.5, 1, 1.5])
         with c_racha:
             st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
             if st.button(f"🔥 Racha: {racha_actual} días", help="Ver detalles", use_container_width=True):
@@ -1066,6 +1079,12 @@ with col_contenido:
                 current_elapsed = st.session_state['timer']['elapsed'] + (time.time() - st.session_state['timer']['start'])
                 render_live_timer(current_elapsed, True)
                 
+                if st.session_state['timer']['mode'] == "Pomodoro":
+                    remaining_seconds = (st.session_state['timer']['focus_time'] * 60) - current_elapsed
+                    if remaining_seconds > 0:
+                        eta_time = datetime.fromtimestamp(time.time() + remaining_seconds).strftime("%H:%M")
+                        st.markdown(f"<p style='text-align: center; color: #94b8d7; font-size: 13px; margin-top: -10px;'>Hora de liberación: {eta_time}</p>", unsafe_allow_html=True)
+                
                 c1, c2, c3 = st.columns([1, 2, 2])
                 with c1:
                     if st.button("Cancelar", use_container_width=True):
@@ -1106,15 +1125,35 @@ with col_contenido:
             elif st.session_state['timer']['state'] == 'PAUSED':
                 st.markdown("<h1 style='text-align: center; color: #10b981; margin-bottom: 0;'>PAUSA</h1>", unsafe_allow_html=True)
                 motivo = st.session_state['timer'].get('interruption_reason', '')
-                if motivo:
-                    st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem; margin-top: 0;'>Motivo: {motivo}</p>", unsafe_allow_html=True)
                 
-                estudio_congelado = st.session_state['timer']['elapsed']
-                hrs = int(estudio_congelado // 3600)
-                mins = int((estudio_congelado % 3600) // 60)
-                secs = int(estudio_congelado % 60)
+                current_pause = st.session_state['timer']['pause_elapsed'] + (time.time() - st.session_state['timer']['pause_start'])
                 
-                st.markdown(f"<div style='font-size: 85px; font-weight: 700; text-align: center; color: #7498b6; font-family: \"Courier New\", Courier, monospace; letter-spacing: 2px; margin: 20px 0;'>{hrs:02d}:{mins:02d}:{secs:02d}</div>", unsafe_allow_html=True)
+                html_pause = f"""
+                <div id="pause_msg" style="text-align: center; color: #7498b6; font-size: 1.2rem; margin-top: 0;">Motivo: {motivo}</div>
+                <div id="pause_clock" style="font-size: 85px; font-weight: 700; text-align: center; color: #7498b6; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; margin: 20px 0;">00:00:00</div>
+                <script>
+                    var elapsedMs = {current_pause * 1000};
+                    var start = Date.now() - elapsedMs;
+                    function updateClock() {{
+                        var delta = Date.now() - start;
+                        
+                        if (delta >= 2700000) {{
+                            document.getElementById("pause_clock").style.color = "#ef4444";
+                            document.getElementById("pause_msg").innerHTML = "¡Tiempo de pausa muy largo, volver al estudio!";
+                            document.getElementById("pause_msg").style.color = "#ef4444";
+                            document.getElementById("pause_msg").style.fontWeight = "bold";
+                        }}
+                        
+                        var hrs = Math.floor(delta / 3600000).toString().padStart(2, '0');
+                        var mins = Math.floor((delta % 3600000) / 60000).toString().padStart(2, '0');
+                        var secs = Math.floor((delta % 60000) / 1000).toString().padStart(2, '0');
+                        document.getElementById("pause_clock").innerHTML = hrs + ":" + mins + ":" + secs;
+                    }}
+                    updateClock();
+                    setInterval(updateClock, 1000);
+                </script>
+                """
+                components.html(html_pause, height=140)
 
                 c1, c2, c3 = st.columns([1, 2, 1])
                 with c2:

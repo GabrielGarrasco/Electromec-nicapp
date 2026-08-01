@@ -35,8 +35,8 @@ def calcular_datos_racha(historial):
         
     return racha_actual, mejor_racha, protectores, dias_para_protector
 
-def calcular_proximo_repaso(confianza, nivel_actual):
-    # Lógica SM-2 simplificada para repetición espaciada
+def calcular_proximo_repaso(confianza, nivel_actual, fecha_examen_str=None):
+    # Lógica base SM-2 (Repetición Espaciada)
     if confianza <= 2:
         nuevo_nivel = 0
         dias = 1
@@ -51,5 +51,20 @@ def calcular_proximo_repaso(confianza, nivel_actual):
         elif nuevo_nivel == 4: dias = 15
         else: dias = 30
         
-    prox_fecha = (date.today() + pd.Timedelta(days=dias)).isoformat()
-    return nuevo_nivel, prox_fecha
+    hoy = date.today()
+    prox_fecha_obj = hoy + pd.Timedelta(days=dias)
+    
+    # MODO PÁNICO: Si el examen es antes de la fecha recomendada por la curva
+    if fecha_examen_str:
+        try:
+            fecha_examen_obj = date.fromisoformat(fecha_examen_str)
+            dias_hasta_examen = (fecha_examen_obj - hoy).days
+            
+            # Si el examen es pronto y el repaso caía después del examen
+            if dias_hasta_examen > 0 and prox_fecha_obj >= fecha_examen_obj:
+                dias_comprimidos = max(1, dias_hasta_examen // 2)
+                prox_fecha_obj = hoy + pd.Timedelta(days=dias_comprimidos)
+        except:
+            pass
+            
+    return nuevo_nivel, prox_fecha_obj.isoformat()

@@ -686,6 +686,16 @@ with col_menu:
         '"Estudia no para saber una cosa más, sino para saberla mejor."<br>- Séneca',
         '"La disciplina es el puente entre tus metas y tus logros."<br>- Jim Rohn',
         '"No es fácil, no es rápido, pero vale la pena"<br>- Anónimo',
+        '"La educación es el arma más poderosa que puedes usar para cambiar el mundo"<br>- Nelson Mandela',
+        '"Dime y lo olvido, enséñame y lo recuerdo, involúcrame y lo aprendo."<br>- Benjamin Franklin',
+        '"Invertir en conocimientos produce los mejores intereses."<br>- Benjamin Franklin',
+        '"La raíz de la educación es amarga, pero su fruto es dulce."<br>- Aristóteles',
+        '"El objetivo principal de la educación es crear personas capaces de hacer cosas nuevas y no simplemente repetir lo que otras generaciones hicieron."<br>- Jean Piaget',
+        '"El aprendizaje es un tesoro que seguirá a su dueño a todas partes."<br>- Proverbio Chino',
+        '"Hay una fuerza motriz más poderosa que el vapor, la electricidad y la energía atómica: la voluntad."<br>- Albert Einstein',
+        '"La curiosidad es más importante que el conocimiento."<br>- Albert Einstein',
+        '"La educación consiste en enseñar a pensar por uno mismo y no en memorizar datos."<br>- Noam Chomsky',
+        '"El hombre no es nada más que lo que la educación hace de él."<br>- Immanuel Kant',
         '"La educación es el pasaporte hacia el futuro."<br>- Malcolm X'
     ]
     frase_diaria = random.choice(frases)

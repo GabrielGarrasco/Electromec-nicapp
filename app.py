@@ -62,15 +62,13 @@ if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materi
 
 OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
 
-# --- HEADER SUPERIOR ---
+# --- HEADER SUPERIOR LIMPIO ---
 racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_racha(st.session_state['historial'])
 
-col_hdr1, col_hdr2 = st.columns([3, 1])
+col_hdr1, col_hdr2 = st.columns([5, 1])
 with col_hdr2:
-    st.markdown("<div style='display: flex; justify-content: flex-end; gap: 15px; margin-top: 10px;'>", unsafe_allow_html=True)
-    if st.button(f"Racha: {racha_actual} días", help="Ver detalles"):
+    if st.button(f"🔥 Racha: {racha_actual} días", help="Ver detalles", use_container_width=True):
         st.session_state['show_racha_modal'] = True
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # --- MODALES (DIALOGS) ---
 @st.dialog("Racha de Estudio", width="small")
@@ -265,6 +263,35 @@ def renderizar_analitica():
         )
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+
+    # --- MAPA DE CALOR (CONSTANCIA) ---
+    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>CONSTANCIA (MAPA DE CALOR)</div>", unsafe_allow_html=True)
+    if not df_hist.empty:
+        df_cal = df_hist[['FECHA_OBJ', 'TIEMPO (min)']].copy()
+        df_cal['Semana'] = df_cal['FECHA_OBJ'].dt.isocalendar().week.astype(str)
+        df_cal['Día'] = df_cal['FECHA_OBJ'].dt.dayofweek
+        mapa_datos = df_cal.groupby(['Semana', 'Día'])['TIEMPO (min)'].sum().reset_index()
+        
+        matriz_calor = mapa_datos.pivot(index='Día', columns='Semana', values='TIEMPO (min)').fillna(0)
+        matriz_calor = matriz_calor.reindex(range(7), fill_value=0)
+        
+        fig_heat = px.imshow(
+            matriz_calor, 
+            labels=dict(x="Semanas del Año", y="Día", color="Minutos"),
+            y=['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+            x=matriz_calor.columns,
+            color_continuous_scale=["#021d34", "#10b981"]
+        )
+        
+        fig_heat.update_traces(xgap=3, ygap=3) 
+        fig_heat.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
+            font_color='#7498b6', margin=dict(l=0, r=0, t=20, b=0),
+            height=220, xaxis=dict(type='category', title="")
+        )
+        st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
+    else:
+        st.info("Aún no hay suficientes datos para armar tu mapa de calor.")
 
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>HISTÓRICO</div>", unsafe_allow_html=True)
     ch1, ch2, ch3, ch4 = st.columns(4)
@@ -676,7 +703,6 @@ def dialog_agregar_sesion():
 col_menu, col_contenido = st.columns([1, 4], gap="large")
 
 with col_menu:
-    st.write("<br><br>", unsafe_allow_html=True)
     st.markdown("### Navegación")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios"], label_visibility="collapsed")
 
@@ -1077,8 +1103,6 @@ with col_contenido:
                     if col.button(motivo, use_container_width=True):
                         st.session_state['timer']['interruption_reason'] = motivo
                         st.session_state['timer']['interruptions'].append(motivo)
-                        st.session_state['timer']['pause_start'] = time.time()
-                        st.session_state['timer']['pause_elapsed'] = 0.0
                         st.session_state['timer']['state'] = 'PAUSED'
                         st.rerun()
                 st.divider()
@@ -1088,27 +1112,18 @@ with col_contenido:
                     st.rerun()
 
             elif st.session_state['timer']['state'] == 'PAUSED':
-                st.markdown("<h1 style='text-align: center; color: #10b981;'>PAUSA</h1>", unsafe_allow_html=True)
-                st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem;'>Motivo: {st.session_state['timer']['interruption_reason']}</p>", unsafe_allow_html=True)
-                current_pause = st.session_state['timer']['pause_elapsed'] + (time.time() - st.session_state['timer']['pause_start'])
+                st.markdown("<h1 style='text-align: center; color: #10b981; margin-bottom: 0;'>PAUSA</h1>", unsafe_allow_html=True)
+                motivo = st.session_state['timer'].get('interruption_reason', '')
+                if motivo:
+                    st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem; margin-top: 0;'>Motivo: {motivo}</p>", unsafe_allow_html=True)
                 
-                html_pause = f"""
-                <div id="pause_clock" style="font-size: 75px; font-weight: 700; text-align: center; color: #f8fafc; font-family: 'Courier New', Courier, monospace; letter-spacing: 2px; margin: 15px 0;">00:00:00</div>
-                <script>
-                    var elapsedMs = {current_pause * 1000};
-                    var start = Date.now() - elapsedMs;
-                    function updateClock() {{
-                        var delta = Date.now() - start;
-                        var hrs = Math.floor(delta / 3600000).toString().padStart(2, '0');
-                        var mins = Math.floor((delta % 3600000) / 60000).toString().padStart(2, '0');
-                        var secs = Math.floor((delta % 60000) / 1000).toString().padStart(2, '0');
-                        document.getElementById("pause_clock").innerHTML = hrs + ":" + mins + ":" + secs;
-                    }}
-                    updateClock();
-                    setInterval(updateClock, 1000);
-                </script>
-                """
-                components.html(html_pause, height=120)
+                # Tiempo congelado en pantalla
+                estudio_congelado = st.session_state['timer']['elapsed']
+                hrs = int(estudio_congelado // 3600)
+                mins = int((estudio_congelado % 3600) // 60)
+                secs = int(estudio_congelado % 60)
+                
+                st.markdown(f"<div style='font-size: 85px; font-weight: 700; text-align: center; color: #7498b6; font-family: \"Courier New\", Courier, monospace; letter-spacing: 2px; margin: 20px 0;'>{hrs:02d}:{mins:02d}:{secs:02d}</div>", unsafe_allow_html=True)
 
                 c1, c2, c3 = st.columns([1, 2, 1])
                 with c2:

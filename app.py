@@ -685,6 +685,7 @@ with col_menu:
         '"No te detengas hasta que te sientas orgulloso."<br>- Anónimo',
         '"Estudia no para saber una cosa más, sino para saberla mejor."<br>- Séneca',
         '"La disciplina es el puente entre tus metas y tus logros."<br>- Jim Rohn',
+        '"No es fácil, no es rápido, pero vale la pena"<br>- Anónimo',
         '"La educación es el pasaporte hacia el futuro."<br>- Malcolm X'
     ]
     frase_diaria = random.choice(frases)

@@ -3,127 +3,17 @@ import time
 import streamlit.components.v1 as components
 import pandas as pd
 from datetime import datetime, date
-import json
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 import plotly.express as px
 import plotly.graph_objects as go
 
+# --- IMPORTACIÓN DE MÓDULOS PROPIOS ---
+from db import cargar_datos_sheet, guardar_datos
+from utils import parse_float_nota, calcular_datos_racha
+from ui import cargar_css
+
 # --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(page_title="Study Meter", layout="wide")
-
-# --- CSS MEJORADO (Dark Blue + Acentos controlados) ---
-st.markdown("""
-    <style>
-    /* Fondo general oscuro: #000a23 */
-    .stApp { background-color: #000a23; color: #f8fafc; font-family: 'Inter', sans-serif; }
-    
-    [data-testid="collapsedControl"] { display: none; }
-    
-    /* Pestañas (Tabs) */
-    .stTabs [data-baseweb="tab-list"] { justify-content: center; background-color: transparent; gap: 30px; border-bottom: 1px solid #153f59; }
-    .stTabs [data-baseweb="tab"] { color: #7498b6; font-weight: 700; font-size: 16px; padding-bottom: 10px; }
-    .stTabs [aria-selected="true"] { color: #94b8d7 !important; border-bottom: 3px solid #10b981 !important; }
-    
-    /* Contenedores (Tarjetas) - Más compactas */
-    [data-testid="stVerticalBlock"] > [style*="flex-direction: column;"] > [data-testid="stVerticalBlock"] { 
-        background-color: #02152b; border-radius: 12px; padding: 12px; border: 1px solid #153f59; 
-    }
-    
-    /* Botones primarios (Forzamos Verde Menta contra el rojo de Streamlit) */
-    button[kind="primary"] { 
-        background-color: #10b981 !important; border-color: #10b981 !important; color: #000a23 !important; border-radius: 8px !important; font-weight: bold !important; padding: 8px !important;
-    }
-    button[kind="primary"]:hover { background-color: #059669 !important; border-color: #059669 !important; color: white !important;}
-    
-    /* Botones secundarios */
-    button[kind="secondary"] { 
-        background-color: #021d34 !important; border-color: #153f59 !important; color: #94b8d7 !important; border-radius: 8px !important; font-weight: 600 !important; padding: 8px !important;
-    }
-    button[kind="secondary"]:hover { border-color: #365b77 !important; color: white !important; }
-    
-    /* Métricas */
-    [data-testid="stMetricValue"] { color: #f8fafc; font-size: 2rem; font-weight: 800; }
-    [data-testid="stMetricLabel"] { color: #7498b6; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
-    header {visibility: hidden;}
-    
-    /* Badges */
-    .color-circle { width: 16px; height: 16px; border-radius: 50%; margin: 0 auto 5px auto; border: 2px solid #153f59; display: inline-block; vertical-align: middle;}
-    .badge-regular { background-color: #eab308; color: #713f12; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
-    .badge-aprobada { background-color: #22c55e; color: #14532d; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
-    .badge-cursando { background-color: #3b82f6; color: #1e3a8a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
-    .badge-pendiente { background-color: #64748b; color: #0f172a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
-    .badge-libre { background-color: #ef4444; color: #450a0a; padding: 2px 6px; border-radius: 6px; font-size: 9px; font-weight: bold; }
-    .nota-box { background-color: #021d34; border: 1px solid #153f59; border-radius: 8px; padding: 10px; text-align: center; margin-top: 10px; }
-    
-    /* Horario Automático */
-    .tabla-horario { width: 100%; border-collapse: collapse; text-align: center; color: #f8fafc; font-family: sans-serif; font-size: 13px; margin-top: 10px; background-color: #000a23; table-layout: fixed; }
-    .tabla-horario th { background-color: #02152b; color: #94b8d7; padding: 10px 5px; border: 1px solid #153f59; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
-    .tabla-horario th:first-child { color: #7498b6; width: 10%; }
-    .tabla-horario td { padding: 0; border: 1px solid #153f59; vertical-align: top; height: 60px; }
-    .tabla-horario td:first-child { font-weight: 700; color: #7498b6; background-color: #02152b; padding-top: 10px; text-align: center; }
-    .materia-bloque { background-color: #365b77; color: #ffffff; padding: 4px; font-weight: 800; line-height: 1.1; width: 100%; height: 100%; min-height: 60px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; box-sizing: border-box; border: 1px solid #557996; border-radius: 4px; }
-    
-    /* Historial Mejorado */
-    .tabla-historial { width: 100%; border-collapse: collapse; text-align: left; color: #f8fafc; font-family: sans-serif; background-color: transparent; }
-    .tabla-historial th { background-color: #02152b; color: #7498b6; padding: 12px 15px; border-bottom: 1px solid #153f59; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-    .tabla-historial td { padding: 15px; border-bottom: 1px solid #021d34; vertical-align: middle; }
-    .tabla-historial tr:last-child td { border-bottom: none; }
-    .tabla-historial tr:hover td { background-color: #02152b; }
-    .materia-pill { background-color: #365b77; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 11px; display: inline-block; text-transform: uppercase;}
-    .efic-green { color: #10b981; font-weight: 900; font-size: 18px; }
-    
-    /* Textos Analitica */
-    .analitica-title { font-size: 11px; font-weight: 800; color: #7498b6; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
-    .analitica-big-number { font-size: 28px; font-weight: 900; color: #f8fafc; text-align: center; margin: 10px 0; }
-    .historico-box { text-align: center; }
-    .historico-title { font-size: 10px; font-weight: 800; color: #7498b6; text-transform: uppercase; margin-bottom: 5px; }
-    .historico-val { font-size: 20px; font-weight: 900; color: #f8fafc; }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- SISTEMA DE GUARDADO EN GOOGLE SHEETS (CON CACHÉ) ---
-def get_gspread_client():
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    secret_str = st.secrets["google_credentials"]
-    try: creds_dict = json.loads(secret_str)
-    except: creds_dict = json.loads(secret_str, strict=False)
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    return gspread.authorize(creds)
-
-@st.cache_data(ttl=600)
-def cargar_datos_sheet():
-    try:
-        client = get_gspread_client()
-        sheet = client.open('StudyMeterDB').worksheet('database')
-        valor = sheet.acell('A2').value
-        if valor: return json.loads(valor)
-    except: return None
-    return None
-
-def guardar_datos():
-    try:
-        datos = {
-            'materias': st.session_state['materias'], 'metodos': st.session_state['metodos'],
-            'distracciones': st.session_state['distracciones'], 'historial': st.session_state['historial'],
-            'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera'],
-            'horarios': st.session_state.get('horarios', [])
-        }
-        client = get_gspread_client()
-        sheet = client.open('StudyMeterDB').worksheet('database')
-        sheet.update_acell('A2', json.dumps(datos))
-        
-        cargar_datos_sheet.clear()
-        st.toast("Datos guardados correctamente.")
-        return True
-    except Exception as e:
-        st.error(f"Error al guardar: {e}")
-        st.stop()
-
-# --- FUNCIONES DE CÁLCULO SEGURAS ---
-def parse_float_nota(val_str):
-    try: return float(str(val_str).replace(',', '.'))
-    except: return None
+cargar_css()
 
 # --- INICIALIZACIÓN DE VARIABLES ---
 if 'timer' not in st.session_state:
@@ -168,36 +58,6 @@ if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materi
     st.session_state['materias'] = []
 
 OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-
-def calcular_datos_racha(historial):
-    if not historial: return 0, 0, 0, 5
-    fechas_str = set([h['FECHA'] for h in historial])
-    fechas_obj = sorted([datetime.strptime(f, "%d/%m/%Y").date() for f in fechas_str])
-    if not fechas_obj: return 0, 0, 0, 5
-    
-    fecha_inicio = fechas_obj[0]
-    hoy = date.today()
-    racha_actual, mejor_racha, protectores, dias_para_protector = 0, 0, 0, 5
-    
-    fecha_iter = fecha_inicio
-    while fecha_iter <= hoy:
-        if fecha_iter in fechas_obj:
-            racha_actual += 1
-            dias_para_protector -= 1
-            if dias_para_protector <= 0:
-                protectores = min(3, protectores + 1)
-                dias_para_protector = 5
-        else:
-            if protectores > 0:
-                protectores -= 1
-                racha_actual += 1 
-            else:
-                racha_actual = 0
-                dias_para_protector = 5
-        if racha_actual > mejor_racha: mejor_racha = racha_actual
-        fecha_iter += pd.Timedelta(days=1)
-        
-    return racha_actual, mejor_racha, protectores, dias_para_protector
 
 # --- HEADER SUPERIOR ---
 racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_racha(st.session_state['historial'])

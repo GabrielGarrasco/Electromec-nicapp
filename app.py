@@ -273,6 +273,9 @@ def renderizar_analitica():
         
         matriz_calor = mapa_datos.pivot(index='Día', columns='Semana', values='TIEMPO (min)').fillna(0)
         
+        # EL TRUCO: Forzamos a que siempre existan los 7 días de la semana (del 0 al 6)
+        matriz_calor = matriz_calor.reindex(range(7), fill_value=0)
+        
         fig_heat = px.imshow(
             matriz_calor, 
             labels=dict(x="Semanas del Año", y="Día", color="Minutos"),

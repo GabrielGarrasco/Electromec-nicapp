@@ -223,15 +223,18 @@ def renderizar_analitica():
                 
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>DESEMPEÑO POR AÑO (PROMEDIOS)</div>", unsafe_allow_html=True)
     notas_por_anio = {1: [], 2: [], 3: [], 4: [], 5: [], 6: []}
+    
     for mat in st.session_state['plan_carrera']:
         anio = int(mat['año'])
         notas_mat = []
         nf = parse_float_nota(mat.get('nota', ''))
         if nf is not None: notas_mat.append(nf)
+            
         for meta in st.session_state['metas']:
             if meta['materia'] == mat['nombre'] and meta.get('nota'):
                 nm = parse_float_nota(meta['nota'])
                 if nm is not None: notas_mat.append(nm)
+                    
         if notas_mat:
             promedio_mat = sum(notas_mat) / len(notas_mat)
             if anio in notas_por_anio: notas_por_anio[anio].append(promedio_mat)
@@ -550,6 +553,11 @@ def dialog_nueva_meta():
     fecha_examen = col2.date_input("FECHA EXAMEN", min_value=date.today())
     dias_sel = st.multiselect("DÍAS DE ESTUDIO", ["L", "M", "X", "J", "V", "S", "D"], default=["L", "M", "X", "J", "V"])
     
+    st.divider()
+    temas_materia = st.session_state.get('temarios', {}).get(materia, [])
+    opciones_temas = [t['tema'] for t in temas_materia]
+    temas_examen = st.multiselect("Temas que entran (Opcional)", opciones_temas, help="Si dejás esto vacío, se asume que entran todos los temas de la materia.")
+    
     c1, c2 = st.columns(2)
     if c1.button("Cancelar", use_container_width=True): st.rerun()
     if c2.button("Guardar", type="primary", use_container_width=True):
@@ -557,7 +565,8 @@ def dialog_nueva_meta():
             nueva = {
                 "id": str(time.time()), "nombre": nombre, "materia": materia,
                 "meta_horas": meta_horas, "fecha_examen": fecha_examen.isoformat(), 
-                "horas_acumuladas": 0.0, "nota": None, "dias_estudio": dias_sel
+                "horas_acumuladas": 0.0, "nota": None, "dias_estudio": dias_sel,
+                "temas_examen": temas_examen
             }
             st.session_state['metas'].append(nueva)
             if guardar_datos(): st.rerun()
@@ -929,7 +938,6 @@ with col_contenido:
                         if guardar_datos(): st.rerun()
 
     elif menu_opcion == "Página Principal":
-        # --- ACÁ AGREGAMOS LA NUEVA PESTAÑA "TEMARIO" ---
         tabs = st.tabs(["Cronómetro", "Temario", "Analítica", "Metas", "Historial"])
 
         def render_meta_card(meta, original_idx, is_pasada, hoy, prefijo_key):
@@ -1116,7 +1124,7 @@ with col_contenido:
                         st.caption("MÉTODO")
                         metodo_sel = st.radio("MÉTODO", st.session_state['metodos'], horizontal=True, label_visibility="collapsed")
                         
-                        # --- ACÁ ESTÁ LA LÓGICA DE REPASO AL GUARDAR LA SESIÓN ---
+                        # --- EVALUACIÓN DE LA CURVA DEL OLVIDO ---
                         temas_disponibles = st.session_state.get('temarios', {}).get(materia_sel, [])
                         opciones_temas = ["-- Repaso general / Ninguno --"] + [t['tema'] for t in temas_disponibles]
                         
@@ -1148,12 +1156,21 @@ with col_contenido:
                                     m['horas_acumuladas'] += (minutos_estudio / 60)
                                     break
                                     
-                        # Aplicar la curva de aprendizaje al tema
+                        # Aplicar la curva al guardar
                         if tema_sel != "-- Repaso general / Ninguno --":
+                            # Buscamos la fecha del próximo examen (Meta) para "Modo Pánico"
+                            metas_materia = [m for m in st.session_state['metas'] if m['materia'] == materia_sel and date.fromisoformat(m['fecha_examen']) >= date.today()]
+                            fecha_prox_examen = None
+                            if metas_materia:
+                                metas_materia.sort(key=lambda x: date.fromisoformat(x['fecha_examen']))
+                                # Si la meta no tiene temas específicos, o si los tiene y nuestro tema está adentro
+                                if not metas_materia[0].get('temas_examen') or tema_sel in metas_materia[0]['temas_examen']:
+                                    fecha_prox_examen = metas_materia[0]['fecha_examen']
+                                    
                             for t in st.session_state['temarios'][materia_sel]:
                                 if t['tema'] == tema_sel:
                                     nivel_actual = t.get('nivel', 0)
-                                    nuevo_nivel, prox_fecha = calcular_proximo_repaso(confianza, nivel_actual)
+                                    nuevo_nivel, prox_fecha = calcular_proximo_repaso(confianza, nivel_actual, fecha_prox_examen)
                                     t['nivel'] = nuevo_nivel
                                     t['proximo_repaso'] = prox_fecha
                                     break
@@ -1265,10 +1282,22 @@ with col_contenido:
                 mat_sel_temario = st.selectbox("Seleccionar Materia", materias_con_temario, label_visibility="collapsed")
                 temas = st.session_state['temarios'][mat_sel_temario]
                 
+                # Botón para filtrar solo los temas del próximo examen
+                solo_examen = st.toggle("Mostrar solo temas del próximo examen")
+                
+                if solo_examen:
+                    metas_activas = [m for m in st.session_state['metas'] if m['materia'] == mat_sel_temario and date.fromisoformat(m['fecha_examen']) >= date.today()]
+                    if metas_activas:
+                        metas_activas.sort(key=lambda x: date.fromisoformat(x['fecha_examen']))
+                        temas_del_examen = metas_activas[0].get('temas_examen', [])
+                        if temas_del_examen:
+                            temas = [t for t in temas if t['tema'] in temas_del_examen]
+                    else:
+                        st.warning("No tenés exámenes próximos cargados para esta materia.")
+                        temas = []
+                
                 hoy_str = date.today().isoformat()
-                vencidos = []
-                al_dia = []
-                nuevos = []
+                vencidos, al_dia, nuevos = [], [], []
                 
                 for t in temas:
                     if not t.get('proximo_repaso'): nuevos.append(t)
@@ -1278,8 +1307,7 @@ with col_contenido:
                 if vencidos:
                     st.markdown("<h4 style='color: #ef4444; margin-top: 15px;'>🔴 Para Repasar Hoy (Urgente)</h4>", unsafe_allow_html=True)
                     for t in vencidos:
-                        try:
-                            fecha_rep = date.fromisoformat(t['proximo_repaso']).strftime('%d/%m')
+                        try: fecha_rep = date.fromisoformat(t['proximo_repaso']).strftime('%d/%m')
                         except: fecha_rep = "Hoy"
                         st.markdown(f"<div style='background-color: #450a0a; border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 5px; border-radius: 4px;'><b>{t['tema']}</b> <span style='float:right; font-size: 12px; opacity:0.8;'>Venció: {fecha_rep} | Nivel {t.get('nivel', 0)}</span></div>", unsafe_allow_html=True)
                 
@@ -1291,8 +1319,7 @@ with col_contenido:
                 if al_dia:
                     st.markdown("<h4 style='color: #10b981; margin-top: 15px;'>🟢 Al Día (Ya estudiados)</h4>", unsafe_allow_html=True)
                     for t in al_dia:
-                        try:
-                            fecha_rep = date.fromisoformat(t['proximo_repaso']).strftime('%d/%m')
+                        try: fecha_rep = date.fromisoformat(t['proximo_repaso']).strftime('%d/%m')
                         except: fecha_rep = ""
                         st.markdown(f"<div style='background-color: #064e3b; border-left: 4px solid #10b981; padding: 10px; margin-bottom: 5px; border-radius: 4px;'><b>{t['tema']}</b> <span style='float:right; font-size: 12px; opacity:0.8;'>Próx. repaso: {fecha_rep} | Nivel {t.get('nivel', 0)}</span></div>", unsafe_allow_html=True)
 

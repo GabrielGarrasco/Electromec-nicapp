@@ -16,10 +16,25 @@ def cargar_datos_sheet():
     try:
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
-        valor = sheet.acell('A2').value
-        if valor: return json.loads(valor)
-    except: return None
-    return None
+        
+        # Traemos A2 (datos generales) y B2 (temarios)
+        valores = sheet.get('A2:B2')
+        
+        datos_generales = None
+        temarios = {}
+        
+        if valores and len(valores) > 0:
+            fila = valores[0]
+            # Leemos A2
+            if len(fila) > 0 and fila[0].strip(): 
+                datos_generales = json.loads(fila[0])
+            # Leemos B2
+            if len(fila) > 1 and fila[1].strip(): 
+                temarios = json.loads(fila[1])
+                
+        return datos_generales, temarios
+    except: 
+        return None, {}
 
 def guardar_datos():
     try:
@@ -29,9 +44,14 @@ def guardar_datos():
             'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera'],
             'horarios': st.session_state.get('horarios', [])
         }
+        temarios = st.session_state.get('temarios', {})
+        
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
+        
+        # Guardamos en celdas separadas por seguridad
         sheet.update_acell('A2', json.dumps(datos))
+        sheet.update_acell('B2', json.dumps(temarios))
         
         cargar_datos_sheet.clear()
         st.toast("Datos guardados correctamente.")

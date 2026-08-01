@@ -991,8 +991,18 @@ with col_contenido:
             
             if not is_pasada:
                 horas_faltantes = max(0.0, meta['meta_horas'] - meta['horas_acumuladas'])
-                falt_h, falt_m = int(horas_faltantes), int((horas_faltantes - int(horas_faltantes)) * 60)
-                st.markdown(f"<div style='text-align:right; font-size: 11px; color: #7498b6; font-weight:bold;'>Faltan {falt_h}h {falt_m}m / {meta['meta_horas']}h 00m</div>", unsafe_allow_html=True)
+                if dias_restantes > 0:
+                    h_pd = horas_faltantes / dias_restantes
+                    h_pd_int = int(h_pd)
+                    m_pd_int = int((h_pd - h_pd_int) * 60)
+                    txt_diario = f"{h_pd_int}h {m_pd_int:02d}m / día"
+                else:
+                    if horas_faltantes > 0:
+                        txt_diario = "¡Último día!"
+                    else:
+                        txt_diario = "0h 00m / día"
+                
+                st.markdown(f"<div style='text-align:right; font-size: 11px; color: #7498b6; font-weight:bold;'>Estudiar: {txt_diario} (Total: {meta['meta_horas']}h)</div>", unsafe_allow_html=True)
             
             if is_pasada:
                 if meta.get('nota'):

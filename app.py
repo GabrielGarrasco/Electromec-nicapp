@@ -62,13 +62,8 @@ if len(st.session_state['materias']) > 0 and isinstance(st.session_state['materi
 
 OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
 
-# --- HEADER SUPERIOR LIMPIO ---
+# CÁLCULO DE RACHA
 racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_racha(st.session_state['historial'])
-
-col_hdr1, col_hdr2 = st.columns([5, 1])
-with col_hdr2:
-    if st.button(f"🔥 Racha: {racha_actual} días", help="Ver detalles", use_container_width=True):
-        st.session_state['show_racha_modal'] = True
 
 # --- MODALES (DIALOGS) ---
 @st.dialog("Racha de Estudio", width="small")
@@ -338,16 +333,16 @@ def dialog_detalle_materia(mat_id):
                 if sel_d != "---" and val_i.strip():
                     nuevos_horarios.append({"dia": sel_d, "inicio": val_i.strip(), "fin": val_f.strip()})
             
-        st.divider()
-        st.caption("CORRELATIVIDADES")
+        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #7498b6;'>Correlatividades</div>", unsafe_allow_html=True)
         opciones_materias = [m['nombre'] for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
         def_reg = [x for x in mat.get('req_regulares', []) if x in opciones_materias]
         def_apr = [x for x in mat.get('req_aprobadas', []) if x in opciones_materias]
         nuevas_reg = st.multiselect("Para cursar necesito REGULAR:", opciones_materias, default=def_reg)
         nuevas_apr = st.multiselect("Para cursar necesito APROBADA:", opciones_materias, default=def_apr)
         
-        st.divider()
-        st.caption("📖 TEMARIO")
+        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #7498b6;'>📖 Temario</div>", unsafe_allow_html=True)
         nombre_mat_actual = mat['nombre']
         temario_actual = st.session_state.get('temarios', {}).get(nombre_mat_actual, [])
         texto_temario_default = "\n".join([t['tema'] for t in temario_actual])
@@ -391,7 +386,6 @@ def dialog_detalle_materia(mat_id):
                 mat['intentos'] = nuevos_intentos
                 mat['horarios_clase'] = nuevos_horarios
                 
-                # Guardar el temario
                 temas_list = [t.strip() for t in texto_temario_nuevo.split('\n') if t.strip()]
                 temario_guardar = []
                 for t_nombre in temas_list:
@@ -415,9 +409,9 @@ def dialog_detalle_materia(mat_id):
         st.markdown(f"### {mat['nombre']}")
         cuatri = mat.get('cuatrimestre', 'No definido')
         
-        info_str = f"**Año:** {mat['año']} | **Cuatrimestre:** {cuatri} | **Estado:** {mat['estado']}"
+        info_str = f"**Año:** {mat['año']} &nbsp;|&nbsp; **Cuatrimestre:** {cuatri} &nbsp;|&nbsp; **Estado:** {mat['estado']}"
         if mat['estado'] == "Aprobada/Promocionada" and mat.get('nota'):
-            info_str += f" | **Nota:** {mat['nota']}"
+            info_str += f" &nbsp;|&nbsp; **Nota:** {mat['nota']}"
         st.markdown(info_str)
         
         intentos_guardados = mat.get('intentos', [])
@@ -429,16 +423,17 @@ def dialog_detalle_materia(mat_id):
         if mat['estado'] == "Cursando" and horarios:
             for hc in horarios:
                 rango = f"{hc['inicio']} a {hc['fin']}" if hc.get('fin') else hc['inicio']
-                st.caption(f"**{hc['dia']}:** {rango}")
+                st.markdown(f"<p style='margin-bottom: 2px; color:#94b8d7;'><b>{hc['dia']}:</b> {rango}</p>", unsafe_allow_html=True)
             
-        st.divider()
+        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+        
         def is_met(m_name, req_type):
             target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
             if not target: return False
             if req_type == 'reg': return target['estado'] in ["Regular", "Aprobada/Promocionada"]
             return target['estado'] == "Aprobada/Promocionada"
 
-        st.markdown("#### Correlatividades")
+        st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color:#7498b6;'>Correlatividades</div>", unsafe_allow_html=True)
         if not mat.get('req_regulares') and not mat.get('req_aprobadas'):
             st.caption("No tiene correlatividades previas.")
             
@@ -458,12 +453,12 @@ def dialog_detalle_materia(mat_id):
         destraba_apr = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_aprobadas', [])]
         
         if destraba_reg or destraba_apr:
-            st.divider()
-            st.markdown("#### Destraba")
+            st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+            st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color:#7498b6;'>Destraba</div>", unsafe_allow_html=True)
             for d in destraba_reg: st.markdown(f"<div style='font-size: 13px; color: #94b8d7;'>- {d} (Para cursar)</div>", unsafe_allow_html=True)
             for d in destraba_apr: st.markdown(f"<div style='font-size: 13px; color: #94b8d7;'>- {d} (Para rendir/cursar)</div>", unsafe_allow_html=True)
 
-        st.divider()
+        st.write("<br>", unsafe_allow_html=True)
         c_del, c_edit = st.columns(2)
         if c_del.button("Eliminar", type="secondary", use_container_width=True):
             st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
@@ -668,6 +663,19 @@ col_menu, col_contenido = st.columns([1, 4], gap="large")
 with col_menu:
     st.markdown("### Navegación")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios"], label_visibility="collapsed")
+    
+    # --- NUEVA FUNCIÓN: PROGRESO DIARIO ---
+    st.markdown("<br><hr class='custom-hr'><br>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 13px; color: #7498b6; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px;'>Progreso Diario</div>", unsafe_allow_html=True)
+    
+    hoy_str = date.today().strftime("%d/%m/%Y")
+    mins_hoy = sum([h['TIEMPO (min)'] for h in st.session_state['historial'] if h['FECHA'] == hoy_str])
+    meta_diaria = 120 # Meta de 2 horas (editable a futuro si querés)
+    progreso = min(mins_hoy / meta_diaria, 1.0)
+    
+    st.markdown(f"<div style='font-size: 14px; color: #f8fafc; font-weight: bold; margin-bottom: 5px;'>Estudiado: {mins_hoy} min</div>", unsafe_allow_html=True)
+    st.progress(progreso)
+    st.caption(f"Meta: {meta_diaria} min")
 
 with col_contenido:
     if menu_opcion == "Carrera":
@@ -938,7 +946,16 @@ with col_contenido:
                         if guardar_datos(): st.rerun()
 
     elif menu_opcion == "Página Principal":
-        tabs = st.tabs(["Cronómetro", "Temario", "Analítica", "Metas", "Historial"])
+        
+        # --- ALINEACIÓN BOTÓN DE RACHA (FLOTANTE SOBRE LAS PESTAÑAS) ---
+        c_tabs, c_racha = st.columns([5, 1])
+        with c_racha:
+            st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
+            if st.button(f"🔥 Racha: {racha_actual} días", help="Ver detalles", use_container_width=True):
+                st.session_state['show_racha_modal'] = True
+        
+        with c_tabs:
+            tabs = st.tabs(["Cronómetro", "Temario", "Analítica", "Metas", "Historial"])
 
         def render_meta_card(meta, original_idx, is_pasada, hoy, prefijo_key):
             try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
@@ -1070,7 +1087,7 @@ with col_contenido:
                         st.session_state['timer']['pause_elapsed'] = 0.0
                         st.session_state['timer']['state'] = 'PAUSED'
                         st.rerun()
-                st.divider()
+                st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                 if st.button("Volver al Cronómetro", use_container_width=True):
                     st.session_state['timer']['state'] = 'RUNNING'
                     st.session_state['timer']['start'] = time.time()
@@ -1112,14 +1129,14 @@ with col_contenido:
                     with st.container(border=True):
                         st.caption("MATERIA")
                         materia_sel = st.radio("MATERIA", nombres_materias, horizontal=True, label_visibility="collapsed")
-                        st.divider()
+                        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                         
                         st.caption("VINCULAR OBJETIVO")
                         metas_filtradas = [m for m in st.session_state['metas'] if m['materia'] == materia_sel]
                         opciones_meta = {"-- Sin vincular --": None}
                         for m in metas_filtradas: opciones_meta[m['nombre']] = m['id']
                         meta_sel = st.selectbox("VINCULAR OBJETIVO", list(opciones_meta.keys()), label_visibility="collapsed")
-                        st.divider()
+                        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                         
                         st.caption("MÉTODO")
                         metodo_sel = st.radio("MÉTODO", st.session_state['metodos'], horizontal=True, label_visibility="collapsed")
@@ -1128,7 +1145,7 @@ with col_contenido:
                         temas_disponibles = st.session_state.get('temarios', {}).get(materia_sel, [])
                         opciones_temas = ["-- Repaso general / Ninguno --"] + [t['tema'] for t in temas_disponibles]
                         
-                        st.divider()
+                        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                         st.caption("EVALUAR TEMA (Curva del Olvido)")
                         tema_sel = st.selectbox("¿Qué tema estudiaste hoy?", opciones_temas)
                         
@@ -1158,12 +1175,10 @@ with col_contenido:
                                     
                         # Aplicar la curva al guardar
                         if tema_sel != "-- Repaso general / Ninguno --":
-                            # Buscamos la fecha del próximo examen (Meta) para "Modo Pánico"
                             metas_materia = [m for m in st.session_state['metas'] if m['materia'] == materia_sel and date.fromisoformat(m['fecha_examen']) >= date.today()]
                             fecha_prox_examen = None
                             if metas_materia:
                                 metas_materia.sort(key=lambda x: date.fromisoformat(x['fecha_examen']))
-                                # Si la meta no tiene temas específicos, o si los tiene y nuestro tema está adentro
                                 if not metas_materia[0].get('temas_examen') or tema_sel in metas_materia[0]['temas_examen']:
                                     fecha_prox_examen = metas_materia[0]['fecha_examen']
                                     
@@ -1183,7 +1198,7 @@ with col_contenido:
                             st.rerun()
 
             if st.session_state['timer']['state'] == 'IDLE':
-                st.divider()
+                st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                 st.markdown("### Mi Horario de Cursado")
                 horarios_completos = []
                 for m in st.session_state['plan_carrera']:
@@ -1282,7 +1297,6 @@ with col_contenido:
                 mat_sel_temario = st.selectbox("Seleccionar Materia", materias_con_temario, label_visibility="collapsed")
                 temas = st.session_state['temarios'][mat_sel_temario]
                 
-                # Botón para filtrar solo los temas del próximo examen
                 solo_examen = st.toggle("Mostrar solo temas del próximo examen")
                 
                 if solo_examen:
@@ -1328,17 +1342,16 @@ with col_contenido:
 
         with tabs[3]:
             materias_con_metas = list(set([m['materia'] for m in st.session_state['metas']]))
-            c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
-            with c_filt1: st.markdown("<div style='margin-top: 30px; color:#7498b6;'><b>Filtros</b></div>", unsafe_allow_html=True)
+            c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2.5, 2.5, 2])
+            with c_filt1: st.markdown("<div style='padding-top: 8px; color:#7498b6; font-weight:bold;'>Filtros</div>", unsafe_allow_html=True)
             f_mat_metas = c_filt2.selectbox("Materias", ["Todas las materias"] + materias_con_metas, key="filtro_materias_metas", label_visibility="collapsed")
             f_est_metas = c_filt3.selectbox("Estado", ["Todas", "Actuales", "Pasadas"], index=1, key="filtro_estado_metas", label_visibility="collapsed")
             
             with c_btn3:
-                st.write("<br>", unsafe_allow_html=True)
                 if st.button("Nueva Meta", type="primary", use_container_width=True):
                     dialog_nueva_meta()
                     
-            st.divider()
+            st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                     
             if not st.session_state['metas']:
                 st.info("No tenés metas creadas. Tocá 'Nueva Meta' para armar tu plan de examen.")
@@ -1369,9 +1382,9 @@ with col_contenido:
                                 render_meta_card(meta, original_idx, is_pasada, hoy, "tab2")
 
         with tabs[4]:
-            c_f1, c_f2, c_f3, c_f4, c_space, c_btn = st.columns([1.5, 3, 3, 3, 0.5, 3])
+            c_f1, c_f2, c_f3, c_f4, c_space, c_btn = st.columns([1, 2.5, 2.5, 2.5, 0.5, 2])
             with c_f1: 
-                st.markdown("<div style='margin-top: 10px; color:#94b8d7; font-weight:800; font-size:14px;'>Filtros</div>", unsafe_allow_html=True)
+                st.markdown("<div style='padding-top: 8px; color:#7498b6; font-weight:bold;'>Filtros</div>", unsafe_allow_html=True)
                 
             nombres_materias = list(set([h['MATERIA'] for h in st.session_state['historial']]))
             nombres_metodos = list(set([h['MÉTODO'] for h in st.session_state['historial']]))
@@ -1385,10 +1398,10 @@ with col_contenido:
                     dialog_agregar_sesion()
                     
             if not st.session_state['historial']:
-                st.write("<br><br>", unsafe_allow_html=True)
+                st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                 st.info("Tu historial está vacío.")
             else:
-                st.write("<br>", unsafe_allow_html=True)
+                st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                 df_hist_view = pd.DataFrame(st.session_state['historial']).iloc[::-1]
                 
                 if f_mat_hist != "Todas las materias": 

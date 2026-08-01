@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 
 # --- IMPORTACIÓN DE MÓDULOS PROPIOS ---
 from db import cargar_datos_sheet, guardar_datos
-from utils import parse_float_nota, calcular_datos_racha
+from utils import parse_float_nota, calcular_datos_racha, calcular_proximo_repaso
 from ui import cargar_css
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
@@ -221,21 +221,17 @@ def renderizar_analitica():
                 )
                 st.plotly_chart(fig_bars, use_container_width=True, config={'displayModeBar': False})
                 
-    # --- GRÁFICO DE RADAR ---
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>DESEMPEÑO POR AÑO (PROMEDIOS)</div>", unsafe_allow_html=True)
     notas_por_anio = {1: [], 2: [], 3: [], 4: [], 5: [], 6: []}
-    
     for mat in st.session_state['plan_carrera']:
         anio = int(mat['año'])
         notas_mat = []
         nf = parse_float_nota(mat.get('nota', ''))
         if nf is not None: notas_mat.append(nf)
-            
         for meta in st.session_state['metas']:
             if meta['materia'] == mat['nombre'] and meta.get('nota'):
                 nm = parse_float_nota(meta['nota'])
                 if nm is not None: notas_mat.append(nm)
-                    
         if notas_mat:
             promedio_mat = sum(notas_mat) / len(notas_mat)
             if anio in notas_por_anio: notas_por_anio[anio].append(promedio_mat)
@@ -248,50 +244,15 @@ def renderizar_analitica():
             data_radar.append({'Año': f"Año {a}", 'Promedio': 0})
             
     df_radar = pd.DataFrame(data_radar)
-    
     fig = px.line_polar(df_radar, r='Promedio', theta='Año', line_close=True, range_r=[0,10])
     fig.update_traces(fill='toself', line_color='#10b981')
     fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)',
-        plot_bgcolor='rgba(0,0,0,0)',
-        font_color='#7498b6',
-        margin=dict(l=20, r=20, t=20, b=20),
-        height=300,
-        polar=dict(
-            radialaxis=dict(visible=True, range=[0, 10], color='#7498b6', gridcolor='#153f59'),
-            angularaxis=dict(color='#f8fafc', gridcolor='#153f59')
-        )
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#7498b6',
+        margin=dict(l=20, r=20, t=20, b=20), height=300,
+        polar=dict(radialaxis=dict(visible=True, range=[0, 10], color='#7498b6', gridcolor='#153f59'),
+                   angularaxis=dict(color='#f8fafc', gridcolor='#153f59'))
     )
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-
-    # --- MAPA DE CALOR (CONSTANCIA) ---
-    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>CONSTANCIA (MAPA DE CALOR)</div>", unsafe_allow_html=True)
-    if not df_hist.empty:
-        df_cal = df_hist[['FECHA_OBJ', 'TIEMPO (min)']].copy()
-        df_cal['Semana'] = df_cal['FECHA_OBJ'].dt.isocalendar().week.astype(str)
-        df_cal['Día'] = df_cal['FECHA_OBJ'].dt.dayofweek
-        mapa_datos = df_cal.groupby(['Semana', 'Día'])['TIEMPO (min)'].sum().reset_index()
-        
-        matriz_calor = mapa_datos.pivot(index='Día', columns='Semana', values='TIEMPO (min)').fillna(0)
-        matriz_calor = matriz_calor.reindex(range(7), fill_value=0)
-        
-        fig_heat = px.imshow(
-            matriz_calor, 
-            labels=dict(x="Semanas del Año", y="Día", color="Minutos"),
-            y=['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
-            x=matriz_calor.columns,
-            color_continuous_scale=["#021d34", "#10b981"]
-        )
-        
-        fig_heat.update_traces(xgap=3, ygap=3) 
-        fig_heat.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', 
-            font_color='#7498b6', margin=dict(l=0, r=0, t=20, b=0),
-            height=220, xaxis=dict(type='category', title="")
-        )
-        st.plotly_chart(fig_heat, use_container_width=True, config={'displayModeBar': False})
-    else:
-        st.info("Aún no hay suficientes datos para armar tu mapa de calor.")
 
     st.markdown("<div class='analitica-title' style='margin-top: 15px;'>HISTÓRICO</div>", unsafe_allow_html=True)
     ch1, ch2, ch3, ch4 = st.columns(4)
@@ -313,17 +274,10 @@ def renderizar_analitica():
             h_tot = int(total_minutos // 60)
             st.markdown(f"<div class='historico-val'>{h_tot}h</div></div>", unsafe_allow_html=True)
 
-    # --- EXPORTAR DATA ---
     st.write("<br>", unsafe_allow_html=True)
     if not df_hist.empty:
         csv = df_hist.drop(columns=['FECHA_OBJ'], errors='ignore').to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Exportar Historial (CSV)",
-            data=csv,
-            file_name='historial_estudio.csv',
-            mime='text/csv',
-            use_container_width=True
-        )
+        st.download_button(label="📥 Exportar Historial (CSV)", data=csv, file_name='historial_estudio.csv', mime='text/csv', use_container_width=True)
 
 @st.dialog("Detalle de la Materia")
 def dialog_detalle_materia(mat_id):
@@ -975,7 +929,8 @@ with col_contenido:
                         if guardar_datos(): st.rerun()
 
     elif menu_opcion == "Página Principal":
-        tabs = st.tabs(["Cronómetro", "Analítica", "Metas", "Historial"])
+        # --- ACÁ AGREGAMOS LA NUEVA PESTAÑA "TEMARIO" ---
+        tabs = st.tabs(["Cronómetro", "Temario", "Analítica", "Metas", "Historial"])
 
         def render_meta_card(meta, original_idx, is_pasada, hoy, prefijo_key):
             try: fecha_str = date.fromisoformat(meta['fecha_examen']).strftime('%d/%m/%Y')
@@ -1103,6 +1058,8 @@ with col_contenido:
                     if col.button(motivo, use_container_width=True):
                         st.session_state['timer']['interruption_reason'] = motivo
                         st.session_state['timer']['interruptions'].append(motivo)
+                        st.session_state['timer']['pause_start'] = time.time()
+                        st.session_state['timer']['pause_elapsed'] = 0.0
                         st.session_state['timer']['state'] = 'PAUSED'
                         st.rerun()
                 st.divider()
@@ -1117,7 +1074,6 @@ with col_contenido:
                 if motivo:
                     st.markdown(f"<p style='text-align: center; color: #7498b6; font-size: 1.2rem; margin-top: 0;'>Motivo: {motivo}</p>", unsafe_allow_html=True)
                 
-                # Tiempo congelado en pantalla
                 estudio_congelado = st.session_state['timer']['elapsed']
                 hrs = int(estudio_congelado // 3600)
                 mins = int((estudio_congelado % 3600) // 60)
@@ -1160,6 +1116,19 @@ with col_contenido:
                         st.caption("MÉTODO")
                         metodo_sel = st.radio("MÉTODO", st.session_state['metodos'], horizontal=True, label_visibility="collapsed")
                         
+                        # --- ACÁ ESTÁ LA LÓGICA DE REPASO AL GUARDAR LA SESIÓN ---
+                        temas_disponibles = st.session_state.get('temarios', {}).get(materia_sel, [])
+                        opciones_temas = ["-- Repaso general / Ninguno --"] + [t['tema'] for t in temas_disponibles]
+                        
+                        st.divider()
+                        st.caption("EVALUAR TEMA (Curva del Olvido)")
+                        tema_sel = st.selectbox("¿Qué tema estudiaste hoy?", opciones_temas)
+                        
+                        confianza = 3
+                        if tema_sel != "-- Repaso general / Ninguno --":
+                            st.write("¿Qué tan bien lo entendiste?")
+                            confianza = st.slider("1 = Me costó un montón, 5 = Lo doy en un final oral", 1, 5, 3)
+                        
                     st.write("")
                     if st.button("Guardar Sesión", type="primary", use_container_width=True):
                         minutos_estudio = round(st.session_state['timer']['elapsed'] / 60)
@@ -1177,6 +1146,16 @@ with col_contenido:
                             for m in st.session_state['metas']:
                                 if m['id'] == id_meta:
                                     m['horas_acumuladas'] += (minutos_estudio / 60)
+                                    break
+                                    
+                        # Aplicar la curva de aprendizaje al tema
+                        if tema_sel != "-- Repaso general / Ninguno --":
+                            for t in st.session_state['temarios'][materia_sel]:
+                                if t['tema'] == tema_sel:
+                                    nivel_actual = t.get('nivel', 0)
+                                    nuevo_nivel, prox_fecha = calcular_proximo_repaso(confianza, nivel_actual)
+                                    t['nivel'] = nuevo_nivel
+                                    t['proximo_repaso'] = prox_fecha
                                     break
                         
                         if guardar_datos():
@@ -1275,9 +1254,52 @@ with col_contenido:
                     st.markdown(html_tabla, unsafe_allow_html=True)
 
         with tabs[1]:
-            renderizar_analitica()
+            st.markdown("### Mi Temario y Repasos")
+            st.caption("Elegí una materia para ver qué temas te tocan repasar hoy según la curva del olvido.")
+            
+            materias_con_temario = [m for m, t in st.session_state.get('temarios', {}).items() if len(t) > 0]
+            
+            if not materias_con_temario:
+                st.info("No tenés materias con temario cargado. Andá a 'Plan de Estudios', editá una materia y pegá la lista de temas en 'Ver / Editar Temario'.")
+            else:
+                mat_sel_temario = st.selectbox("Seleccionar Materia", materias_con_temario, label_visibility="collapsed")
+                temas = st.session_state['temarios'][mat_sel_temario]
+                
+                hoy_str = date.today().isoformat()
+                vencidos = []
+                al_dia = []
+                nuevos = []
+                
+                for t in temas:
+                    if not t.get('proximo_repaso'): nuevos.append(t)
+                    elif t['proximo_repaso'] <= hoy_str: vencidos.append(t)
+                    else: al_dia.append(t)
+                
+                if vencidos:
+                    st.markdown("<h4 style='color: #ef4444; margin-top: 15px;'>🔴 Para Repasar Hoy (Urgente)</h4>", unsafe_allow_html=True)
+                    for t in vencidos:
+                        try:
+                            fecha_rep = date.fromisoformat(t['proximo_repaso']).strftime('%d/%m')
+                        except: fecha_rep = "Hoy"
+                        st.markdown(f"<div style='background-color: #450a0a; border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 5px; border-radius: 4px;'><b>{t['tema']}</b> <span style='float:right; font-size: 12px; opacity:0.8;'>Venció: {fecha_rep} | Nivel {t.get('nivel', 0)}</span></div>", unsafe_allow_html=True)
+                
+                if nuevos:
+                    st.markdown("<h4 style='color: #7498b6; margin-top: 15px;'>⚪ Nuevos (Aún no estudiados)</h4>", unsafe_allow_html=True)
+                    for t in nuevos:
+                        st.markdown(f"<div style='background-color: #021d34; border-left: 4px solid #7498b6; padding: 10px; margin-bottom: 5px; border-radius: 4px;'>{t['tema']}</div>", unsafe_allow_html=True)
+                        
+                if al_dia:
+                    st.markdown("<h4 style='color: #10b981; margin-top: 15px;'>🟢 Al Día (Ya estudiados)</h4>", unsafe_allow_html=True)
+                    for t in al_dia:
+                        try:
+                            fecha_rep = date.fromisoformat(t['proximo_repaso']).strftime('%d/%m')
+                        except: fecha_rep = ""
+                        st.markdown(f"<div style='background-color: #064e3b; border-left: 4px solid #10b981; padding: 10px; margin-bottom: 5px; border-radius: 4px;'><b>{t['tema']}</b> <span style='float:right; font-size: 12px; opacity:0.8;'>Próx. repaso: {fecha_rep} | Nivel {t.get('nivel', 0)}</span></div>", unsafe_allow_html=True)
 
         with tabs[2]:
+            renderizar_analitica()
+
+        with tabs[3]:
             materias_con_metas = list(set([m['materia'] for m in st.session_state['metas']]))
             c_filt1, c_filt2, c_filt3, c_btn3 = st.columns([1, 2, 2, 2])
             with c_filt1: st.markdown("<div style='margin-top: 30px; color:#7498b6;'><b>Filtros</b></div>", unsafe_allow_html=True)
@@ -1319,7 +1341,7 @@ with col_contenido:
                             with st.container(border=True):
                                 render_meta_card(meta, original_idx, is_pasada, hoy, "tab2")
 
-        with tabs[3]:
+        with tabs[4]:
             c_f1, c_f2, c_f3, c_f4, c_space, c_btn = st.columns([1.5, 3, 3, 3, 0.5, 3])
             with c_f1: 
                 st.markdown("<div style='margin-top: 10px; color:#94b8d7; font-weight:800; font-size:14px;'>Filtros</div>", unsafe_allow_html=True)

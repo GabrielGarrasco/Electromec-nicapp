@@ -221,6 +221,8 @@ def renderizar_analitica():
     notas_por_anio = {1: [], 2: [], 3: [], 4: [], 5: [], 6: []}
     
     for mat in st.session_state['plan_carrera']:
+        if not str(mat['año']).isdigit():
+            continue
         anio = int(mat['año'])
         notas_mat = []
         nf = parse_float_nota(mat.get('nota', ''))
@@ -288,8 +290,9 @@ def dialog_detalle_materia(mat_id):
         nuevo_nombre = st.text_input("Nombre", value=mat['nombre'])
         
         col1, col2, col3 = st.columns(3)
-        opciones_anio = [1, 2, 3, 4, 5, 6]
-        idx_anio = opciones_anio.index(int(mat['año'])) if int(mat['año']) in opciones_anio else 0
+        opciones_anio = [1, 2, 3, 4, 5, 6, "Extracurricular"]
+        val_anio_actual = int(mat['año']) if str(mat['año']).isdigit() else mat['año']
+        idx_anio = opciones_anio.index(val_anio_actual) if val_anio_actual in opciones_anio else 0
         nuevo_anio = col1.selectbox("Año", opciones_anio, index=idx_anio)
         
         opciones_cuatri = ["1er Cuatrimestre", "2do Cuatrimestre", "Anual"]
@@ -472,7 +475,7 @@ def dialog_detalle_materia(mat_id):
 def dialog_nueva_materia_plan():
     nombre = st.text_input("Nombre de la materia")
     col1, col2, col3 = st.columns(3)
-    anio = col1.selectbox("Año", [1, 2, 3, 4, 5, 6])
+    anio = col1.selectbox("Año", [1, 2, 3, 4, 5, 6, "Extracurricular"])
     cuatri = col2.selectbox("Cuatrimestre", ["1er Cuatrimestre", "2do Cuatrimestre", "Anual"])
     estado = col3.selectbox("Estado", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
     
@@ -665,21 +668,8 @@ with col_menu:
     st.markdown("### Navegación")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios"], label_visibility="collapsed")
     
-    # --- NUEVA FUNCIÓN: PROGRESO DIARIO (MÁS COMPACTO Y ARRIBA) ---
-    st.markdown("<hr class='custom-hr' style='margin: 10px 0;'>", unsafe_allow_html=True)
-    st.markdown("<div style='font-size: 11px; color: #7498b6; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;'>Progreso Diario</div>", unsafe_allow_html=True)
-    
-    hoy_str = date.today().strftime("%d/%m/%Y")
-    mins_hoy = sum([h['TIEMPO (min)'] for h in st.session_state['historial'] if h['FECHA'] == hoy_str])
-    meta_diaria = 120 # Meta de 2 horas
-    progreso = min(mins_hoy / meta_diaria, 1.0)
-    
-    st.markdown(f"<div style='font-size: 13px; color: #f8fafc; font-weight: bold; margin-bottom: 5px;'>Estudiado: {mins_hoy} min</div>", unsafe_allow_html=True)
-    st.progress(progreso)
-    st.caption(f"Meta: {meta_diaria} min")
-    
     # --- FRASES MOTIVACIONALES (FONDO DEL MENÚ) ---
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
     frases = [
         '"El éxito es la suma de pequeños esfuerzos repetidos día tras día."<br>- Robert Collier',
         '"No te detengas hasta que te sientas orgulloso."<br>- Anónimo',
@@ -706,6 +696,19 @@ with col_menu:
     ]
     frase_diaria = random.choice(frases)
     st.markdown(f"<div style='background-color: #02152b; padding: 10px; border-radius: 8px; border: 1px solid #153f59; font-size: 11px; color: #94b8d7; font-style: italic; text-align: center; line-height: 1.4;'>{frase_diaria}</div>", unsafe_allow_html=True)
+    
+    # --- NUEVA FUNCIÓN: PROGRESO DIARIO (MÁS COMPACTO Y ARRIBA) ---
+    st.markdown("<hr class='custom-hr' style='margin: 10px 0;'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 11px; color: #7498b6; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;'>Progreso Diario</div>", unsafe_allow_html=True)
+    
+    hoy_str = date.today().strftime("%d/%m/%Y")
+    mins_hoy = sum([h['TIEMPO (min)'] for h in st.session_state['historial'] if h['FECHA'] == hoy_str])
+    meta_diaria = 120 # Meta de 2 horas
+    progreso = min(mins_hoy / meta_diaria, 1.0)
+    
+    st.markdown(f"<div style='font-size: 13px; color: #f8fafc; font-weight: bold; margin-bottom: 5px;'>Estudiado: {mins_hoy} min</div>", unsafe_allow_html=True)
+    st.progress(progreso)
+    st.caption(f"Meta: {meta_diaria} min")
 
 with col_contenido:
     if menu_opcion == "Carrera":
@@ -853,10 +856,10 @@ with col_contenido:
             st.info("Todavía no agregaste ninguna materia a tu plan de estudios.")
         else:
             df_plan = pd.DataFrame(st.session_state['plan_carrera'])
-            anios = sorted(df_plan['año'].unique())
+            anios = sorted(df_plan['año'].unique().tolist(), key=lambda x: int(x) if str(x).isdigit() else 999)
             
             for anio in anios:
-                st.markdown(f"### Año {anio}")
+                st.markdown(f"### Año {anio}" if str(anio).isdigit() else f"### {anio}")
                 materias_anio = df_plan[df_plan['año'] == anio]
                 cols = st.columns(4)
                 for i, row in materias_anio.reset_index().iterrows():

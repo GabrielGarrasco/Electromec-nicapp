@@ -13,7 +13,7 @@ from utils import parse_float_nota, calcular_datos_racha, calcular_proximo_repas
 from ui import cargar_css
 
 # --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Study Meter", layout="wide")
+st.set_page_config(page_title="Electromecánica", page_icon="⚙️", layout="wide")
 cargar_css()
 
 # --- INICIALIZACIÓN DE VARIABLES ---

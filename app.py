@@ -1054,24 +1054,23 @@ with col_contenido:
                         dias_restantes += 1
             
             etiqueta_estado = f"<span style='color: #10b981; font-weight:800; float:right;'>{dias_restantes} días</span>" if not is_pasada else "<span style='color: #ef4444; float:right;'>Examen pasado</span>"
-            # Reemplazo de la cabecera de la tarjeta:
-        c_title, c_dots = st.columns([6, 1])
-        with c_title:
-            st.markdown(f"<div style='text-align:center; font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 10px;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
-        with c_dots:
-            # Estilo custom para que el botón parezca un ícono y no rompa el layout
-            st.markdown(f"""
-            <style>
-                div[data-testid="stButton"] button[key="btn_edit_meta_{prefijo_key}_{original_idx}"] {{
-                    background: transparent; border: none; padding: 0; color: #7498b6; font-size: 18px; margin-top: -5px; box-shadow: none;
-                }}
-                div[data-testid="stButton"] button[key="btn_edit_meta_{prefijo_key}_{original_idx}"]:hover {{
-                    color: #f8fafc; background: transparent;
-                }}
-            </style>
-            """, unsafe_allow_html=True)
-            if st.button("⋮", key=f"btn_edit_meta_{prefijo_key}_{original_idx}", help="Editar o eliminar meta"):
-                dialog_editar_meta(original_idx)
+            
+            c_title, c_dots = st.columns([6, 1])
+            with c_title:
+                st.markdown(f"<div style='text-align:center; font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 10px;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
+            with c_dots:
+                st.markdown(f"""
+                <style>
+                    div[data-testid="stButton"] button[key="btn_edit_meta_{prefijo_key}_{original_idx}"] {{
+                        background: transparent; border: none; padding: 0; color: #7498b6; font-size: 18px; margin-top: -5px; box-shadow: none;
+                    }}
+                    div[data-testid="stButton"] button[key="btn_edit_meta_{prefijo_key}_{original_idx}"]:hover {{
+                        color: #f8fafc; background: transparent;
+                    }}
+                </style>
+                """, unsafe_allow_html=True)
+                if st.button("⋮", key=f"btn_edit_meta_{prefijo_key}_{original_idx}", help="Editar o eliminar meta"):
+                    dialog_editar_meta(original_idx)
             
             progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
             pct = int(progreso * 100)

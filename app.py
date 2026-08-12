@@ -570,6 +570,52 @@ def dialog_nueva_meta():
             st.session_state['metas'].append(nueva)
             if guardar_datos(): st.rerun()
 
+@st.dialog("Editar Meta de Examen")
+def dialog_editar_meta(meta_idx):
+    meta = st.session_state['metas'][meta_idx]
+    nombres_materias = [m["nombre"] for m in st.session_state['materias']]
+    
+    if not nombres_materias:
+        st.warning("No hay materias activas.")
+        return
+
+    nombre = st.text_input("NOMBRE (EJ: PARCIAL 1)", value=meta.get('nombre', ''))
+    
+    idx_mat = nombres_materias.index(meta['materia']) if meta.get('materia') in nombres_materias else 0
+    materia = st.selectbox("MATERIA", nombres_materias, index=idx_mat)
+    
+    col1, col2 = st.columns(2)
+    meta_horas = col1.number_input("META (HORAS)", min_value=1, step=1, value=int(meta.get('meta_horas', 20)))
+    
+    try: default_date = date.fromisoformat(meta.get('fecha_examen', date.today().isoformat()))
+    except: default_date = date.today()
+    fecha_examen = col2.date_input("FECHA EXAMEN", value=default_date)
+    
+    dias_sel = st.multiselect("DÍAS DE ESTUDIO", ["L", "M", "X", "J", "V", "S", "D"], default=meta.get('dias_estudio', ["L", "M", "X", "J", "V"]))
+    
+    st.divider()
+    temas_materia = st.session_state.get('temarios', {}).get(materia, [])
+    opciones_temas = [t['tema'] for t in temas_materia]
+    temas_actuales = [t for t in meta.get('temas_examen', []) if t in opciones_temas]
+    temas_examen = st.multiselect("Temas que entran (Opcional)", opciones_temas, default=temas_actuales)
+    
+    st.write("<br>", unsafe_allow_html=True)
+    c1, c2, c3 = st.columns(3)
+    if c1.button("🗑️ Eliminar", use_container_width=True):
+        st.session_state['metas'].pop(meta_idx)
+        if guardar_datos(): st.rerun()
+    if c2.button("Cancelar", use_container_width=True): 
+        st.rerun()
+    if c3.button("Guardar", type="primary", use_container_width=True):
+        if nombre:
+            meta['nombre'] = nombre
+            meta['materia'] = materia
+            meta['meta_horas'] = meta_horas
+            meta['fecha_examen'] = fecha_examen.isoformat()
+            meta['dias_estudio'] = dias_sel
+            meta['temas_examen'] = temas_examen
+            if guardar_datos(): st.rerun()
+
 @st.dialog("Asignar Nota Final")
 def dialog_asignar_nota(meta_idx):
     meta_actual = st.session_state['metas'][meta_idx]
@@ -1008,7 +1054,24 @@ with col_contenido:
                         dias_restantes += 1
             
             etiqueta_estado = f"<span style='color: #10b981; font-weight:800; float:right;'>{dias_restantes} días</span>" if not is_pasada else "<span style='color: #ef4444; float:right;'>Examen pasado</span>"
+            # Reemplazo de la cabecera de la tarjeta:
+        c_title, c_dots = st.columns([6, 1])
+        with c_title:
             st.markdown(f"<div style='text-align:center; font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 10px;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
+        with c_dots:
+            # Estilo custom para que el botón parezca un ícono y no rompa el layout
+            st.markdown(f"""
+            <style>
+                div[data-testid="stButton"] button[key="btn_edit_meta_{prefijo_key}_{original_idx}"] {{
+                    background: transparent; border: none; padding: 0; color: #7498b6; font-size: 18px; margin-top: -5px; box-shadow: none;
+                }}
+                div[data-testid="stButton"] button[key="btn_edit_meta_{prefijo_key}_{original_idx}"]:hover {{
+                    color: #f8fafc; background: transparent;
+                }}
+            </style>
+            """, unsafe_allow_html=True)
+            if st.button("⋮", key=f"btn_edit_meta_{prefijo_key}_{original_idx}", help="Editar o eliminar meta"):
+                dialog_editar_meta(original_idx)
             
             progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
             pct = int(progreso * 100)

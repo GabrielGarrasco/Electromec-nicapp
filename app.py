@@ -888,6 +888,41 @@ with col_contenido:
             if st.button("Histórico de Notas", use_container_width=True):
                 dialog_historico_notas()
 
+            st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+            st.markdown("### Calendario de Eventos")
+            eventos = []
+            for m in st.session_state['metas']:
+                if m.get('fecha_examen'):
+                    eventos.append({
+                        'fecha': m['fecha_examen'],
+                        'nombre': m['nombre'],
+                        'materia': m['materia']
+                    })
+            if not eventos:
+                st.info("No hay eventos próximos ni pasados.")
+            else:
+                eventos.sort(key=lambda x: x['fecha'])
+                html_cal = "<div style='background-color: #02152b; border-radius: 12px; padding: 15px; border: 1px solid #153f59;'>"
+                for ev in eventos:
+                    try:
+                        f_obj = date.fromisoformat(ev['fecha'])
+                        f_str = f_obj.strftime('%d/%m/%Y')
+                        is_past = f_obj < date.today()
+                        color_fecha = "#7498b6" if is_past else "#10b981"
+                        opacidad = "0.5" if is_past else "1.0"
+                    except:
+                        f_str = ev['fecha']
+                        color_fecha = "#10b981"
+                        opacidad = "1.0"
+                    
+                    color_mat_ev = next((mat_info.get('color', '#f8fafc') for mat_info in st.session_state.get('materias', []) if isinstance(mat_info, dict) and mat_info.get('nombre') == ev['materia']), "#f8fafc")
+                    html_cal += f"<div style='display: flex; margin-bottom: 8px; border-bottom: 1px solid #153f59; padding-bottom: 5px; opacity: {opacidad};'>"
+                    html_cal += f"<div style='width: 90px; color: {color_fecha}; font-weight: bold; font-size: 13px;'>{f_str}</div>"
+                    html_cal += f"<div style='flex: 1; color: #f8fafc; font-size: 13px;'><span style='font-weight: 600;'>{ev['nombre']}</span> <span style='color: {color_mat_ev}; font-size: 11px; margin-left: 5px;'>({ev['materia']})</span></div>"
+                    html_cal += "</div>"
+                html_cal += "</div>"
+                st.markdown(html_cal, unsafe_allow_html=True)
+
     elif menu_opcion == "Plan de Estudios":
         c_head1, c_head2 = st.columns([4, 1])
         with c_head1:
@@ -1057,7 +1092,7 @@ with col_contenido:
             
             c_title, c_dots = st.columns([6, 1])
             with c_title:
-                st.markdown(f"<div style='text-align:center; font-size: 14px; font-weight: 800; text-transform: uppercase; margin-bottom: 10px;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
+                pass # Eliminado "TU PLAN PARA HOY" a pedido
             with c_dots:
                 st.markdown(f"""
                 <style>
@@ -1075,12 +1110,15 @@ with col_contenido:
             progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
             pct = int(progreso * 100)
             
+            # Buscar el color de la materia
+            color_materia = next((m.get('color', '#7498b6') for m in st.session_state.get('materias', []) if isinstance(m, dict) and m.get('nombre') == meta['materia']), "#7498b6")
+            
             st.markdown(f"""
             <div style='display:flex; justify-content:space-between; align-items:center;'>
                 <h4 style='margin-bottom: 0px;'>{meta['nombre']}</h4>
                 <h4 style='margin-bottom: 0px;'>{pct}%</h4>
             </div>
-            <div style='color: #7498b6; font-size: 12px; font-weight: bold; margin-bottom: 10px;'>{meta['materia']} {etiqueta_estado}</div>
+            <div style='font-size: 12px; font-weight: bold; margin-bottom: 10px;'><span style='color: {color_materia};'>{meta['materia']}</span> {etiqueta_estado}</div>
             """, unsafe_allow_html=True)
             
             st.progress(progreso)
@@ -1123,7 +1161,6 @@ with col_contenido:
                         
                     if not metas_actuales:
                         with st.container(border=True):
-                            st.markdown("<div style='text-align:center; font-weight:bold; color:#7498b6;'>TU PLAN PARA HOY</div>", unsafe_allow_html=True)
                             st.info("No tenés metas próximas. ¡Todo al día!")
                     else:
                         idx, meta_priority = metas_actuales[0]

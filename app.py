@@ -6,6 +6,7 @@ from datetime import datetime, date
 import plotly.express as px
 import plotly.graph_objects as go
 import random
+import re
 
 # --- IMPORTACIÓN DE MÓDULOS PROPIOS ---
 from db import cargar_datos_sheet, guardar_datos
@@ -44,6 +45,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['metas'] = datos_generales.get('metas', [])
         st.session_state['plan_carrera'] = datos_generales.get('plan_carrera', [])
         st.session_state['horarios'] = datos_generales.get('horarios', [])
+        st.session_state['calendario_manual'] = datos_generales.get('calendario_manual', "")
         for m in st.session_state['metas']:
             if 'nota' not in m: m['nota'] = None
     else:
@@ -54,6 +56,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['metas'] = [] 
         st.session_state['plan_carrera'] = []
         st.session_state['horarios'] = []
+        st.session_state['calendario_manual'] = ""
         
     st.session_state['temarios'] = temarios_guardados if temarios_guardados else {}
     st.session_state['datos_cargados'] = True
@@ -890,35 +893,84 @@ with col_contenido:
 
             st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
             st.markdown("### Calendario de Eventos")
+            
+            with st.expander("Ver / Editar Eventos Manuales"):
+                st.info("Pegá acá las fechas de la facu. Usá un guion (-) para separar la fecha del evento. Ej: '15/12 al 20/12 - Inscripciones'. Las fechas pasadas se van a ocultar solas.")
+                texto_cal = st.text_area("Eventos manuales", value=st.session_state.get('calendario_manual', ''), height=120, label_visibility="collapsed")
+                if st.button("Guardar Eventos", type="primary", use_container_width=True):
+                    st.session_state['calendario_manual'] = texto_cal
+                    if guardar_datos(): st.rerun()
+
             eventos = []
+            hoy = date.today()
+            
+            # Automáticos
             for m in st.session_state['metas']:
                 if m.get('fecha_examen'):
-                    eventos.append({
-                        'fecha': m['fecha_examen'],
-                        'nombre': m['nombre'],
-                        'materia': m['materia']
-                    })
+                    try:
+                        f_obj = date.fromisoformat(m['fecha_examen'])
+                        if f_obj >= hoy:
+                            eventos.append({
+                                'fecha_obj': f_obj,
+                                'texto_izq': f_obj.strftime('%d/%m/%Y'),
+                                'texto_der': f"<span style='font-weight: 600;'>{m['nombre']}</span>",
+                                'materia': m['materia']
+                            })
+                    except: pass
+                    
+            # Manuales
+            manual_lines = [line.strip() for line in st.session_state.get('calendario_manual', '').split('\n') if line.strip()]
+            for line in manual_lines:
+                match_all = re.findall(r'(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?', line)
+                if not match_all:
+                    continue 
+                
+                d1, m1, y1 = match_all[0]
+                y1 = int(y1) if y1 else hoy.year
+                if y1 < 100: y1 += 2000
+                
+                d2, m2, y2 = match_all[-1]
+                y2 = int(y2) if y2 else hoy.year
+                if y2 < 100: y2 += 2000
+                
+                try:
+                    f_obj = date(y1, int(m1), int(d1))
+                    f_fin = date(y2, int(m2), int(d2))
+                    if f_fin < hoy:
+                        continue 
+                except:
+                    continue
+                    
+                partes = line.split('-', 1)
+                if len(partes) > 1:
+                    texto_izq = partes[0].strip()
+                    texto_der = f"<span style='font-weight: 600;'>{partes[1].strip()}</span>"
+                else:
+                    texto_izq = f"{d1}/{m1}/{y1}"
+                    texto_der = f"<span style='font-weight: 600;'>{line}</span>"
+                    
+                eventos.append({
+                    'fecha_obj': f_obj,
+                    'texto_izq': texto_izq,
+                    'texto_der': texto_der,
+                    'materia': None
+                })
+                
             if not eventos:
-                st.info("No hay eventos próximos ni pasados.")
+                st.info("No hay eventos próximos.")
             else:
-                eventos.sort(key=lambda x: x['fecha'])
+                eventos.sort(key=lambda x: x['fecha_obj'])
                 html_cal = "<div style='background-color: #02152b; border-radius: 12px; padding: 15px; border: 1px solid #153f59;'>"
                 for ev in eventos:
-                    try:
-                        f_obj = date.fromisoformat(ev['fecha'])
-                        f_str = f_obj.strftime('%d/%m/%Y')
-                        is_past = f_obj < date.today()
-                        color_fecha = "#7498b6" if is_past else "#10b981"
-                        opacidad = "0.5" if is_past else "1.0"
-                    except:
-                        f_str = ev['fecha']
-                        color_fecha = "#10b981"
-                        opacidad = "1.0"
-                    
-                    color_mat_ev = next((mat_info.get('color', '#f8fafc') for mat_info in st.session_state.get('materias', []) if isinstance(mat_info, dict) and mat_info.get('nombre') == ev['materia']), "#f8fafc")
-                    html_cal += f"<div style='display: flex; margin-bottom: 8px; border-bottom: 1px solid #153f59; padding-bottom: 5px; opacity: {opacidad};'>"
-                    html_cal += f"<div style='width: 90px; color: {color_fecha}; font-weight: bold; font-size: 13px;'>{f_str}</div>"
-                    html_cal += f"<div style='flex: 1; color: #f8fafc; font-size: 13px;'><span style='font-weight: 600;'>{ev['nombre']}</span> <span style='color: {color_mat_ev}; font-size: 11px; margin-left: 5px;'>({ev['materia']})</span></div>"
+                    color_mat_ev = "#f8fafc"
+                    mat_tag = ""
+                    if ev['materia']:
+                        color_mat_ev = next((mat_info.get('color', '#7498b6') for mat_info in st.session_state.get('materias', []) if isinstance(mat_info, dict) and mat_info.get('nombre') == ev['materia']), "#7498b6")
+                        mat_tag = f" <span style='color: {color_mat_ev}; font-size: 11px; margin-left: 5px;'>({ev['materia']})</span>"
+                        
+                    html_cal += f"<div style='display: flex; margin-bottom: 10px; border-bottom: 1px solid #153f59; padding-bottom: 8px; align-items: center;'>"
+                    html_cal += f"<div style='width: 140px; color: #10b981; font-weight: bold; font-size: 13px; flex-shrink: 0;'>{ev['texto_izq']}</div>"
+                    html_cal += f"<div style='flex: 1; color: #f8fafc; font-size: 14px;'>{ev['texto_der']}{mat_tag}</div>"
                     html_cal += "</div>"
                 html_cal += "</div>"
                 st.markdown(html_cal, unsafe_allow_html=True)
@@ -1092,7 +1144,7 @@ with col_contenido:
             
             c_title, c_dots = st.columns([6, 1])
             with c_title:
-                pass # Eliminado "TU PLAN PARA HOY" a pedido
+                pass 
             with c_dots:
                 st.markdown(f"""
                 <style>
@@ -1110,7 +1162,6 @@ with col_contenido:
             progreso = min(meta['horas_acumuladas'] / meta['meta_horas'], 1.0)
             pct = int(progreso * 100)
             
-            # Buscar el color de la materia
             color_materia = next((m.get('color', '#7498b6') for m in st.session_state.get('materias', []) if isinstance(m, dict) and m.get('nombre') == meta['materia']), "#7498b6")
             
             st.markdown(f"""

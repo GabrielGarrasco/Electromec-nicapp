@@ -1303,15 +1303,164 @@ with col_contenido:
         st.subheader("Logros Desbloqueados")
         logros_html = "<div style='display: flex; gap: 10px; flex-wrap: wrap;'>"
         
+        logros_ganados = 0
+        
+        # 1
+        if len(st.session_state['historial']) >= 1:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>El Bautismo</div>"
+            logros_ganados += 1
+            
+        # 2
+        if any(int(h.get('TIEMPO (min)', 0)) >= 180 for h in st.session_state['historial']):
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Máquina</div>"
+            logros_ganados += 1
+            
+        # 3
+        if any(h.get('EFIC.') == '100%' and int(h.get('TIEMPO (min)', 0)) >= 60 for h in st.session_state['historial']):
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Francotirador</div>"
+            logros_ganados += 1
+            
+        # 4
         if racha_actual >= 14:
-            logros_html += "<div style='border: 1px solid #10b981; color: #10b981; padding: 5px 15px; border-radius: 20px;'>Inmortal (Racha 14d)</div>"
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Inmortal</div>"
+            logros_ganados += 1
             
-        sesiones_largas = [h for h in st.session_state['historial'] if int(h['TIEMPO (min)']) >= 180]
-        if sesiones_largas:
-            logros_html += "<div style='border: 1px solid #eab308; color: #eab308; padding: 5px 15px; border-radius: 20px;'>Maquina (3h de corrido)</div>"
+        # 5
+        if racha_actual >= 30:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Leyenda</div>"
+            logros_ganados += 1
             
-        if not (racha_actual >= 14 or sesiones_largas):
-            logros_html += "<div style='color: #7498b6; font-size: 14px;'>Segui estudiando para desbloquear logros.</div>"
+        # 6
+        finde = False
+        for h in st.session_state['historial']:
+            try:
+                if pd.to_datetime(h['FECHA'], format='%d/%m/%Y').dayofweek >= 5:
+                    finde = True
+                    break
+            except: pass
+        if finde:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Finde Productivo</div>"
+            logros_ganados += 1
+            
+        # 7
+        total_mins = sum(int(h.get('TIEMPO (min)', 0)) for h in st.session_state['historial'])
+        if total_mins >= 6000:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Centurión</div>"
+            logros_ganados += 1
+            
+        # 8
+        excelencia = False
+        for m in st.session_state['metas']:
+            if m.get('nota'):
+                nota_val = parse_float_nota(m['nota'])
+                if nota_val is not None and nota_val >= 9:
+                    excelencia = True
+                    break
+        if excelencia:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Excelencia</div>"
+            logros_ganados += 1
+            
+        # 9
+        multitasking = False
+        if st.session_state['historial']:
+            df_h = pd.DataFrame(st.session_state['historial'])
+            if 'FECHA' in df_h.columns and 'MATERIA' in df_h.columns:
+                agrupado = df_h.groupby('FECHA')['MATERIA'].nunique()
+                if not agrupado.empty and agrupado.max() >= 3:
+                    multitasking = True
+        if multitasking:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Multitasking</div>"
+            logros_ganados += 1
+
+        # 10
+        redencion = False
+        for m in st.session_state['plan_carrera']:
+            if m.get('estado') == 'Aprobada/Promocionada':
+                intentos_validos = [i for i in m.get('intentos', []) if i.strip()]
+                if len(intentos_validos) > 1:
+                    redencion = True
+                    break
+        if redencion:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Redención</div>"
+            logros_ganados += 1
+
+        # 11
+        if any(m.get('estado') == 'Aprobada/Promocionada' for m in st.session_state['plan_carrera']):
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Primer Paso</div>"
+            logros_ganados += 1
+
+        # 12
+        total_mat = len(st.session_state['plan_carrera'])
+        apr_mat = sum(1 for m in st.session_state['plan_carrera'] if m.get('estado') == 'Aprobada/Promocionada')
+        if total_mat > 0 and apr_mat >= (total_mat / 2):
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Ecuador</div>"
+            logros_ganados += 1
+
+        # 13
+        if racha_actual >= 50:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Imparable</div>"
+            logros_ganados += 1
+
+        # 14
+        if total_mins >= 18000:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Veterano</div>"
+            logros_ganados += 1
+
+        # 15
+        perf_count = 0
+        for h in st.session_state['historial']:
+            if h.get('EFIC.') == '100%':
+                perf_count += 1
+                if perf_count >= 5: break
+            else:
+                perf_count = 0
+        if perf_count >= 5:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Perfeccionista</div>"
+            logros_ganados += 1
+
+        # 16
+        metodos_usados = set(h.get('MÉTODO') for h in st.session_state['historial'] if h.get('MÉTODO'))
+        if len(metodos_usados) >= 4:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Metódico</div>"
+            logros_ganados += 1
+
+        # 17
+        if any(int(h.get('TIEMPO (min)', 0)) >= 120 and not h.get('INTERRUPCIONES', []) for h in st.session_state['historial']):
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Foco Profundo</div>"
+            logros_ganados += 1
+
+        # 18
+        if len([m for m in st.session_state['metas'] if not m.get('nota')]) >= 3:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Planificador</div>"
+            logros_ganados += 1
+
+        # 19
+        lunes = False
+        for h in st.session_state['historial']:
+            try:
+                if pd.to_datetime(h['FECHA'], format='%d/%m/%Y').dayofweek == 0:
+                    lunes = True
+                    break
+            except: pass
+        if lunes:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Arranque de Semana</div>"
+            logros_ganados += 1
+
+        # 20
+        maraton = False
+        if st.session_state['historial']:
+            df_mar = pd.DataFrame(st.session_state['historial'])
+            if 'FECHA' in df_mar.columns and 'TIEMPO (min)' in df_mar.columns:
+                df_mar['TIEMPO_NUM'] = pd.to_numeric(df_mar['TIEMPO (min)'], errors='coerce').fillna(0)
+                agrup_mar = df_mar.groupby('FECHA')['TIEMPO_NUM'].sum()
+                if not agrup_mar.empty and agrup_mar.max() >= 360:
+                    maraton = True
+        if maraton:
+            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Maratón</div>"
+            logros_ganados += 1
+
+        if logros_ganados == 0:
+            logros_html += "<div style='color: #7498b6; font-size: 14px;'>Seguí estudiando para desbloquear logros ocultos.</div>"
             
         logros_html += "</div>"
         st.markdown(logros_html, unsafe_allow_html=True)

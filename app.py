@@ -51,6 +51,7 @@ if 'datos_cargados' not in st.session_state:
             {"nombre": "Alfajor", "costo": 3000},
             {"nombre": "Tarde libre sin culpa", "costo": 5000}
         ])
+        st.session_state['logros_desbloqueados'] = datos_generales.get('logros_desbloqueados', [])
         for m in st.session_state['metas']:
             if 'nota' not in m: m['nota'] = None
     else:
@@ -67,6 +68,7 @@ if 'datos_cargados' not in st.session_state:
             {"nombre": "Alfajor", "costo": 3000},
             {"nombre": "Tarde libre sin culpa", "costo": 5000}
         ]
+        st.session_state['logros_desbloqueados'] = []
         
     st.session_state['temarios'] = temarios_guardados if temarios_guardados else {}
     st.session_state['datos_cargados'] = True
@@ -78,6 +80,108 @@ OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "S
 
 # CÁLCULO DE RACHA
 racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_racha(st.session_state['historial'])
+
+# --- DEFINICIÓN Y EVALUACIÓN DE LOGROS ---
+DEFINICION_LOGROS = [
+    {"id": 1, "nombre": "El Bautismo", "desc": "Guardaste tu primera sesión de estudio en el historial."},
+    {"id": 2, "nombre": "Máquina", "desc": "Hiciste una sesión de 3 horas o más de corrido."},
+    {"id": 3, "nombre": "Francotirador", "desc": "Metiste una sesión de al menos 1 hora con 100% de eficiencia."},
+    {"id": 4, "nombre": "Inmortal", "desc": "Alcanzaste una racha de 14 días seguidos estudiando."},
+    {"id": 5, "nombre": "Leyenda", "desc": "Alcanzaste una racha de 30 días seguidos estudiando."},
+    {"id": 6, "nombre": "Finde Productivo", "desc": "Registraste estudio un sábado o domingo."},
+    {"id": 7, "nombre": "Centurión", "desc": "Alcanzaste las 100 horas totales de estudio (6000 min)."},
+    {"id": 8, "nombre": "Excelencia", "desc": "Te sacaste un 9 o un 10 en un examen."},
+    {"id": 9, "nombre": "Multitasking", "desc": "Estudiaste 3 materias distintas en un solo día."},
+    {"id": 10, "nombre": "Redención", "desc": "Aprobaste una materia después de haber reprobado finales (más de 1 intento)."},
+    {"id": 11, "nombre": "Primer Paso", "desc": "Aprobaste la primera materia de tu carrera."},
+    {"id": 12, "nombre": "Ecuador", "desc": "Aprobaste la mitad de las materias del plan de estudios."},
+    {"id": 13, "nombre": "Imparable", "desc": "Alcanzaste una racha de 50 días seguidos estudiando."},
+    {"id": 14, "nombre": "Veterano", "desc": "Alcanzaste las 300 horas totales de estudio (18000 min)."},
+    {"id": 15, "nombre": "Perfeccionista", "desc": "Registraste 5 sesiones seguidas con 100% de eficiencia."},
+    {"id": 16, "nombre": "Metódico", "desc": "Usaste al menos 4 métodos de estudio distintos en tu historial."},
+    {"id": 17, "nombre": "Foco Profundo", "desc": "Sesión de 2 horas sin anotar una sola interrupción."},
+    {"id": 18, "nombre": "Planificador", "desc": "Llegaste a tener 3 metas de examen planificadas a futuro simultáneamente."},
+    {"id": 19, "nombre": "Arranque de Semana", "desc": "Estudiaste un lunes para arrancar con todo."},
+    {"id": 20, "nombre": "Maratón", "desc": "Sumaste más de 6 horas de estudio en un solo día."}
+]
+
+def evaluar_logros():
+    desbloqueados = st.session_state.get('logros_desbloqueados', [])
+    nuevos_desbloqueados = False
+    hist = st.session_state.get('historial', [])
+    plan = st.session_state.get('plan_carrera', [])
+    metas = st.session_state.get('metas', [])
+    
+    for logro in DEFINICION_LOGROS:
+        l_id = logro["id"]
+        if l_id in desbloqueados: continue
+        
+        cumple = False
+        if l_id == 1 and len(hist) >= 1: cumple = True
+        elif l_id == 2 and any(int(h.get('TIEMPO (min)', 0)) >= 180 for h in hist): cumple = True
+        elif l_id == 3 and any(h.get('EFIC.') == '100%' and int(h.get('TIEMPO (min)', 0)) >= 60 for h in hist): cumple = True
+        elif l_id == 4 and racha_actual >= 14: cumple = True
+        elif l_id == 5 and racha_actual >= 30: cumple = True
+        elif l_id == 6:
+            for h in hist:
+                try:
+                    if pd.to_datetime(h['FECHA'], format='%d/%m/%Y').dayofweek >= 5: cumple = True
+                except: pass
+        elif l_id == 7 and sum(int(h.get('TIEMPO (min)', 0)) for h in hist) >= 6000: cumple = True
+        elif l_id == 8:
+            for m in metas:
+                if m.get('nota'):
+                    n = parse_float_nota(m['nota'])
+                    if n is not None and n >= 9: cumple = True
+        elif l_id == 9 and hist:
+            df = pd.DataFrame(hist)
+            if 'FECHA' in df.columns and 'MATERIA' in df.columns:
+                if not df.groupby('FECHA')['MATERIA'].nunique().empty and df.groupby('FECHA')['MATERIA'].nunique().max() >= 3:
+                    cumple = True
+        elif l_id == 10:
+            for m in plan:
+                if m.get('estado') == 'Aprobada/Promocionada':
+                    if len([i for i in m.get('intentos', []) if i.strip()]) > 1: cumple = True
+        elif l_id == 11 and any(m.get('estado') == 'Aprobada/Promocionada' for m in plan): cumple = True
+        elif l_id == 12:
+            tot = len(plan)
+            apr = sum(1 for m in plan if m.get('estado') == 'Aprobada/Promocionada')
+            if tot > 0 and apr >= (tot / 2): cumple = True
+        elif l_id == 13 and racha_actual >= 50: cumple = True
+        elif l_id == 14 and sum(int(h.get('TIEMPO (min)', 0)) for h in hist) >= 18000: cumple = True
+        elif l_id == 15:
+            count = 0
+            for h in hist:
+                if h.get('EFIC.') == '100%':
+                    count += 1
+                    if count >= 5: cumple = True
+                else: count = 0
+        elif l_id == 16 and len(set(h.get('MÉTODO') for h in hist if h.get('MÉTODO'))) >= 4: cumple = True
+        elif l_id == 17 and any(int(h.get('TIEMPO (min)', 0)) >= 120 and not h.get('INTERRUPCIONES', []) for h in hist): cumple = True
+        elif l_id == 18 and len([m for m in metas if not m.get('nota')]) >= 3: cumple = True
+        elif l_id == 19:
+            for h in hist:
+                try:
+                    if pd.to_datetime(h['FECHA'], format='%d/%m/%Y').dayofweek == 0: cumple = True
+                except: pass
+        elif l_id == 20 and hist:
+            df = pd.DataFrame(hist)
+            if 'FECHA' in df.columns and 'TIEMPO (min)' in df.columns:
+                df['T_NUM'] = pd.to_numeric(df['TIEMPO (min)'], errors='coerce').fillna(0)
+                if not df.groupby('FECHA')['T_NUM'].sum().empty and df.groupby('FECHA')['T_NUM'].sum().max() >= 360:
+                    cumple = True
+        
+        if cumple:
+            desbloqueados.append(l_id)
+            st.toast(f"🏆 ¡Nuevo Logro Desbloqueado!\n**{logro['nombre']}**\n{logro['desc']}")
+            nuevos_desbloqueados = True
+            
+    if nuevos_desbloqueados:
+        st.session_state['logros_desbloqueados'] = desbloqueados
+        guardar_datos(silencioso=True)
+
+# Llamamos a la función apenas arranca para chequear de fondo
+evaluar_logros()
 
 # --- MODO INVASIÓN ---
 hoy_date = date.today()
@@ -143,6 +247,14 @@ def dialog_racha():
 
 if st.session_state.get('show_racha_modal', False):
     dialog_racha()
+
+@st.dialog("Detalle del Logro")
+def dialog_logro(nombre, desc):
+    st.markdown(f"<h3 style='text-align:center; color:#10b981; margin-top:0;'>🏆 {nombre}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center; color:#f8fafc; font-size:16px;'>{desc}</p>", unsafe_allow_html=True)
+    st.write("<br>", unsafe_allow_html=True)
+    if st.button("Genial", use_container_width=True):
+        st.rerun()
 
 # --- RELOJ EN VIVO (CON ALARMA) ---
 def render_live_timer(elapsed_seconds, is_running):
@@ -1301,169 +1413,15 @@ with col_contenido:
         st.divider()
         
         st.subheader("Logros Desbloqueados")
-        logros_html = "<div style='display: flex; gap: 10px; flex-wrap: wrap;'>"
         
-        logros_ganados = 0
-        
-        # 1
-        if len(st.session_state['historial']) >= 1:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>El Bautismo</div>"
-            logros_ganados += 1
-            
-        # 2
-        if any(int(h.get('TIEMPO (min)', 0)) >= 180 for h in st.session_state['historial']):
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Máquina</div>"
-            logros_ganados += 1
-            
-        # 3
-        if any(h.get('EFIC.') == '100%' and int(h.get('TIEMPO (min)', 0)) >= 60 for h in st.session_state['historial']):
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Francotirador</div>"
-            logros_ganados += 1
-            
-        # 4
-        if racha_actual >= 14:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Inmortal</div>"
-            logros_ganados += 1
-            
-        # 5
-        if racha_actual >= 30:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Leyenda</div>"
-            logros_ganados += 1
-            
-        # 6
-        finde = False
-        for h in st.session_state['historial']:
-            try:
-                if pd.to_datetime(h['FECHA'], format='%d/%m/%Y').dayofweek >= 5:
-                    finde = True
-                    break
-            except: pass
-        if finde:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Finde Productivo</div>"
-            logros_ganados += 1
-            
-        # 7
-        total_mins = sum(int(h.get('TIEMPO (min)', 0)) for h in st.session_state['historial'])
-        if total_mins >= 6000:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Centurión</div>"
-            logros_ganados += 1
-            
-        # 8
-        excelencia = False
-        for m in st.session_state['metas']:
-            if m.get('nota'):
-                nota_val = parse_float_nota(m['nota'])
-                if nota_val is not None and nota_val >= 9:
-                    excelencia = True
-                    break
-        if excelencia:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Excelencia</div>"
-            logros_ganados += 1
-            
-        # 9
-        multitasking = False
-        if st.session_state['historial']:
-            df_h = pd.DataFrame(st.session_state['historial'])
-            if 'FECHA' in df_h.columns and 'MATERIA' in df_h.columns:
-                agrupado = df_h.groupby('FECHA')['MATERIA'].nunique()
-                if not agrupado.empty and agrupado.max() >= 3:
-                    multitasking = True
-        if multitasking:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Multitasking</div>"
-            logros_ganados += 1
-
-        # 10
-        redencion = False
-        for m in st.session_state['plan_carrera']:
-            if m.get('estado') == 'Aprobada/Promocionada':
-                intentos_validos = [i for i in m.get('intentos', []) if i.strip()]
-                if len(intentos_validos) > 1:
-                    redencion = True
-                    break
-        if redencion:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Redención</div>"
-            logros_ganados += 1
-
-        # 11
-        if any(m.get('estado') == 'Aprobada/Promocionada' for m in st.session_state['plan_carrera']):
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Primer Paso</div>"
-            logros_ganados += 1
-
-        # 12
-        total_mat = len(st.session_state['plan_carrera'])
-        apr_mat = sum(1 for m in st.session_state['plan_carrera'] if m.get('estado') == 'Aprobada/Promocionada')
-        if total_mat > 0 and apr_mat >= (total_mat / 2):
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Ecuador</div>"
-            logros_ganados += 1
-
-        # 13
-        if racha_actual >= 50:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Imparable</div>"
-            logros_ganados += 1
-
-        # 14
-        if total_mins >= 18000:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Veterano</div>"
-            logros_ganados += 1
-
-        # 15
-        perf_count = 0
-        for h in st.session_state['historial']:
-            if h.get('EFIC.') == '100%':
-                perf_count += 1
-                if perf_count >= 5: break
-            else:
-                perf_count = 0
-        if perf_count >= 5:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Perfeccionista</div>"
-            logros_ganados += 1
-
-        # 16
-        metodos_usados = set(h.get('MÉTODO') for h in st.session_state['historial'] if h.get('MÉTODO'))
-        if len(metodos_usados) >= 4:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Metódico</div>"
-            logros_ganados += 1
-
-        # 17
-        if any(int(h.get('TIEMPO (min)', 0)) >= 120 and not h.get('INTERRUPCIONES', []) for h in st.session_state['historial']):
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Foco Profundo</div>"
-            logros_ganados += 1
-
-        # 18
-        if len([m for m in st.session_state['metas'] if not m.get('nota')]) >= 3:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Planificador</div>"
-            logros_ganados += 1
-
-        # 19
-        lunes = False
-        for h in st.session_state['historial']:
-            try:
-                if pd.to_datetime(h['FECHA'], format='%d/%m/%Y').dayofweek == 0:
-                    lunes = True
-                    break
-            except: pass
-        if lunes:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Arranque de Semana</div>"
-            logros_ganados += 1
-
-        # 20
-        maraton = False
-        if st.session_state['historial']:
-            df_mar = pd.DataFrame(st.session_state['historial'])
-            if 'FECHA' in df_mar.columns and 'TIEMPO (min)' in df_mar.columns:
-                df_mar['TIEMPO_NUM'] = pd.to_numeric(df_mar['TIEMPO (min)'], errors='coerce').fillna(0)
-                agrup_mar = df_mar.groupby('FECHA')['TIEMPO_NUM'].sum()
-                if not agrup_mar.empty and agrup_mar.max() >= 360:
-                    maraton = True
-        if maraton:
-            logros_html += "<div style='border: 1px solid #7498b6; color: #7498b6; padding: 5px 15px; border-radius: 20px;'>Maratón</div>"
-            logros_ganados += 1
-
-        if logros_ganados == 0:
-            logros_html += "<div style='color: #7498b6; font-size: 14px;'>Seguí estudiando para desbloquear logros ocultos.</div>"
-            
-        logros_html += "</div>"
-        st.markdown(logros_html, unsafe_allow_html=True)
+        cols_logros = st.columns(4)
+        for i, logro in enumerate(DEFINICION_LOGROS):
+            with cols_logros[i % 4]:
+                if logro['id'] in st.session_state.get('logros_desbloqueados', []):
+                    if st.button(logro['nombre'], key=f"btn_logro_unlocked_{logro['id']}", use_container_width=True):
+                        dialog_logro(logro['nombre'], logro['desc'])
+                else:
+                    st.button(f"Logro {i+1}/20", key=f"btn_logro_locked_{logro['id']}", disabled=True, use_container_width=True)
 
 
     elif menu_opcion == "Página Principal":

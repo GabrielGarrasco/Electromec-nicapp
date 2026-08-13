@@ -46,6 +46,11 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['plan_carrera'] = datos_generales.get('plan_carrera', [])
         st.session_state['horarios'] = datos_generales.get('horarios', [])
         st.session_state['calendario_manual'] = datos_generales.get('calendario_manual', "")
+        st.session_state['xp_total'] = datos_generales.get('xp_total', 0)
+        st.session_state['recompensas'] = datos_generales.get('recompensas', [
+            {"nombre": "Comida chatarra", "costo": 3000},
+            {"nombre": "Tarde libre sin culpa", "costo": 5000}
+        ])
         for m in st.session_state['metas']:
             if 'nota' not in m: m['nota'] = None
     else:
@@ -57,6 +62,11 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['plan_carrera'] = []
         st.session_state['horarios'] = []
         st.session_state['calendario_manual'] = ""
+        st.session_state['xp_total'] = 0
+        st.session_state['recompensas'] = [
+            {"nombre": "Comida chatarra", "costo": 3000},
+            {"nombre": "Tarde libre sin culpa", "costo": 5000}
+        ]
         
     st.session_state['temarios'] = temarios_guardados if temarios_guardados else {}
     st.session_state['datos_cargados'] = True
@@ -68,6 +78,38 @@ OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "S
 
 # CÁLCULO DE RACHA
 racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_racha(st.session_state['historial'])
+
+# --- MODO INVASIÓN ---
+hoy_date = date.today()
+examenes_proximos = []
+for m in st.session_state['metas']:
+    if m.get('fecha_examen'):
+        try:
+            f_ex = date.fromisoformat(m['fecha_examen'])
+            if 0 <= (f_ex - hoy_date).days <= 7:
+                examenes_proximos.append(m)
+        except:
+            pass
+
+modo_invasion = len(examenes_proximos) >= 2
+multiplicador_xp = 2 if modo_invasion else 1
+
+if modo_invasion:
+    st.markdown("""
+    <style>
+        .stApp { background-color: #420516 !important; }
+        div[data-testid="stSidebar"] { background-color: #420516 !important; }
+        div.stButton > button:first-child { background-color: #7D1935 !important; border-color: #7B113A !important; color: white !important; }
+        div[border="true"], .historico-box { background-color: #59244b !important; border: 1px solid #7B113A !important; }
+        .custom-hr { border-top: 1px solid #7B113A !important; }
+        .analitica-title, .historico-title, h1, h2, h3, h4, p, div, span { color: #f8fafc !important; }
+        .materia-pill, .badge-cursando, .badge-regular { background-color: #7D1935 !important; color: #f8fafc !important; border: 1px solid #950101 !important; }
+    </style>
+    <div style='background-color: #950101; padding: 10px; text-align: center; font-weight: bold; margin-bottom: 15px; border-radius: 8px;'>
+        ALERTA DE INVASIÓN: Múltiples exámenes próximos. XP x2 activada.
+    </div>
+    """, unsafe_allow_html=True)
+
 
 # --- MODALES (DIALOGS) ---
 @st.dialog("Racha de Estudio", width="small")
@@ -700,6 +742,13 @@ def dialog_agregar_sesion():
             "TIEMPO (min)": tiempo_neto, "EFIC.": f"{eficiencia}%", "INTERRUPCIONES": []
         }
         st.session_state['historial'].append(nueva_sesion)
+        
+        # XP LOGIC PARA SESION MANUAL
+        xp_ganada = int(tiempo_neto * 10 * multiplicador_xp)
+        if eficiencia == 100:
+            xp_ganada = int(xp_ganada * 1.2)
+        st.session_state['xp_total'] += xp_ganada
+        
         id_meta = opciones_obj[objetivo_sel]
         if id_meta:
             for m in st.session_state['metas']:
@@ -715,7 +764,7 @@ col_menu, col_contenido = st.columns([1, 4], gap="large")
 
 with col_menu:
     st.markdown("### Navegación")
-    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios"], label_visibility="collapsed")
+    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios", "Perfil & Recompensas"], label_visibility="collapsed")
     
     # --- FRASES MOTIVACIONALES (FONDO DEL MENÚ) ---
     st.markdown("<br>", unsafe_allow_html=True)
@@ -820,7 +869,7 @@ with col_contenido:
                         st.markdown(f"""
                         <style>
                             div[data-testid="stButton"] button[key="btn_carr_curs_{m['id']}"] {{
-                                background-color: #02152b; color: #f8fafc; text-align: left;
+                                background-color: transparent; color: #f8fafc; text-align: left;
                                 border: none; border-left: 4px solid {color_border}; justify-content: flex-start;
                                 padding-left: 15px; font-size: 14px;
                             }}
@@ -831,7 +880,7 @@ with col_contenido:
             
             with col_der:
                 st.markdown("### Puedo Cursar")
-                def is_met(m_name, req_type):
+                def is_met_carr(m_name, req_type):
                     target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
                     if not target: return False
                     if req_type == 'reg': return target['estado'] in ["Regular", "Aprobada/Promocionada"]
@@ -840,8 +889,8 @@ with col_contenido:
                 puedo_cursar = []
                 for m in st.session_state['plan_carrera']:
                     if m['estado'] in ["Pendiente", "Libre/Recursado"]:
-                        req_reg_ok = all(is_met(r, 'reg') for r in m.get('req_regulares', []))
-                        req_apr_ok = all(is_met(r, 'apr') for r in m.get('req_aprobadas', []))
+                        req_reg_ok = all(is_met_carr(r, 'reg') for r in m.get('req_regulares', []))
+                        req_apr_ok = all(is_met_carr(r, 'apr') for r in m.get('req_aprobadas', []))
                         if req_reg_ok and req_apr_ok: puedo_cursar.append(m)
                             
                 puedo_cursar.sort(key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
@@ -853,7 +902,7 @@ with col_contenido:
                         st.markdown(f"""
                         <style>
                             div[data-testid="stButton"] button[key="btn_carr_puedo_{m['id']}"] {{
-                                background-color: #02152b; color: #f8fafc; text-align: left;
+                                background-color: transparent; color: #f8fafc; text-align: left;
                                 border: none; border-left: 4px solid {color_border}; justify-content: flex-start;
                                 padding-left: 15px; font-size: 14px;
                             }}
@@ -881,7 +930,7 @@ with col_contenido:
             promedio = sum(notas_validas) / len(notas_validas) if notas_validas else 0.0
             
             st.markdown(f"""
-            <div style="background-color: #02152b; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #153f59;">
+            <div style="background-color: transparent; border-radius: 12px; padding: 20px; text-align: center; margin-top: 10px; border: 1px solid #153f59;">
                 <div style="color: #7498b6; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">PROMEDIO GENERAL</div>
                 <div style="color: #10b981; font-size: 38px; font-weight: 800; line-height: 1;">{promedio:.2f}</div>
             </div>
@@ -921,7 +970,6 @@ with col_contenido:
             # --- 2. PROCESAR MANUALES (CON INICIO Y FIN) ---
             manual_lines = [line.strip() for line in st.session_state.get('calendario_manual', '').split('\n') if line.strip()]
             for line in manual_lines:
-                # Busca fechas formato DD/MM o DD/MM/AAAA
                 match_all = re.findall(r'(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?', line)
                 if not match_all:
                     continue 
@@ -937,7 +985,7 @@ with col_contenido:
                 try:
                     f_obj = date(y1, int(m1), int(d1))
                     f_fin = date(y2, int(m2), int(d2))
-                    if f_fin < hoy: # Oculta los que ya terminaron
+                    if f_fin < hoy: 
                         continue 
                 except:
                     continue
@@ -960,9 +1008,8 @@ with col_contenido:
                 min_date = min(e['inicio'] for e in eventos)
                 max_date = max(e['fin'] for e in eventos)
                 
-                # Función para obtener el color de la materia o uno por defecto
                 def get_color(materia):
-                    if not materia: return "#365b77" # Color neutro para los manuales
+                    if not materia: return "#365b77"
                     return next((m.get('color', '#10b981') for m in st.session_state.get('materias', []) if m['nombre'] == materia), "#10b981")
 
                 meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -975,29 +1022,25 @@ with col_contenido:
                     start_of_month = date(y, m, 1)
                     end_of_month = date(y, m, days_in_month)
                     
-                    # Filtramos eventos que toquen este mes
                     eventos_mes = [e for e in eventos if e['inicio'] <= end_of_month and e['fin'] >= start_of_month]
                     
                     if eventos_mes:
                         html_cal += f"<h4 style='color: #94b8d7; margin-top: 20px; text-transform: uppercase;'>{meses[m]} {y}</h4>"
                         html_cal += "<table style='width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 20px;'>"
-                        html_cal += "<tr style='color: #7498b6; font-size: 11px; text-align: center; background-color: #02152b;'><th>LUN</th><th>MAR</th><th>MIE</th><th>JUE</th><th>VIE</th><th>SAB</th><th>DOM</th></tr>"
+                        html_cal += "<tr style='color: #7498b6; font-size: 11px; text-align: center; background-color: transparent;'><th>LUN</th><th>MAR</th><th>MIE</th><th>JUE</th><th>VIE</th><th>SAB</th><th>DOM</th></tr>"
                         
                         cal_weeks = calendar.monthcalendar(y, m)
                         for week in cal_weeks:
                             week_dates = [date(y, m, d) if d != 0 else None for d in week]
                             
-                            # Buscar qué eventos cruzan por esta semana
                             week_events = []
                             for e in eventos_mes:
                                 valid_dates = [wd for wd in week_dates if wd is not None]
                                 if valid_dates and e['inicio'] <= valid_dates[-1] and e['fin'] >= valid_dates[0]:
                                     week_events.append(e)
                                     
-                            # Ordenamos para que los eventos más largos queden arriba (tipo Tetris)
                             week_events.sort(key=lambda e: (-(e['fin'] - e['inicio']).days, e['inicio']))
                             
-                            # Lógica para asignar "renglones" (slots) y que no se superpongan visualmente
                             slots = []
                             event_slots = {}
                             for e in week_events:
@@ -1023,51 +1066,39 @@ with col_contenido:
                                     slots.append(new_slot)
                                     event_slots[id(e)] = len(slots) - 1
 
-                            # Dibujar los días de la semana
                             html_cal += "<tr>"
                             for i, d in enumerate(week):
                                 if d == 0:
                                     html_cal += "<td style='border: 1px solid #153f59; background-color: rgba(2, 21, 43, 0.3); height: 85px;'></td>"
                                 else:
                                     wd = date(y, m, d)
-                                    # Marcador de "Día de hoy"
                                     is_today = wd == hoy
-                                    bg_color = "#032847" if is_today else "#021d34"
+                                    bg_color = "transparent"
                                     circle_style = "background-color: #10b981; color: #02152b; border-radius: 50%; width: 20px; height: 20px; display: inline-flex; justify-content: center; align-items: center;" if is_today else ""
                                     day_num_html = f"<div style='color: #f8fafc; font-weight: bold; font-size: 12px; margin: 4px 4px 2px 4px;'><span style='{circle_style}'>{d}</span></div>"
                                     
                                     html_cal += f"<td style='border: 1px solid #153f59; background-color: {bg_color}; padding: 0; vertical-align: top; height: 85px; position: relative;'>"
                                     html_cal += day_num_html
                                     
-                                    # Dibujamos cada barra del evento para ese día
                                     for s_idx in range(len(slots)):
                                         ev = next((e for e in week_events if event_slots[id(e)] == s_idx and e['inicio'] <= wd <= e['fin']), None)
                                         if ev:
                                             color = get_color(ev['materia'])
-                                            
-                                            # Mostrar el texto solo el primer día del evento o el Lunes (para eventos que continúan)
                                             is_start = wd == ev['inicio'] or i == 0 or week_dates[i-1] is None
                                             text = ev['texto'] if is_start else "&nbsp;"
-                                            
-                                            # Bordes redondeados solo en las puntas reales del evento
                                             radius = ""
                                             if wd == ev['inicio']: radius += "border-top-left-radius: 4px; border-bottom-left-radius: 4px; "
                                             if wd == ev['fin']: radius += "border-top-right-radius: 4px; border-bottom-right-radius: 4px; "
-                                            
-                                            # Quitar márgenes para que las barras se conecten entre los cuadros de los días
                                             m_left = "4px" if wd == ev['inicio'] else "0"
                                             m_right = "4px" if wd == ev['fin'] else "0"
-                                            
                                             html_cal += f"<div style='background-color: {color}E6; color: #02152b; font-size: 10px; padding: 2px 4px; margin-top: 2px; margin-left: {m_left}; margin-right: {m_right}; {radius} overflow: hidden; white-space: nowrap; text-overflow: ellipsis; height: 18px; line-height: 14px;' title='{ev['texto']}'><b>{text}</b></div>"
                                         else:
-                                            # Espaciador invisible para que la grilla vertical no se rompa si hay espacios huecos
                                             html_cal += "<div style='height: 20px; margin-top: 2px;'></div>"
                                             
                                     html_cal += "</td>"
                             html_cal += "</tr>"
                         html_cal += "</table>"
                     
-                    # Avanzar al próximo mes
                     m += 1
                     if m > 12:
                         m = 1
@@ -1155,7 +1186,7 @@ with col_contenido:
 
                 with cols_mat[i % 3]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 15px; text-align: center; background-color: #02152b; margin-bottom: 10px;">
+                    <div style="border: 1px solid #153f59; border-radius: 12px; padding: 15px; text-align: center; background-color: transparent; margin-bottom: 10px;">
                         <div class="color-circle" style="background-color: {mat['color']};"></div>
                         <div style="font-size: 15px; font-weight: 600;">{mat['nombre']}</div>
                         {estado_badge}
@@ -1180,7 +1211,7 @@ with col_contenido:
             for i, dist in enumerate(st.session_state['distracciones']):
                 with cols_dist[i % 4]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #153f59; border-radius: 10px; padding: 10px; text-align: center; background-color: #02152b; margin-bottom: 5px;">
+                    <div style="border: 1px solid #153f59; border-radius: 10px; padding: 10px; text-align: center; background-color: transparent; margin-bottom: 5px;">
                         <div style="font-weight: 600; font-size: 14px;">{dist}</div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -1203,7 +1234,7 @@ with col_contenido:
             for i, met in enumerate(st.session_state['metodos']):
                 with cols_met[i % 4]:
                     st.markdown(f"""
-                    <div style="border: 1px solid #153f59; border-radius: 10px; padding: 10px; text-align: center; background-color: #02152b; margin-bottom: 5px;">
+                    <div style="border: 1px solid #153f59; border-radius: 10px; padding: 10px; text-align: center; background-color: transparent; margin-bottom: 5px;">
                         <div style="font-weight: 600; font-size: 14px;">{met}</div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -1211,12 +1242,87 @@ with col_contenido:
                         st.session_state['metodos'].pop(i)
                         if guardar_datos(): st.rerun()
 
+    elif menu_opcion == "Perfil & Recompensas":
+        st.header("Perfil del Estudiante")
+        
+        xp_actual = st.session_state.get('xp_total', 0)
+        rangos = [
+            (0, "Material: Cobre"), 
+            (5000, "Material: Hierro"), 
+            (15000, "Material: Acero"), 
+            (30000, "Material: Titanio"), 
+            (50000, "Material: Wolframio")
+        ]
+        rango_actual = rangos[0][1]
+        prox_meta = 5000
+        for limite, nombre in rangos:
+            if xp_actual >= limite:
+                rango_actual = nombre
+            else:
+                prox_meta = limite
+                break
+                
+        progreso_rango = min(xp_actual / prox_meta, 1.0)
+        
+        c_r1, c_r2 = st.columns([1, 3])
+        with c_r1:
+            st.markdown(f"""
+            <div style="background-color: transparent; border: 1px solid #153f59; padding: 20px; text-align: center;">
+                <div style="font-size: 14px; color: #7498b6;">RANGO ACTUAL</div>
+                <div style="font-size: 24px; font-weight: bold; color: #f8fafc;">{rango_actual}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with c_r2:
+            st.write(f"Progreso hacia el siguiente rango ({xp_actual} / {prox_meta} XP)")
+            st.progress(progreso_rango)
+
+        st.divider()
+        
+        st.subheader("Tienda de Recompensas")
+        st.write(f"Saldo disponible: {xp_actual} XP")
+        
+        cols_tienda = st.columns(3)
+        for i, rec in enumerate(st.session_state['recompensas']):
+            with cols_tienda[i % 3]:
+                with st.container(border=True):
+                    st.write(f"**{rec['nombre']}**")
+                    st.write(f"Costo: {rec['costo']} XP")
+                    if st.button("Canjear", key=f"canjear_{i}", disabled=xp_actual < rec['costo']):
+                        st.session_state['xp_total'] -= rec['costo']
+                        if guardar_datos(): st.rerun()
+                        
+        with st.expander("Crear nueva recompensa"):
+            n_nombre = st.text_input("Premio")
+            n_costo = st.number_input("Costo (XP)", min_value=100, step=100)
+            if st.button("Agregar a la tienda"):
+                st.session_state['recompensas'].append({"nombre": n_nombre, "costo": n_costo})
+                if guardar_datos(): st.rerun()
+
+        st.divider()
+        
+        st.subheader("Logros Desbloqueados")
+        logros_html = "<div style='display: flex; gap: 10px; flex-wrap: wrap;'>"
+        
+        if racha_actual >= 14:
+            logros_html += "<div style='border: 1px solid #10b981; color: #10b981; padding: 5px 15px; border-radius: 20px;'>Inmortal (Racha 14d)</div>"
+            
+        sesiones_largas = [h for h in st.session_state['historial'] if int(h['TIEMPO (min)']) >= 180]
+        if sesiones_largas:
+            logros_html += "<div style='border: 1px solid #eab308; color: #eab308; padding: 5px 15px; border-radius: 20px;'>Maquina (3h de corrido)</div>"
+            
+        if not (racha_actual >= 14 or sesiones_largas):
+            logros_html += "<div style='color: #7498b6; font-size: 14px;'>Segui estudiando para desbloquear logros.</div>"
+            
+        logros_html += "</div>"
+        st.markdown(logros_html, unsafe_allow_html=True)
+
+
     elif menu_opcion == "Página Principal":
         
         # --- ALINEACIÓN BOTÓN DE RACHA (FLOTANTE JUNTO A PESTAÑAS) ---
         c_empty, c_racha = st.columns([6, 1])
         with c_racha:
-            if st.button(f"🔥 Racha: {racha_actual} días", help="Ver detalles", use_container_width=True):
+            if st.button(f"Racha: {racha_actual} días", help="Ver detalles", use_container_width=True):
                 st.session_state['show_racha_modal'] = True
                 
         # Subimos las pestañas para que queden en la misma línea visual que el botón
@@ -1484,6 +1590,13 @@ with col_contenido:
                             "INTERRUPCIONES": st.session_state['timer']['interruptions']
                         }
                         st.session_state['historial'].append(nueva_sesion)
+                        
+                        # XP LOGIC PARA SESION CON TIMER
+                        xp_ganada = int(minutos_estudio * 10 * multiplicador_xp)
+                        if not st.session_state['timer']['interruptions']:
+                            xp_ganada = int(xp_ganada * 1.2)
+                        st.session_state['xp_total'] += xp_ganada
+                        
                         st.session_state['timer']['interruptions'] = []
                         
                         id_meta = opciones_meta[meta_sel]
@@ -1639,19 +1752,19 @@ with col_contenido:
                     else: al_dia.append(t)
                 
                 if vencidos:
-                    st.markdown("<h4 style='color: #ef4444; margin-top: 15px;'>🔴 Para Repasar Hoy (Urgente)</h4>", unsafe_allow_html=True)
+                    st.markdown("<h4 style='color: #ef4444; margin-top: 15px;'>Para Repasar Hoy (Urgente)</h4>", unsafe_allow_html=True)
                     for t in vencidos:
                         try: fecha_rep = date.fromisoformat(t['proximo_repaso']).strftime('%d/%m')
                         except: fecha_rep = "Hoy"
                         st.markdown(f"<div style='background-color: #450a0a; border-left: 4px solid #ef4444; padding: 10px; margin-bottom: 5px; border-radius: 4px;'><b>{t['tema']}</b> <span style='float:right; font-size: 12px; opacity:0.8;'>Venció: {fecha_rep} | Nivel {t.get('nivel', 0)}</span></div>", unsafe_allow_html=True)
                 
                 if nuevos:
-                    st.markdown("<h4 style='color: #7498b6; margin-top: 15px;'>⚪ Nuevos (Aún no estudiados)</h4>", unsafe_allow_html=True)
+                    st.markdown("<h4 style='color: #7498b6; margin-top: 15px;'>Nuevos (Aún no estudiados)</h4>", unsafe_allow_html=True)
                     for t in nuevos:
-                        st.markdown(f"<div style='background-color: #021d34; border-left: 4px solid #7498b6; padding: 10px; margin-bottom: 5px; border-radius: 4px;'>{t['tema']}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='background-color: transparent; border-left: 4px solid #7498b6; padding: 10px; margin-bottom: 5px; border-radius: 4px;'>{t['tema']}</div>", unsafe_allow_html=True)
                         
                 if al_dia:
-                    st.markdown("<h4 style='color: #10b981; margin-top: 15px;'>🟢 Al Día (Ya estudiados)</h4>", unsafe_allow_html=True)
+                    st.markdown("<h4 style='color: #10b981; margin-top: 15px;'>Al Día (Ya estudiados)</h4>", unsafe_allow_html=True)
                     for t in al_dia:
                         try: fecha_rep = date.fromisoformat(t['proximo_repaso']).strftime('%d/%m')
                         except: fecha_rep = ""

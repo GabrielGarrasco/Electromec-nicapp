@@ -904,23 +904,24 @@ with col_contenido:
             eventos = []
             hoy = date.today()
             
-            # Automáticos
+            # --- 1. PROCESAR AUTOMÁTICOS (METAS) ---
             for m in st.session_state['metas']:
                 if m.get('fecha_examen'):
                     try:
                         f_obj = date.fromisoformat(m['fecha_examen'])
                         if f_obj >= hoy:
                             eventos.append({
-                                'fecha_obj': f_obj,
-                                'texto_izq': f_obj.strftime('%d/%m/%Y'),
-                                'texto_der': f"<span style='font-weight: 600;'>{m['nombre']}</span>",
+                                'inicio': f_obj,
+                                'fin': f_obj,
+                                'texto': m['nombre'],
                                 'materia': m['materia']
                             })
                     except: pass
                     
-            # Manuales
+            # --- 2. PROCESAR MANUALES (CON INICIO Y FIN) ---
             manual_lines = [line.strip() for line in st.session_state.get('calendario_manual', '').split('\n') if line.strip()]
             for line in manual_lines:
+                # Busca fechas formato DD/MM o DD/MM/AAAA
                 match_all = re.findall(r'(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?', line)
                 if not match_all:
                     continue 
@@ -936,71 +937,142 @@ with col_contenido:
                 try:
                     f_obj = date(y1, int(m1), int(d1))
                     f_fin = date(y2, int(m2), int(d2))
-                    if f_fin < hoy:
+                    if f_fin < hoy: # Oculta los que ya terminaron
                         continue 
                 except:
                     continue
                     
                 partes = line.split('-', 1)
-                if len(partes) > 1:
-                    texto_izq = partes[0].strip()
-                    texto_der = f"<span style='font-weight: 600;'>{partes[1].strip()}</span>"
-                else:
-                    texto_izq = f"{d1}/{m1}/{y1}"
-                    texto_der = f"<span style='font-weight: 600;'>{line}</span>"
+                texto = partes[1].strip() if len(partes) > 1 else line
                     
                 eventos.append({
-                    'fecha_obj': f_obj,
-                    'texto_izq': texto_izq,
-                    'texto_der': texto_der,
+                    'inicio': f_obj,
+                    'fin': f_fin,
+                    'texto': texto,
                     'materia': None
                 })
                 
+            # --- 3. DIBUJAR CALENDARIO CON BARRAS CONTINUAS ---
             if not eventos:
                 st.info("No hay eventos próximos.")
             else:
                 import calendar
-                eventos_dict = {}
-                for ev in eventos:
-                    d = ev['fecha_obj']
-                    mes_clave = (d.year, d.month)
-                    if mes_clave not in eventos_dict: eventos_dict[mes_clave] = {}
-                    if d.day not in eventos_dict[mes_clave]: eventos_dict[mes_clave][d.day] = []
-                    
-                    # Limpiamos el texto para que entre bien en el cuadradito
-                    texto = ev['texto_der'].replace("<span style='font-weight: 600;'>", "").replace("</span>", "")
-                    color_materia = "#7498b6" # Color por defecto para los manuales
-                    if ev['materia']:
-                        color_materia = next((m.get('color', '#10b981') for m in st.session_state.get('materias', []) if m['nombre'] == ev['materia']), "#10b981")
-                    
-                    eventos_dict[mes_clave][d.day].append({'texto': texto, 'color': color_materia})
+                min_date = min(e['inicio'] for e in eventos)
+                max_date = max(e['fin'] for e in eventos)
+                
+                # Función para obtener el color de la materia o uno por defecto
+                def get_color(materia):
+                    if not materia: return "#365b77" # Color neutro para los manuales
+                    return next((m.get('color', '#10b981') for m in st.session_state.get('materias', []) if m['nombre'] == materia), "#10b981")
 
                 meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
                 
                 html_cal = ""
-                # Solo renderizamos los meses que tienen eventos próximos
-                for (y, m) in sorted(eventos_dict.keys()):
-                    html_cal += f"<h4 style='color: #94b8d7; margin-top: 20px; text-transform: uppercase;'>{meses[m]} {y}</h4>"
-                    html_cal += "<table style='width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 20px;'>"
-                    html_cal += "<tr style='color: #7498b6; font-size: 11px; text-align: center; background-color: #02152b;'><th>LUN</th><th>MAR</th><th>MIE</th><th>JUE</th><th>VIE</th><th>SAB</th><th>DOM</th></tr>"
+                y, m = min_date.year, min_date.month
+                
+                while (y, m) <= (max_date.year, max_date.month):
+                    _, days_in_month = calendar.monthrange(y, m)
+                    start_of_month = date(y, m, 1)
+                    end_of_month = date(y, m, days_in_month)
                     
-                    for semana in calendar.monthcalendar(y, m):
-                        html_cal += "<tr>"
-                        for dia in semana:
-                            if dia == 0: # Días vacíos del mes
-                                html_cal += "<td style='border: 1px solid #153f59; background-color: rgba(2, 21, 43, 0.3); height: 75px;'></td>"
-                            else:
-                                if dia in eventos_dict[(y, m)]:
-                                    evs_html = ""
-                                    for e in eventos_dict[(y, m)][dia]:
-                                        # Le damos el color de la materia, cortamos el texto si es muy largo y añadimos un tooltip (title)
-                                        evs_html += f"<div style='background-color: {e['color']}33; border-left: 3px solid {e['color']}; color: #f8fafc; font-size: 10px; padding: 2px 4px; margin-top: 2px; border-radius: 0 4px 4px 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;' title='{e['texto']}'>{e['texto']}</div>"
-                                    html_cal += f"<td style='border: 1px solid #153f59; background-color: #021d34; padding: 4px; vertical-align: top; height: 75px;'><div style='color: #f8fafc; font-weight: bold; font-size: 12px; margin-bottom: 2px;'>{dia}</div>{evs_html}</td>"
-                                else: # Días sin eventos
-                                    html_cal += f"<td style='border: 1px solid #153f59; padding: 4px; vertical-align: top; height: 75px; color: #7498b6; font-size: 12px;'>{dia}</td>"
-                        html_cal += "</tr>"
-                    html_cal += "</table>"
+                    # Filtramos eventos que toquen este mes
+                    eventos_mes = [e for e in eventos if e['inicio'] <= end_of_month and e['fin'] >= start_of_month]
                     
+                    if eventos_mes:
+                        html_cal += f"<h4 style='color: #94b8d7; margin-top: 20px; text-transform: uppercase;'>{meses[m]} {y}</h4>"
+                        html_cal += "<table style='width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 20px;'>"
+                        html_cal += "<tr style='color: #7498b6; font-size: 11px; text-align: center; background-color: #02152b;'><th>LUN</th><th>MAR</th><th>MIE</th><th>JUE</th><th>VIE</th><th>SAB</th><th>DOM</th></tr>"
+                        
+                        cal_weeks = calendar.monthcalendar(y, m)
+                        for week in cal_weeks:
+                            week_dates = [date(y, m, d) if d != 0 else None for d in week]
+                            
+                            # Buscar qué eventos cruzan por esta semana
+                            week_events = []
+                            for e in eventos_mes:
+                                valid_dates = [wd for wd in week_dates if wd is not None]
+                                if valid_dates and e['inicio'] <= valid_dates[-1] and e['fin'] >= valid_dates[0]:
+                                    week_events.append(e)
+                                    
+                            # Ordenamos para que los eventos más largos queden arriba (tipo Tetris)
+                            week_events.sort(key=lambda e: (-(e['fin'] - e['inicio']).days, e['inicio']))
+                            
+                            # Lógica para asignar "renglones" (slots) y que no se superpongan visualmente
+                            slots = []
+                            event_slots = {}
+                            for e in week_events:
+                                assigned = False
+                                for s_idx, s in enumerate(slots):
+                                    overlap = False
+                                    for wd in week_dates:
+                                        if wd and e['inicio'] <= wd <= e['fin'] and wd in s:
+                                            overlap = True
+                                            break
+                                    if not overlap:
+                                        for wd in week_dates:
+                                            if wd and e['inicio'] <= wd <= e['fin']:
+                                                s.append(wd)
+                                        event_slots[id(e)] = s_idx
+                                        assigned = True
+                                        break
+                                if not assigned:
+                                    new_slot = []
+                                    for wd in week_dates:
+                                        if wd and e['inicio'] <= wd <= e['fin']:
+                                            new_slot.append(wd)
+                                    slots.append(new_slot)
+                                    event_slots[id(e)] = len(slots) - 1
+
+                            # Dibujar los días de la semana
+                            html_cal += "<tr>"
+                            for i, d in enumerate(week):
+                                if d == 0:
+                                    html_cal += "<td style='border: 1px solid #153f59; background-color: rgba(2, 21, 43, 0.3); height: 85px;'></td>"
+                                else:
+                                    wd = date(y, m, d)
+                                    # Marcador de "Día de hoy"
+                                    is_today = wd == hoy
+                                    bg_color = "#032847" if is_today else "#021d34"
+                                    circle_style = "background-color: #10b981; color: #02152b; border-radius: 50%; width: 20px; height: 20px; display: inline-flex; justify-content: center; align-items: center;" if is_today else ""
+                                    day_num_html = f"<div style='color: #f8fafc; font-weight: bold; font-size: 12px; margin: 4px 4px 2px 4px;'><span style='{circle_style}'>{d}</span></div>"
+                                    
+                                    html_cal += f"<td style='border: 1px solid #153f59; background-color: {bg_color}; padding: 0; vertical-align: top; height: 85px; position: relative;'>"
+                                    html_cal += day_num_html
+                                    
+                                    # Dibujamos cada barra del evento para ese día
+                                    for s_idx in range(len(slots)):
+                                        ev = next((e for e in week_events if event_slots[id(e)] == s_idx and e['inicio'] <= wd <= e['fin']), None)
+                                        if ev:
+                                            color = get_color(ev['materia'])
+                                            
+                                            # Mostrar el texto solo el primer día del evento o el Lunes (para eventos que continúan)
+                                            is_start = wd == ev['inicio'] or i == 0 or week_dates[i-1] is None
+                                            text = ev['texto'] if is_start else "&nbsp;"
+                                            
+                                            # Bordes redondeados solo en las puntas reales del evento
+                                            radius = ""
+                                            if wd == ev['inicio']: radius += "border-top-left-radius: 4px; border-bottom-left-radius: 4px; "
+                                            if wd == ev['fin']: radius += "border-top-right-radius: 4px; border-bottom-right-radius: 4px; "
+                                            
+                                            # Quitar márgenes para que las barras se conecten entre los cuadros de los días
+                                            m_left = "4px" if wd == ev['inicio'] else "0"
+                                            m_right = "4px" if wd == ev['fin'] else "0"
+                                            
+                                            html_cal += f"<div style='background-color: {color}E6; color: #02152b; font-size: 10px; padding: 2px 4px; margin-top: 2px; margin-left: {m_left}; margin-right: {m_right}; {radius} overflow: hidden; white-space: nowrap; text-overflow: ellipsis; height: 18px; line-height: 14px;' title='{ev['texto']}'><b>{text}</b></div>"
+                                        else:
+                                            # Espaciador invisible para que la grilla vertical no se rompa si hay espacios huecos
+                                            html_cal += "<div style='height: 20px; margin-top: 2px;'></div>"
+                                            
+                                    html_cal += "</td>"
+                            html_cal += "</tr>"
+                        html_cal += "</table>"
+                    
+                    # Avanzar al próximo mes
+                    m += 1
+                    if m > 12:
+                        m = 1
+                        y += 1
+                        
                 st.markdown(html_cal, unsafe_allow_html=True)
 
     elif menu_opcion == "Plan de Estudios":

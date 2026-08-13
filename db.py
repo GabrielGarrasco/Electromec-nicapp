@@ -43,7 +43,7 @@ def cargar_datos_sheet():
     except: 
         return None, {}
 
-def guardar_datos():
+def guardar_datos(silencioso=False):
     try:
         datos = {
             'materias': st.session_state['materias'], 'metodos': st.session_state['metodos'],
@@ -51,7 +51,8 @@ def guardar_datos():
             'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera'],
             'horarios': st.session_state.get('horarios', []),
             'xp_total': st.session_state.get('xp_total', 0),
-            'recompensas': st.session_state.get('recompensas', [])
+            'recompensas': st.session_state.get('recompensas', []),
+            'logros_desbloqueados': st.session_state.get('logros_desbloqueados', [])
         }
         temarios = st.session_state.get('temarios', {})
         
@@ -71,7 +72,10 @@ def guardar_datos():
             sheet.update("Z2", eventos_formateados)
         
         cargar_datos_sheet.clear()
-        st.toast("Datos guardados correctamente.")
+        
+        if not silencioso:
+            st.toast("Datos guardados correctamente.")
+            
         return True
     except Exception as e:
         st.error(f"Error al guardar: {e}")

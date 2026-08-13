@@ -959,20 +959,48 @@ with col_contenido:
             if not eventos:
                 st.info("No hay eventos próximos.")
             else:
-                eventos.sort(key=lambda x: x['fecha_obj'])
-                html_cal = "<div style='background-color: #02152b; border-radius: 12px; padding: 15px; border: 1px solid #153f59;'>"
+                import calendar
+                eventos_dict = {}
                 for ev in eventos:
-                    color_mat_ev = "#f8fafc"
-                    mat_tag = ""
+                    d = ev['fecha_obj']
+                    mes_clave = (d.year, d.month)
+                    if mes_clave not in eventos_dict: eventos_dict[mes_clave] = {}
+                    if d.day not in eventos_dict[mes_clave]: eventos_dict[mes_clave][d.day] = []
+                    
+                    # Limpiamos el texto para que entre bien en el cuadradito
+                    texto = ev['texto_der'].replace("<span style='font-weight: 600;'>", "").replace("</span>", "")
+                    color_materia = "#7498b6" # Color por defecto para los manuales
                     if ev['materia']:
-                        color_mat_ev = next((mat_info.get('color', '#7498b6') for mat_info in st.session_state.get('materias', []) if isinstance(mat_info, dict) and mat_info.get('nombre') == ev['materia']), "#7498b6")
-                        mat_tag = f" <span style='color: {color_mat_ev}; font-size: 11px; margin-left: 5px;'>({ev['materia']})</span>"
-                        
-                    html_cal += f"<div style='display: flex; margin-bottom: 10px; border-bottom: 1px solid #153f59; padding-bottom: 8px; align-items: center;'>"
-                    html_cal += f"<div style='width: 140px; color: #10b981; font-weight: bold; font-size: 13px; flex-shrink: 0;'>{ev['texto_izq']}</div>"
-                    html_cal += f"<div style='flex: 1; color: #f8fafc; font-size: 14px;'>{ev['texto_der']}{mat_tag}</div>"
-                    html_cal += "</div>"
-                html_cal += "</div>"
+                        color_materia = next((m.get('color', '#10b981') for m in st.session_state.get('materias', []) if m['nombre'] == ev['materia']), "#10b981")
+                    
+                    eventos_dict[mes_clave][d.day].append({'texto': texto, 'color': color_materia})
+
+                meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                
+                html_cal = ""
+                # Solo renderizamos los meses que tienen eventos próximos
+                for (y, m) in sorted(eventos_dict.keys()):
+                    html_cal += f"<h4 style='color: #94b8d7; margin-top: 20px; text-transform: uppercase;'>{meses[m]} {y}</h4>"
+                    html_cal += "<table style='width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 20px;'>"
+                    html_cal += "<tr style='color: #7498b6; font-size: 11px; text-align: center; background-color: #02152b;'><th>LUN</th><th>MAR</th><th>MIE</th><th>JUE</th><th>VIE</th><th>SAB</th><th>DOM</th></tr>"
+                    
+                    for semana in calendar.monthcalendar(y, m):
+                        html_cal += "<tr>"
+                        for dia in semana:
+                            if dia == 0: # Días vacíos del mes
+                                html_cal += "<td style='border: 1px solid #153f59; background-color: rgba(2, 21, 43, 0.3); height: 75px;'></td>"
+                            else:
+                                if dia in eventos_dict[(y, m)]:
+                                    evs_html = ""
+                                    for e in eventos_dict[(y, m)][dia]:
+                                        # Le damos el color de la materia, cortamos el texto si es muy largo y añadimos un tooltip (title)
+                                        evs_html += f"<div style='background-color: {e['color']}33; border-left: 3px solid {e['color']}; color: #f8fafc; font-size: 10px; padding: 2px 4px; margin-top: 2px; border-radius: 0 4px 4px 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;' title='{e['texto']}'>{e['texto']}</div>"
+                                    html_cal += f"<td style='border: 1px solid #153f59; background-color: #021d34; padding: 4px; vertical-align: top; height: 75px;'><div style='color: #f8fafc; font-weight: bold; font-size: 12px; margin-bottom: 2px;'>{dia}</div>{evs_html}</td>"
+                                else: # Días sin eventos
+                                    html_cal += f"<td style='border: 1px solid #153f59; padding: 4px; vertical-align: top; height: 75px; color: #7498b6; font-size: 12px;'>{dia}</td>"
+                        html_cal += "</tr>"
+                    html_cal += "</table>"
+                    
                 st.markdown(html_cal, unsafe_allow_html=True)
 
     elif menu_opcion == "Plan de Estudios":

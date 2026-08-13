@@ -81,7 +81,7 @@ OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "S
 # CÁLCULO DE RACHA
 racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_racha(st.session_state['historial'])
 
-# --- DEFINICIÓN Y EVALUACIÓN DE LOGROS ---
+# --- DEFINICIÓN Y EVALUACIÓN DE LOGROS (30 en total) ---
 DEFINICION_LOGROS = [
     {"id": 1, "nombre": "El Bautismo", "desc": "Guardaste tu primera sesión de estudio en el historial."},
     {"id": 2, "nombre": "Máquina", "desc": "Hiciste una sesión de 3 horas o más de corrido."},
@@ -102,7 +102,17 @@ DEFINICION_LOGROS = [
     {"id": 17, "nombre": "Foco Profundo", "desc": "Sesión de 2 horas sin anotar una sola interrupción."},
     {"id": 18, "nombre": "Planificador", "desc": "Llegaste a tener 3 metas de examen planificadas a futuro simultáneamente."},
     {"id": 19, "nombre": "Arranque de Semana", "desc": "Estudiaste un lunes para arrancar con todo."},
-    {"id": 20, "nombre": "Maratón", "desc": "Sumaste más de 6 horas de estudio en un solo día."}
+    {"id": 20, "nombre": "Maratón", "desc": "Sumaste más de 6 horas de estudio en un solo día."},
+    {"id": 21, "nombre": "Erudito", "desc": "Aprobaste tus primeras 5 materias en el plan de estudios."},
+    {"id": 22, "nombre": "Especialista", "desc": "Acumulaste más de 50 horas de estudio (3000 min) en una sola materia."},
+    {"id": 23, "nombre": "Invencible", "desc": "Lograste la locura de 100 días de racha."},
+    {"id": 24, "nombre": "Resiliente", "desc": "Metiste una sesión de más de 2 horas a pesar de tener interrupciones en el medio."},
+    {"id": 25, "nombre": "Sobrecarga", "desc": "Llegaste a tener 5 materias activas (cursando o regulares) al mismo tiempo."},
+    {"id": 26, "nombre": "Caja de Herramientas", "desc": "Registraste al menos 8 métodos de estudio distintos en tu sistema."},
+    {"id": 27, "nombre": "Maestro del Repaso", "desc": "Dominaste al menos 10 temas llevándolos a nivel 3 o superior en la curva del olvido."},
+    {"id": 28, "nombre": "Titán", "desc": "Alcanzaste las 500 horas totales de estudio (30000 min)."},
+    {"id": 29, "nombre": "Amasador de XP", "desc": "Llegaste a acumular 50.000 de XP sin gastar."},
+    {"id": 30, "nombre": "Impecable", "desc": "Te sacaste un 10 clavado en la nota final de algún examen."}
 ]
 
 def evaluar_logros():
@@ -170,10 +180,29 @@ def evaluar_logros():
                 df['T_NUM'] = pd.to_numeric(df['TIEMPO (min)'], errors='coerce').fillna(0)
                 if not df.groupby('FECHA')['T_NUM'].sum().empty and df.groupby('FECHA')['T_NUM'].sum().max() >= 360:
                     cumple = True
+        elif l_id == 21 and sum(1 for m in plan if m.get('estado') == 'Aprobada/Promocionada') >= 5: cumple = True
+        elif l_id == 22 and hist:
+            df = pd.DataFrame(hist)
+            if 'MATERIA' in df.columns and 'TIEMPO (min)' in df.columns:
+                df['T_NUM'] = pd.to_numeric(df['TIEMPO (min)'], errors='coerce').fillna(0)
+                if not df.groupby('MATERIA')['T_NUM'].sum().empty and df.groupby('MATERIA')['T_NUM'].sum().max() >= 3000:
+                    cumple = True
+        elif l_id == 23 and racha_actual >= 100: cumple = True
+        elif l_id == 24 and any(int(h.get('TIEMPO (min)', 0)) >= 120 and h.get('EFIC.') != '100%' for h in hist): cumple = True
+        elif l_id == 25 and sum(1 for m in plan if m.get('estado') in ['Cursando', 'Regular']) >= 5: cumple = True
+        elif l_id == 26 and len(st.session_state.get('metodos', [])) >= 8: cumple = True
+        elif l_id == 27 and sum(1 for temario in st.session_state.get('temarios', {}).values() for t in temario if t.get('nivel', 0) >= 3) >= 10: cumple = True
+        elif l_id == 28 and sum(int(h.get('TIEMPO (min)', 0)) for h in hist) >= 30000: cumple = True
+        elif l_id == 29 and st.session_state.get('xp_total', 0) >= 50000: cumple = True
+        elif l_id == 30:
+            for m in metas:
+                if m.get('nota'):
+                    n = parse_float_nota(m['nota'])
+                    if n is not None and n == 10: cumple = True
         
         if cumple:
             desbloqueados.append(l_id)
-            st.toast(f"🏆 ¡Nuevo Logro Desbloqueado!\n**{logro['nombre']}**\n{logro['desc']}")
+            st.toast(f"Nuevo Logro Desbloqueado: {logro['nombre']}\n{logro['desc']}")
             nuevos_desbloqueados = True
             
     if nuevos_desbloqueados:
@@ -184,6 +213,7 @@ def evaluar_logros():
 evaluar_logros()
 
 # --- MODO INVASIÓN ---
+# Se activa solo si hay 2 o más exámenes en los próximos 7 días a partir de HOY.
 hoy_date = date.today()
 examenes_proximos = []
 for m in st.session_state['metas']:
@@ -209,9 +239,6 @@ if modo_invasion:
         .analitica-title, .historico-title, h1, h2, h3, h4, p, div, span { color: #f8fafc !important; }
         .materia-pill, .badge-cursando, .badge-regular { background-color: #7D1935 !important; color: #f8fafc !important; border: 1px solid #950101 !important; }
     </style>
-    <div style='background-color: #950101; padding: 10px; text-align: center; font-weight: bold; margin-bottom: 15px; border-radius: 8px;'>
-        ALERTA DE INVASIÓN: Múltiples exámenes próximos. XP x2 activada.
-    </div>
     """, unsafe_allow_html=True)
 
 
@@ -250,7 +277,7 @@ if st.session_state.get('show_racha_modal', False):
 
 @st.dialog("Detalle del Logro")
 def dialog_logro(nombre, desc):
-    st.markdown(f"<h3 style='text-align:center; color:#10b981; margin-top:0;'>🏆 {nombre}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='text-align:center; color:#10b981; margin-top:0;'>{nombre}</h3>", unsafe_allow_html=True)
     st.markdown(f"<p style='text-align:center; color:#f8fafc; font-size:16px;'>{desc}</p>", unsafe_allow_html=True)
     st.write("<br>", unsafe_allow_html=True)
     if st.button("Genial", use_container_width=True):
@@ -1421,7 +1448,7 @@ with col_contenido:
                     if st.button(logro['nombre'], key=f"btn_logro_unlocked_{logro['id']}", use_container_width=True):
                         dialog_logro(logro['nombre'], logro['desc'])
                 else:
-                    st.button(f"Logro {i+1}/20", key=f"btn_logro_locked_{logro['id']}", disabled=True, use_container_width=True)
+                    st.button(f"Logro {i+1}/30", key=f"btn_logro_locked_{logro['id']}", disabled=True, use_container_width=True)
 
 
     elif menu_opcion == "Página Principal":

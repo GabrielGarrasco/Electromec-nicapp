@@ -48,7 +48,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['calendario_manual'] = datos_generales.get('calendario_manual', "")
         st.session_state['xp_total'] = datos_generales.get('xp_total', 0)
         st.session_state['recompensas'] = datos_generales.get('recompensas', [
-            {"nombre": "Comida chatarra", "costo": 3000},
+            {"nombre": "Alfajor", "costo": 3000},
             {"nombre": "Tarde libre sin culpa", "costo": 5000}
         ])
         for m in st.session_state['metas']:
@@ -64,7 +64,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['calendario_manual'] = ""
         st.session_state['xp_total'] = 0
         st.session_state['recompensas'] = [
-            {"nombre": "Comida chatarra", "costo": 3000},
+            {"nombre": "Alfajor", "costo": 3000},
             {"nombre": "Tarde libre sin culpa", "costo": 5000}
         ]
         

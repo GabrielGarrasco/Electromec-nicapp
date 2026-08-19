@@ -2007,6 +2007,7 @@ with col_contenido:
                         html_hist += "</table>"
                         
                         st.markdown(html_hist, unsafe_allow_html=True)
-            elif menu_opcion == "Digitalizar Apuntes":
+
+    elif menu_opcion == "Digitalizar Apuntes":
         import transcriptor
         transcriptor.renderizar_transcriptor()

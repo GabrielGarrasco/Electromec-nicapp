@@ -1703,15 +1703,17 @@ with col_contenido:
                         
                         # --- EVALUACIÓN DE LA CURVA DEL OLVIDO ---
                         temas_disponibles = st.session_state.get('temarios', {}).get(materia_sel, [])
-                        opciones_temas = ["-- Repaso general / Ninguno --"] + [t['tema'] for t in temas_disponibles]
+                        opciones_temas = [t['tema'] for t in temas_disponibles]
                         
                         st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                         st.caption("EVALUAR TEMA (Curva del Olvido)")
-                        tema_sel = st.selectbox("¿Qué tema estudiaste hoy?", opciones_temas)
+                        
+                        # Acá cambiamos a multiselect para elegir varios
+                        temas_sel = st.multiselect("¿Qué temas estudiaste hoy?", opciones_temas)
                         
                         confianza = 3
-                        if tema_sel != "-- Repaso general / Ninguno --":
-                            st.write("¿Qué tan bien lo entendiste?")
+                        if temas_sel: # Si eligió al menos un tema
+                            st.write("¿Qué tan bien los entendiste en general?")
                             confianza = st.slider("1 = Me costó un montón, 5 = Lo doy en un final oral", 1, 5, 3)
                         
                     st.write("")
@@ -1740,22 +1742,20 @@ with col_contenido:
                                     m['horas_acumuladas'] += (minutos_estudio / 60)
                                     break
                                     
-                        # Aplicar la curva al guardar
-                        if tema_sel != "-- Repaso general / Ninguno --":
+                        # Aplicar la curva al guardar para TODOS los temas seleccionados
+                        if temas_sel:
                             metas_materia = [m for m in st.session_state['metas'] if m['materia'] == materia_sel and date.fromisoformat(m['fecha_examen']) >= date.today()]
                             fecha_prox_examen = None
                             if metas_materia:
                                 metas_materia.sort(key=lambda x: date.fromisoformat(x['fecha_examen']))
-                                if not metas_materia[0].get('temas_examen') or tema_sel in metas_materia[0]['temas_examen']:
-                                    fecha_prox_examen = metas_materia[0]['fecha_examen']
-                                    
+                                fecha_prox_examen = metas_materia[0]['fecha_examen']
+                                
                             for t in st.session_state['temarios'][materia_sel]:
-                                if t['tema'] == tema_sel:
+                                if t['tema'] in temas_sel: # Verificamos si está en la lista
                                     nivel_actual = t.get('nivel', 0)
                                     nuevo_nivel, prox_fecha = calcular_proximo_repaso(confianza, nivel_actual, fecha_prox_examen)
                                     t['nivel'] = nuevo_nivel
                                     t['proximo_repaso'] = prox_fecha
-                                    break
                         
                         if guardar_datos():
                             st.session_state['timer']['state'] = 'IDLE'

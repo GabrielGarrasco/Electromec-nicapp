@@ -1624,7 +1624,7 @@ with col_contenido:
                         st.session_state['timer']['interruption_reason'] = motivo
                         st.session_state['timer']['interruptions'].append(motivo)
                         st.session_state['timer']['pause_start'] = time.time()
-                        st.session_state['timer']['pause_elapsed'] = 0.0
+                        # st.session_state['timer']['pause_elapsed'] = 0.0 # <-- Eliminado para no blanquear pausas anteriores
                         st.session_state['timer']['state'] = 'PAUSED'
                         st.rerun()
                 st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
@@ -1669,6 +1669,7 @@ with col_contenido:
                 c1, c2, c3 = st.columns([1, 2, 1])
                 with c2:
                     if st.button("REANUDAR", type="primary", use_container_width=True):
+                        st.session_state['timer']['pause_elapsed'] += time.time() - st.session_state['timer']['pause_start']
                         st.session_state['timer']['start'] = time.time()
                         st.session_state['timer']['state'] = 'RUNNING'
                         st.rerun()
@@ -1719,10 +1720,14 @@ with col_contenido:
                     st.write("")
                     if st.button("Guardar Sesión", type="primary", use_container_width=True):
                         minutos_estudio = round(st.session_state['timer']['elapsed'] / 60)
+                        minutos_pausa = round(st.session_state['timer']['pause_elapsed'] / 60)
+                        total_min = minutos_estudio + minutos_pausa
+                        eficiencia_calc = round((minutos_estudio / total_min * 100)) if total_min > 0 else 100
+                        
                         nueva_sesion = {
                             "FECHA": datetime.now().strftime("%d/%m/%Y"),
                             "MATERIA": materia_sel, "MÉTODO": metodo_sel,
-                            "TIEMPO (min)": minutos_estudio, "EFIC.": "100%",
+                            "TIEMPO (min)": minutos_estudio, "EFIC.": f"{eficiencia_calc}%",
                             "INTERRUPCIONES": st.session_state['timer']['interruptions']
                         }
                         st.session_state['historial'].append(nueva_sesion)

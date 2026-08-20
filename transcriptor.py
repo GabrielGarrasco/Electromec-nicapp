@@ -1,18 +1,102 @@
 import streamlit as st
 import os
 import requests
+import re
 from PIL import Image
 from google import genai
 from google.genai import types
 
 # --- DICCIONARIO DE MATERIAS A NOTION ---
-# Reemplazá los números raros por los IDs reales de tus páginas de Notion.
-# El nombre de la materia tiene que coincidir exacto con los que tenés en la app.
 MATERIAS_NOTION = {
     "FÍSICA 1": "pega_el_id_de_32_caracteres_aca",
     "PROBABILIDAD Y ESTADÍSTICA": "3c2f8087b7d18038959cd4ee3c84cfc7",
     "MATEMÁTICA SUPERIOR": "pega_el_id_de_32_caracteres_aca"
 }
+
+def parse_rich_text(text):
+    """Traduce negritas y fórmulas inline al formato nativo de Notion"""
+    tokens = re.split(r'(\$\$.*?\$\$|\$.*?\$|\*\*.*?\*\*)', text)
+    rich_text_array = []
+    for token in tokens:
+        if not token: continue
+        if token.startswith('$$') and token.endswith('$$'):
+            rich_text_array.append({"type": "equation", "equation": {"expression": token[2:-2].strip()}})
+        elif token.startswith('$') and token.endswith('$'):
+            rich_text_array.append({"type": "equation", "equation": {"expression": token[1:-1].strip()}})
+        elif token.startswith('**') and token.endswith('**'):
+            rich_text_array.append({"type": "text", "text": {"content": token[2:-2]}, "annotations": {"bold": True}})
+        else:
+            rich_text_array.append({"type": "text", "text": {"content": token}})
+    return rich_text_array
+
+def markdown_to_notion_blocks(markdown_text):
+    """Convierte el texto Markdown crudo en bloques puros de Notion"""
+    bloques = []
+    lineas = markdown_text.split('\n')
+    i = 0
+    
+    while i < len(lineas):
+        linea = lineas[i].strip()
+        if not linea:
+            i += 1
+            continue
+            
+        # 1. Títulos
+        if linea.startswith('### '):
+            bloques.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": parse_rich_text(linea[4:])}})
+        elif linea.startswith('## '):
+            bloques.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": parse_rich_text(linea[3:])}})
+        elif linea.startswith('# '):
+            bloques.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": parse_rich_text(linea[2:])}})
+            
+        # 2. Listas y Viñetas
+        elif linea.startswith('* ') or linea.startswith('- '):
+            bloques.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": parse_rich_text(linea[2:])}})
+            
+        # 3. Citas / Quotes
+        elif linea.startswith('> '):
+            bloques.append({"object": "block", "type": "quote", "quote": {"rich_text": parse_rich_text(linea[2:])}})
+            
+        # 4. Separador
+        elif linea == '---':
+            bloques.append({"object": "block", "type": "divider", "divider": {}})
+            
+        # 5. Ecuaciones en bloque grande
+        elif linea.startswith('$$') and linea.endswith('$$') and len(linea) > 4:
+            bloques.append({"object": "block", "type": "equation", "equation": {"expression": linea[2:-2].strip()}})
+            
+        # 6. Tablas Mágicas
+        elif linea.startswith('|'):
+            table_rows = []
+            while i < len(lineas) and lineas[i].strip().startswith('|'):
+                row_line = lineas[i].strip()
+                # Salteamos el renglón separador |---|---|
+                if re.match(r'^\|[\s\-\|:]+\|$', row_line):
+                    i += 1
+                    continue
+                
+                cells = [cell.strip() for cell in row_line.split('|')[1:-1]]
+                row_cells = [parse_rich_text(cell) for cell in cells]
+                table_rows.append({"object": "block", "type": "table_row", "table_row": {"cells": row_cells}})
+                i += 1
+                
+            if table_rows:
+                bloques.append({
+                    "object": "block", "type": "table",
+                    "table": {
+                        "table_width": len(table_rows[0]["table_row"]["cells"]),
+                        "has_column_header": True, "has_row_header": False,
+                        "children": table_rows
+                    }
+                })
+            continue # La tabla ya sumó al contador de 'i'
+            
+        # 7. Párrafos normales
+        else:
+            bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": parse_rich_text(linea)}})
+            
+        i += 1
+    return bloques
 
 def mandar_a_notion(texto, page_id, token):
     url = f"https://api.notion.com/v1/blocks/{page_id}/children"
@@ -22,42 +106,24 @@ def mandar_a_notion(texto, page_id, token):
         "Notion-Version": "2022-06-28"
     }
     
-    bloques = []
-    parrafos = texto.split('\n\n')
+    bloques_procesados = markdown_to_notion_blocks(texto)
     
-    for p in parrafos:
-        p = p.strip()
-        if not p: continue
-            
-        if p.startswith('$$') and p.endswith('$$'):
-            formula = p.replace('$$', '').strip()
-            bloques.append({"object": "block", "type": "equation", "equation": {"expression": formula}})
-        elif p.startswith('# '):
-            bloques.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": [{"type": "text", "text": {"content": p[2:].strip()}}]}})
-        elif p.startswith('## '):
-            bloques.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": p[3:].strip()}}]}})
-        else:
-            lineas = p.split('\n')
-            for linea in lineas:
-                if linea.strip():
-                    bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": linea[:2000]}}]}})
-            
-    # SOLUCIÓN AL LÍMITE DE 100 BLOQUES DE NOTION:
-    chunk_size = 99
+    # Mandamos en bloques de a 90 para burlar el límite de Notion (100)
+    chunk_size = 90
     respuesta = None
-    for i in range(0, len(bloques), chunk_size):
-        chunk = bloques[i:i + chunk_size]
+    for i in range(0, len(bloques_procesados), chunk_size):
+        chunk = bloques_procesados[i:i + chunk_size]
         data = {"children": chunk}
         respuesta = requests.patch(url, headers=headers, json=data)
         if respuesta.status_code != 200:
-            return respuesta # Corta si tira error
+            return respuesta
             
     return respuesta
 
 @st.dialog("✏️ Editar Transcripción", width="large")
 def dialog_editar_texto():
-    st.info("Acá podés corregir la versión cruda. Lo que guardes acá se va a mandar a Notion.")
-    texto_editado = st.text_area("Markdown crudo", st.session_state['ultima_transcripcion'], height=450, label_visibility="collapsed")
+    st.info("Acá podés corregir la versión cruda. Lo que guardes acá es lo que se envía a Notion.")
+    texto_editado = st.text_area("Texto", st.session_state['ultima_transcripcion'], height=450, label_visibility="collapsed")
     if st.button("Guardar Cambios", type="primary"):
         st.session_state['ultima_transcripcion'] = texto_editado
         st.rerun()
@@ -77,7 +143,6 @@ def renderizar_transcriptor():
         st.session_state['dicc_abreviaturas'] = "Ej: q = que, cto = circuito, tmb = también"
 
     with st.expander("Mis Abreviaturas (Opcional)"):
-        st.info("Anotá acá tus abreviaturas si querés forzar a la IA a que las lea de una manera específica.")
         st.session_state['dicc_abreviaturas'] = st.text_area("Diccionario", st.session_state['dicc_abreviaturas'], height=100, label_visibility="collapsed")
 
     archivos_subidos = st.file_uploader("Subí las fotos de tus apuntes acá", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
@@ -106,14 +171,14 @@ def renderizar_transcriptor():
                     Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes manteniendo la estructura original.
                     
                     REGLAS ESTRICTAS:
-                    1. ESTRUCTURA: Respeta los títulos, subtítulos, listas y sangrías en formato Markdown.
-                    2. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Prohibido usar LaTeX para texto normal. Reserva LaTeX solo para ecuaciones.
-                    3. ESQUEMAS/CUADROS: Transcribe su contenido de forma lógica.
-                    4. NOTAS: Si hay post-its, transcríbelas agregando "[NOTA]: " al inicio.
-                    5. ABREVIATURAS: Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
-                    6. IMPORTANTE - NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
-                    NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha.md
-                    (Saca los datos del texto. Prioriza el título de la Unidad/Tema).
+                    1. ESTRUCTURA: Respeta los títulos, subtítulos y sangrías. 
+                    2. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
+                    3. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones.
+                    4. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
+                    5. NOTAS: Si hay post-its, transcríbelas agregando "[NOTA]: " al inicio.
+                    6. ABREVIATURAS: Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
+                    7. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
+                    NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """
 
                     response = client.models.generate_content(
@@ -123,7 +188,6 @@ def renderizar_transcriptor():
                     )
 
                     texto_completo = response.text
-                    nombre_archivo = "Apuntes_Digitalizados.md"
                     texto_limpio = texto_completo
                     materia_detectada = ""
                     
@@ -131,7 +195,6 @@ def renderizar_transcriptor():
                         partes = texto_completo.split("NOMBRE_ARCHIVO:")
                         texto_limpio = partes[0].strip()
                         nombre_archivo = partes[1].strip()
-                        if not nombre_archivo.endswith(".md"): nombre_archivo += ".md"
                         
                         for mat in MATERIAS_NOTION.keys():
                             if mat.lower() in nombre_archivo.lower():
@@ -139,29 +202,25 @@ def renderizar_transcriptor():
                                 break
 
                     st.session_state['ultima_transcripcion'] = texto_limpio
-                    st.session_state['ultimo_nombre_archivo'] = nombre_archivo
                     st.session_state['materia_detectada'] = materia_detectada
 
                 except Exception as e:
                     st.error(f"Hubo un error al procesar las imágenes: {e}")
 
-        # --- SECCIÓN DE PREVISUALIZACIÓN Y EXPORTACIÓN (CERO FRICCIÓN) ---
+        # --- SECCIÓN DE PREVISUALIZACIÓN Y EXPORTACIÓN ---
         if 'ultima_transcripcion' in st.session_state:
             st.success("¡Transcripción completada!")
             
-            # 1. Previsualización limpia y renderizada
             st.markdown("### Previsualización:")
             st.container(border=True).markdown(st.session_state['ultima_transcripcion'])
 
             st.divider()
             
-            # Selector de materia
             lista_materias = list(MATERIAS_NOTION.keys())
-            idx_mat = lista_materias.index(st.session_state['materia_detectada']) if st.session_state['materia_detectada'] in lista_materias else 0
+            idx_mat = lista_materias.index(st.session_state['materia_detectada']) if st.session_state.get('materia_detectada') in lista_materias else 0
             materia_elegida = st.selectbox("¿A qué materia de Notion lo mandamos?", lista_materias, index=idx_mat)
             
-            # Botonera de acciones
-            c_btn1, c_btn2, c_btn3 = st.columns(3)
+            c_btn1, c_btn2 = st.columns(2)
             
             with c_btn1:
                 if st.button("✏️ Editar Texto", use_container_width=True):
@@ -176,18 +235,9 @@ def renderizar_transcriptor():
                         if page_id == "pega_el_id_de_32_caracteres_aca":
                             st.warning("Te falta poner el ID real de la materia en el código.")
                         else:
-                            with st.spinner("Enviando a Notion en bloques..."):
+                            with st.spinner("Enviando a Notion con formato nativo..."):
                                 res = mandar_a_notion(st.session_state['ultima_transcripcion'], page_id, notion_token)
                                 if res.status_code == 200:
                                     st.toast("¡Apunte transferido con éxito! 🎉")
                                 else:
                                     st.error(f"Error de Notion: {res.text}")
-
-            with c_btn3:
-                st.download_button(
-                    label="Descargar (.md)", 
-                    data=st.session_state['ultima_transcripcion'], 
-                    file_name=st.session_state.get('ultimo_nombre_archivo', 'Apuntes.md'), 
-                    mime="text/markdown", 
-                    use_container_width=True
-                )

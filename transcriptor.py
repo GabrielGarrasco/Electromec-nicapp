@@ -13,30 +13,51 @@ MATERIAS_NOTION = {
     "MATEMÁTICA SUPERIOR": "pega_el_id_de_32_caracteres_aca"
 }
 
-def parse_rich_text(text):
-    """Traduce negritas, fórmulas inline y color verde al formato nativo de Notion"""
-    tokens = re.split(r'(<green>.*?</green>|\$\$.*?\$\$|\$.*?\$|\*\*.*?\*\*)', text)
-    rich_text_array = []
-    for token in tokens:
-        if not token: continue
-        if token.startswith('<green>') and token.endswith('</green>'):
-            rich_text_array.append({"type": "text", "text": {"content": token[7:-8]}, "annotations": {"color": "green"}})
-        elif token.startswith('$$') and token.endswith('$$'):
-            rich_text_array.append({"type": "equation", "equation": {"expression": token[2:-2].strip()}})
-        elif token.startswith('$') and token.endswith('$'):
-            rich_text_array.append({"type": "equation", "equation": {"expression": token[1:-1].strip()}})
-        elif token.startswith('**') and token.endswith('**'):
-            rich_text_array.append({"type": "text", "text": {"content": token[2:-2]}, "annotations": {"bold": True}})
-        else:
-            rich_text_array.append({"type": "text", "text": {"content": token}})
-    return rich_text_array
-
 def markdown_to_notion_blocks(markdown_text):
     """Convierte el texto Markdown crudo en bloques puros de Notion"""
+    # Limpiamos por si la IA escapó los símbolos de dólar por error
+    markdown_text = markdown_text.replace('\\$', '$')
+    
     bloques = []
     lineas = markdown_text.split('\n')
     i = 0
+    is_green = False  # Mantiene el estado del color entre renglones y listas
     
+    def parse_line(text):
+        nonlocal is_green
+        tokens = re.split(r'(<green>|</green>|\$\$.*?\$\$|\$.*?\$|\*\*.*?\*\*)', text)
+        rich_text_array = []
+        
+        for token in tokens:
+            if not token: continue
+            
+            if token == '<green>':
+                is_green = True
+                continue
+            if token == '</green>':
+                is_green = False
+                continue
+                
+            annotations = {}
+            if is_green:
+                annotations["color"] = "green"
+                
+            if token.startswith('$$') and token.endswith('$$'):
+                rich_text_array.append({"type": "equation", "equation": {"expression": token[2:-2].strip()}})
+            elif token.startswith('$') and token.endswith('$') and token != '$':
+                rich_text_array.append({"type": "equation", "equation": {"expression": token[1:-1].strip()}})
+            elif token.startswith('**') and token.endswith('**'):
+                annotations["bold"] = True
+                rich_text_array.append({"type": "text", "text": {"content": token[2:-2]}, "annotations": annotations.copy()})
+            else:
+                rich_text_array.append({"type": "text", "text": {"content": token}, "annotations": annotations.copy()})
+        
+        # Si la línea era solo etiquetas, mandamos texto vacío para que Notion no crashee
+        if not rich_text_array:
+            rich_text_array.append({"type": "text", "text": {"content": ""}})
+            
+        return rich_text_array
+
     while i < len(lineas):
         linea = lineas[i].strip()
         if not linea:
@@ -45,19 +66,19 @@ def markdown_to_notion_blocks(markdown_text):
             
         # 1. Títulos
         if linea.startswith('### '):
-            bloques.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": parse_rich_text(linea[4:])}})
+            bloques.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": parse_line(linea[4:])}})
         elif linea.startswith('## '):
-            bloques.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": parse_rich_text(linea[3:])}})
+            bloques.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": parse_line(linea[3:])}})
         elif linea.startswith('# '):
-            bloques.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": parse_rich_text(linea[2:])}})
+            bloques.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": parse_line(linea[2:])}})
             
         # 2. Listas y Viñetas
         elif linea.startswith('* ') or linea.startswith('- '):
-            bloques.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": parse_rich_text(linea[2:])}})
+            bloques.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": parse_line(linea[2:])}})
             
         # 3. Citas / Quotes
         elif linea.startswith('> '):
-            bloques.append({"object": "block", "type": "quote", "quote": {"rich_text": parse_rich_text(linea[2:])}})
+            bloques.append({"object": "block", "type": "quote", "quote": {"rich_text": parse_line(linea[2:])}})
             
         # 4. Separador
         elif linea == '---':
@@ -77,7 +98,7 @@ def markdown_to_notion_blocks(markdown_text):
                     continue
                 
                 cells = [cell.strip() for cell in row_line.split('|')[1:-1]]
-                row_cells = [parse_rich_text(cell) for cell in cells]
+                row_cells = [parse_line(cell) for cell in cells]
                 table_rows.append({"object": "block", "type": "table_row", "table_row": {"cells": row_cells}})
                 i += 1
                 
@@ -99,7 +120,7 @@ def markdown_to_notion_blocks(markdown_text):
                 "object": "block",
                 "type": "callout",
                 "callout": {
-                    "rich_text": parse_rich_text(texto_nota),
+                    "rich_text": parse_line(texto_nota),
                     "icon": {"type": "emoji", "emoji": "📌"},
                     "color": "yellow_background"
                 }
@@ -119,7 +140,7 @@ def markdown_to_notion_blocks(markdown_text):
             
         # 9. Párrafos normales
         else:
-            bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": parse_rich_text(linea)}})
+            bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": parse_line(linea)}})
             
         i += 1
     return bloques
@@ -198,9 +219,9 @@ def renderizar_transcriptor():
                     REGLAS ESTRICTAS:
                     1. ESTRUCTURA Y FORMATO EXACTO: Respeta los títulos, subtítulos, sangrías y la disposición espacial literalmente igual que en las fotos para que quede limpio y ordenado en la computadora.
                     2. ABREVIATURAS (¡CRÍTICO!): Identifica y REEMPLAZA todas las abreviaturas por la palabra completa según el contexto. Por ejemplo, "coef." debe transcribirse siempre como "coeficiente". Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
-                    3. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo (presta mucha atención a los textos escritos en lápiz, ya que suelen serlo), enciérralo estrictamente entre las etiquetas <green> y </green> (Ej: <green>Ejemplo: esto va en verde</green>).
+                    3. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo (presta mucha atención a los textos escritos en lápiz), enciérralo siempre abriendo con <green> y cerrando con </green>. NO dejes etiquetas a medias.
                     4. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
-                    5. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones matemáticas.
+                    5. ECUACIONES Y SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas. Escribe las ecuaciones SIEMPRE encerradas entre símbolos de dólar simples ($ecuación$) o dobles ($$ecuación$$), NUNCA escapes el símbolo de dólar con barras invertidas (NUNCA escribas \\$).
                     6. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
                     7. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
                     8. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.

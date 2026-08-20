@@ -10,7 +10,7 @@ from google.genai import types
 # El nombre de la materia tiene que coincidir exacto con los que tenés en la app.
 MATERIAS_NOTION = {
     "FÍSICA 1": "pega_el_id_de_32_caracteres_aca",
-    "PROBABILIDAD Y ESTADÍSTICA": "pega_el_id_de_32_caracteres_aca",
+    "PROBABILIDAD Y ESTADÍSTICA": "3c2f8087b7d18038959cd4ee3c84cfc7",
     "MATEMÁTICA SUPERIOR": "pega_el_id_de_32_caracteres_aca"
 }
 

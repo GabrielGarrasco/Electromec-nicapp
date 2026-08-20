@@ -14,12 +14,14 @@ MATERIAS_NOTION = {
 }
 
 def parse_rich_text(text):
-    """Traduce negritas y fórmulas inline al formato nativo de Notion"""
-    tokens = re.split(r'(\$\$.*?\$\$|\$.*?\$|\*\*.*?\*\*)', text)
+    """Traduce negritas, fórmulas inline y color verde al formato nativo de Notion"""
+    tokens = re.split(r'(<green>.*?</green>|\$\$.*?\$\$|\$.*?\$|\*\*.*?\*\*)', text)
     rich_text_array = []
     for token in tokens:
         if not token: continue
-        if token.startswith('$$') and token.endswith('$$'):
+        if token.startswith('<green>') and token.endswith('</green>'):
+            rich_text_array.append({"type": "text", "text": {"content": token[7:-8]}, "annotations": {"color": "green"}})
+        elif token.startswith('$$') and token.endswith('$$'):
             rich_text_array.append({"type": "equation", "equation": {"expression": token[2:-2].strip()}})
         elif token.startswith('$') and token.endswith('$'):
             rich_text_array.append({"type": "equation", "equation": {"expression": token[1:-1].strip()}})
@@ -115,19 +117,7 @@ def markdown_to_notion_blocks(markdown_text):
                 }
             })
             
-        # 9. EJEMPLOS (Párrafo con texto verde)
-        elif linea.startswith('[EJEMPLO]:'):
-            texto_ejemplo = linea.replace('[EJEMPLO]:', '').strip()
-            bloques.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": parse_rich_text(texto_ejemplo),
-                    "color": "green"
-                }
-            })
-            
-        # 10. Párrafos normales
+        # 9. Párrafos normales
         else:
             bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": parse_rich_text(linea)}})
             
@@ -203,17 +193,17 @@ def renderizar_transcriptor():
             with st.spinner("Escaneando documentos..."):
                 try:
                     prompt_maestro = f"""
-                    Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes manteniendo la estructura original.
+                    Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes.
                     
                     REGLAS ESTRICTAS:
-                    1. ESTRUCTURA: Respeta los títulos, subtítulos y sangrías. 
-                    2. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
-                    3. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones.
-                    4. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
-                    5. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
-                    6. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
-                    7. ABREVIATURAS Y TEXTO LITERAL: Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}. IMPORTANTE: NO omitas abreviaturas que no estén en el diccionario (como "coef."), transcríbelas tal cual, letra por letra, sin saltearte nada.
-                    8. EJEMPLOS (LÁPIZ): Los ejemplos y ejercicios (que muchas veces están escritos en lápiz) escríbelos en un renglón nuevo empezando exactamente con la etiqueta: [EJEMPLO]: seguido del texto.
+                    1. ESTRUCTURA Y FORMATO EXACTO: Respeta los títulos, subtítulos, sangrías y la disposición espacial literalmente igual que en las fotos para que quede limpio y ordenado en la computadora.
+                    2. ABREVIATURAS (¡CRÍTICO!): Identifica y REEMPLAZA todas las abreviaturas por la palabra completa según el contexto. Por ejemplo, "coef." debe transcribirse siempre como "coeficiente". Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
+                    3. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo (presta mucha atención a los textos escritos en lápiz, ya que suelen serlo), enciérralo estrictamente entre las etiquetas <green> y </green> (Ej: <green>Ejemplo: esto va en verde</green>).
+                    4. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
+                    5. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones matemáticas.
+                    6. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
+                    7. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
+                    8. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
                     9. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
                     NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """
@@ -249,10 +239,7 @@ def renderizar_transcriptor():
             st.success("¡Transcripción completada!")
             
             st.markdown("### Previsualización:")
-            
-            # Reemplazo visual para Streamlit (renderiza el verde en la previsualización)
-            texto_preview = st.session_state['ultima_transcripcion'].replace('[EJEMPLO]:', '<span style="color: green; font-weight: bold;">[EJEMPLO]:</span>')
-            st.container(border=True).markdown(texto_preview, unsafe_allow_html=True)
+            st.container(border=True).markdown(st.session_state['ultima_transcripcion'])
 
             st.divider()
             
@@ -281,6 +268,3 @@ def renderizar_transcriptor():
                                     st.toast("¡Apunte transferido con éxito! 🎉")
                                 else:
                                     st.error(f"Error de Notion: {res.text}")
-
-if __name__ == "__main__":
-    renderizar_transcriptor()

@@ -22,21 +22,45 @@ def mandar_a_notion(texto, page_id, token):
         "Notion-Version": "2022-06-28"
     }
     
-    # Separamos el texto por renglones para mandarlo como párrafos a Notion
     bloques = []
-    for parrafo in texto.split('\n'):
-        if parrafo.strip():
-            bloques.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": [{"type": "text", "text": {"content": parrafo[:2000]}}]
-                }
-            })
+    parrafos = texto.split('\n\n')
+    
+    for p in parrafos:
+        p = p.strip()
+        if not p: continue
             
-    data = {"children": bloques}
-    respuesta = requests.patch(url, headers=headers, json=data)
+        if p.startswith('$$') and p.endswith('$$'):
+            formula = p.replace('$$', '').strip()
+            bloques.append({"object": "block", "type": "equation", "equation": {"expression": formula}})
+        elif p.startswith('# '):
+            bloques.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": [{"type": "text", "text": {"content": p[2:].strip()}}]}})
+        elif p.startswith('## '):
+            bloques.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": p[3:].strip()}}]}})
+        else:
+            lineas = p.split('\n')
+            for linea in lineas:
+                if linea.strip():
+                    bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": linea[:2000]}}]}})
+            
+    # SOLUCIÓN AL LÍMITE DE 100 BLOQUES DE NOTION:
+    chunk_size = 99
+    respuesta = None
+    for i in range(0, len(bloques), chunk_size):
+        chunk = bloques[i:i + chunk_size]
+        data = {"children": chunk}
+        respuesta = requests.patch(url, headers=headers, json=data)
+        if respuesta.status_code != 200:
+            return respuesta # Corta si tira error
+            
     return respuesta
+
+@st.dialog("✏️ Editar Transcripción", width="large")
+def dialog_editar_texto():
+    st.info("Acá podés corregir la versión cruda. Lo que guardes acá se va a mandar a Notion.")
+    texto_editado = st.text_area("Markdown crudo", st.session_state['ultima_transcripcion'], height=450, label_visibility="collapsed")
+    if st.button("Guardar Cambios", type="primary"):
+        st.session_state['ultima_transcripcion'] = texto_editado
+        st.rerun()
 
 def renderizar_transcriptor():
     st.header("Digitalizar Apuntes")
@@ -60,7 +84,6 @@ def renderizar_transcriptor():
 
     if archivos_subidos:
         st.subheader("Ordená tus páginas")
-        
         cols = st.columns(len(archivos_subidos))
         imagenes_ordenadas = []
         
@@ -110,7 +133,6 @@ def renderizar_transcriptor():
                         nombre_archivo = partes[1].strip()
                         if not nombre_archivo.endswith(".md"): nombre_archivo += ".md"
                         
-                        # Intentamos adivinar la materia buscando los nombres conocidos en el título
                         for mat in MATERIAS_NOTION.keys():
                             if mat.lower() in nombre_archivo.lower():
                                 materia_detectada = mat
@@ -123,43 +145,48 @@ def renderizar_transcriptor():
                 except Exception as e:
                     st.error(f"Hubo un error al procesar las imágenes: {e}")
 
-        # --- SECCIÓN DE EDICIÓN Y EXPORTACIÓN ---
+        # --- SECCIÓN DE PREVISUALIZACIÓN Y EXPORTACIÓN (CERO FRICCIÓN) ---
         if 'ultima_transcripcion' in st.session_state:
             st.success("¡Transcripción completada!")
-            st.markdown("### Editar Transcripción:")
             
-            # Acá podés editar el texto a mano
-            texto_editado = st.text_area("Revisá y corregí si hay algún error:", st.session_state['ultima_transcripcion'], height=350, label_visibility="collapsed")
-            
+            # 1. Previsualización limpia y renderizada
+            st.markdown("### Previsualización:")
+            st.container(border=True).markdown(st.session_state['ultima_transcripcion'])
+
             st.divider()
-            st.subheader("📥 Guardar Apunte")
             
-            # Selector de materia (por si la IA no la detectó bien)
+            # Selector de materia
             lista_materias = list(MATERIAS_NOTION.keys())
             idx_mat = lista_materias.index(st.session_state['materia_detectada']) if st.session_state['materia_detectada'] in lista_materias else 0
             materia_elegida = st.selectbox("¿A qué materia de Notion lo mandamos?", lista_materias, index=idx_mat)
             
-            c_down1, c_down2 = st.columns(2)
-            with c_down1:
+            # Botonera de acciones
+            c_btn1, c_btn2, c_btn3 = st.columns(3)
+            
+            with c_btn1:
+                if st.button("✏️ Editar Texto", use_container_width=True):
+                    dialog_editar_texto()
+                    
+            with c_btn2:
                 if st.button("🚀 Transferir a Notion", type="primary", use_container_width=True):
                     if not notion_token:
                         st.error("No configuraste el NOTION_TOKEN en los Secrets.")
                     else:
                         page_id = MATERIAS_NOTION[materia_elegida]
                         if page_id == "pega_el_id_de_32_caracteres_aca":
-                            st.warning("Te falta poner el ID real de la materia en el código de transcriptor.py")
+                            st.warning("Te falta poner el ID real de la materia en el código.")
                         else:
-                            with st.spinner("Enviando a Notion..."):
-                                res = mandar_a_notion(texto_editado, page_id, notion_token)
+                            with st.spinner("Enviando a Notion en bloques..."):
+                                res = mandar_a_notion(st.session_state['ultima_transcripcion'], page_id, notion_token)
                                 if res.status_code == 200:
                                     st.toast("¡Apunte transferido con éxito! 🎉")
                                 else:
                                     st.error(f"Error de Notion: {res.text}")
 
-            with c_down2:
+            with c_btn3:
                 st.download_button(
-                    label="Descargar .md (Backup)", 
-                    data=texto_editado, 
+                    label="Descargar (.md)", 
+                    data=st.session_state['ultima_transcripcion'], 
                     file_name=st.session_state.get('ultimo_nombre_archivo', 'Apuntes.md'), 
                     mime="text/markdown", 
                     use_container_width=True

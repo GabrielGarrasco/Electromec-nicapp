@@ -7,8 +7,18 @@ def parse_float_nota(val_str):
 
 def calcular_datos_racha(historial):
     if not historial: return 0, 0, 0, 5
-    fechas_str = set([h['FECHA'] for h in historial])
-    fechas_obj = sorted([datetime.strptime(f, "%d/%m/%Y").date() for f in fechas_str])
+    
+    # Limpieza absoluta de fechas para evitar duplicados "fantasmas"
+    fechas_obj = set()
+    for h in historial:
+        f_str = str(h.get('FECHA', '')).strip()
+        if f_str:
+            try:
+                fechas_obj.add(datetime.strptime(f_str, "%d/%m/%Y").date())
+            except:
+                pass
+                
+    fechas_obj = sorted(list(fechas_obj))
     if not fechas_obj: return 0, 0, 0, 5
     
     fecha_inicio = fechas_obj[0]
@@ -30,6 +40,7 @@ def calcular_datos_racha(historial):
             else:
                 racha_actual = 0
                 dias_para_protector = 5
+                
         if racha_actual > mejor_racha: mejor_racha = racha_actual
         fecha_iter += pd.Timedelta(days=1)
         

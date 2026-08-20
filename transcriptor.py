@@ -8,33 +8,51 @@ from google.genai import types
 from docx import Document
 from docx.shared import Inches
 
+def add_markdown_runs(paragraph, text):
+    """Traduce negritas y cursivas de Markdown al formato nativo de Word"""
+    # Separamos por negritas (**texto**)
+    partes = re.split(r'(\*\*.*?\*\*)', text)
+    for part in partes:
+        if part.startswith('**') and part.endswith('**'):
+            run = paragraph.add_run(part[2:-2])
+            run.bold = True
+        else:
+            # Separamos por cursivas (*texto* o _texto_)
+            subpartes = re.split(r'(\*[^\*]+\*|_[^_]+_)', part)
+            for subpart in subpartes:
+                if (subpart.startswith('*') and subpart.endswith('*')) or \
+                   (subpart.startswith('_') and subpart.endswith('_')):
+                    run = paragraph.add_run(subpart[1:-1])
+                    run.italic = True
+                else:
+                    paragraph.add_run(subpart)
+
 def generar_docx(texto, imagenes):
     doc = Document()
     doc.add_heading("Apuntes Digitalizados", 0)
     
-    # Procesamos línea por línea limpiando la "basura" de Markdown
+    # Procesamos línea por línea asignando estilos nativos de Word
     for linea in texto.split('\n'):
         linea = linea.strip()
         if not linea:
-            doc.add_paragraph()
             continue
             
-        # Limpiamos asteriscos de negrita y cambiamos el asterisco de lista por un punto
-        texto_limpio = linea.replace('**', '')
-        if texto_limpio.startswith('* '):
-            texto_limpio = texto_limpio.replace('* ', '• ', 1)
-        elif texto_limpio.startswith('- '):
-            texto_limpio = texto_limpio.replace('- ', '• ', 1)
-            
-        # Aplicamos tamaños de título nativos de Word
         if linea.startswith('# '):
-            doc.add_heading(texto_limpio.replace('# ', ''), 1)
+            doc.add_heading(linea[2:].replace('**', ''), 1)
         elif linea.startswith('## '):
-            doc.add_heading(texto_limpio.replace('## ', ''), 2)
+            doc.add_heading(linea[3:].replace('**', ''), 2)
         elif linea.startswith('### '):
-            doc.add_heading(texto_limpio.replace('### ', ''), 3)
+            doc.add_heading(linea[4:].replace('**', ''), 3)
+        elif linea.startswith('* ') or linea.startswith('- '):
+            p = doc.add_paragraph(style='List Bullet')
+            add_markdown_runs(p, linea[2:])
+        elif re.match(r'^\d+\.\s', linea):
+            p = doc.add_paragraph(style='List Number')
+            texto_lista = re.sub(r'^\d+\.\s', '', linea)
+            add_markdown_runs(p, texto_lista)
         else:
-            doc.add_paragraph(texto_limpio)
+            p = doc.add_paragraph()
+            add_markdown_runs(p, linea)
     
     # Añadimos las imágenes ordenadas al final del documento
     if imagenes:
@@ -105,7 +123,7 @@ def renderizar_transcriptor():
                     REGLAS ESTRICTAS:
                     1. ESTRUCTURA: Respeta los títulos, subtítulos, listas y sangrías.
                     2. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). ESTÁ TOTALMENTE PROHIBIDO usar LaTeX (como $\\rightarrow$) para texto normal. Reserva el formato LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas complejas.
-                    3. ESQUEMAS/CUADROS: Si hay un mapa mental o cuadro, transcribe su contenido de forma lógica y estructurada. NO dejes notas indicando que falta una imagen.
+                    3. ESQUEMAS/CUADROS: Transcribe su contenido de forma lógica y estructurada. ESTÁ PROHIBIDO dejar marcas indicando que falta una imagen o esquema.
                     4. NOTAS: Si hay post-its o notas al margen, transcríbelas agregando "[NOTA]: " al inicio.
                     5. ABREVIATURAS: Usa este diccionario provisto para reemplazar las abreviaturas: {st.session_state['dicc_abreviaturas']}.
                     6. Devuelve SOLO la transcripción directa, sin comentarios extra.

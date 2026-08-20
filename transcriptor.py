@@ -103,19 +103,7 @@ def markdown_to_notion_blocks(markdown_text):
                 }
             })
             
-        # 8. EJEMPLOS EN LÁPIZ (Texto Verde)
-        elif linea.startswith('[EJEMPLO]:'):
-            texto_ejemplo = linea.replace('[EJEMPLO]:', '').strip()
-            bloques.append({
-                "object": "block",
-                "type": "paragraph",
-                "paragraph": {
-                    "rich_text": parse_rich_text(texto_ejemplo),
-                    "color": "green"
-                }
-            })
-            
-        # 9. HUECO PARA IMÁGENES (Callout Azul)
+        # 8. HUECO PARA IMÁGENES (Callout Azul)
         elif '[IMAGEN_ESQUEMA]' in linea:
             bloques.append({
                 "object": "block",
@@ -124,6 +112,18 @@ def markdown_to_notion_blocks(markdown_text):
                     "rich_text": [{"type": "text", "text": {"content": "Arrastrá la foto del esquema o diagrama acá."}}],
                     "icon": {"type": "emoji", "emoji": "🖼️"},
                     "color": "blue_background"
+                }
+            })
+            
+        # 9. EJEMPLOS (Párrafo con texto verde)
+        elif linea.startswith('[EJEMPLO]:'):
+            texto_ejemplo = linea.replace('[EJEMPLO]:', '').strip()
+            bloques.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": parse_rich_text(texto_ejemplo),
+                    "color": "green"
                 }
             })
             
@@ -206,14 +206,14 @@ def renderizar_transcriptor():
                     Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes manteniendo la estructura original.
                     
                     REGLAS ESTRICTAS:
-                    1. ESTRUCTURA: Respeta los títulos, subtítulos y sangrías de la forma más fiel posible a las imágenes.
+                    1. ESTRUCTURA: Respeta los títulos, subtítulos y sangrías. 
                     2. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
                     3. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones.
                     4. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
                     5. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
                     6. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
-                    7. EJEMPLOS: Si el texto está escrito en lápiz o es un ejemplo claro, escribe en un renglón nuevo empezando exactamente con: [EJEMPLO]: seguido del texto.
-                    8. ABREVIATURAS: Desarrolla TODAS las abreviaturas a su palabra completa (ej: "coef." a "coeficiente") usando el contexto y este diccionario: {st.session_state['dicc_abreviaturas']}.
+                    7. ABREVIATURAS Y TEXTO LITERAL: Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}. IMPORTANTE: NO omitas abreviaturas que no estén en el diccionario (como "coef."), transcríbelas tal cual, letra por letra, sin saltearte nada.
+                    8. EJEMPLOS (LÁPIZ): Los ejemplos y ejercicios (que muchas veces están escritos en lápiz) escríbelos en un renglón nuevo empezando exactamente con la etiqueta: [EJEMPLO]: seguido del texto.
                     9. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
                     NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """
@@ -249,7 +249,10 @@ def renderizar_transcriptor():
             st.success("¡Transcripción completada!")
             
             st.markdown("### Previsualización:")
-            st.container(border=True).markdown(st.session_state['ultima_transcripcion'])
+            
+            # Reemplazo visual para Streamlit (renderiza el verde en la previsualización)
+            texto_preview = st.session_state['ultima_transcripcion'].replace('[EJEMPLO]:', '<span style="color: green; font-weight: bold;">[EJEMPLO]:</span>')
+            st.container(border=True).markdown(texto_preview, unsafe_allow_html=True)
 
             st.divider()
             
@@ -278,3 +281,6 @@ def renderizar_transcriptor():
                                     st.toast("¡Apunte transferido con éxito! 🎉")
                                 else:
                                     st.error(f"Error de Notion: {res.text}")
+
+if __name__ == "__main__":
+    renderizar_transcriptor()

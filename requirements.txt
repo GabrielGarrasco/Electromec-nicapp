@@ -5,6 +5,6 @@ oauth2client
 altair
 plotly
 google-genai
-python-docx
 fpdf2
 pillow
+requests

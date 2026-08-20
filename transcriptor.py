@@ -70,7 +70,6 @@ def markdown_to_notion_blocks(markdown_text):
             table_rows = []
             while i < len(lineas) and lineas[i].strip().startswith('|'):
                 row_line = lineas[i].strip()
-                # Salteamos el renglón separador |---|---|
                 if re.match(r'^\|[\s\-\|:]+\|$', row_line):
                     i += 1
                     continue
@@ -89,9 +88,34 @@ def markdown_to_notion_blocks(markdown_text):
                         "children": table_rows
                     }
                 })
-            continue # La tabla ya sumó al contador de 'i'
+            continue 
             
-        # 7. Párrafos normales
+        # 7. POST-ITS (Callout Amarillo)
+        elif linea.startswith('[NOTA]:'):
+            texto_nota = linea.replace('[NOTA]:', '').strip()
+            bloques.append({
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "rich_text": parse_rich_text(texto_nota),
+                    "icon": {"type": "emoji", "emoji": "📌"},
+                    "color": "yellow_background"
+                }
+            })
+            
+        # 8. HUECO PARA IMÁGENES (Callout Azul)
+        elif '[IMAGEN_ESQUEMA]' in linea:
+            bloques.append({
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "rich_text": [{"type": "text", "text": {"content": "Arrastrá la foto del esquema o diagrama acá."}}],
+                    "icon": {"type": "emoji", "emoji": "🖼️"},
+                    "color": "blue_background"
+                }
+            })
+            
+        # 9. Párrafos normales
         else:
             bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": parse_rich_text(linea)}})
             
@@ -108,7 +132,6 @@ def mandar_a_notion(texto, page_id, token):
     
     bloques_procesados = markdown_to_notion_blocks(texto)
     
-    # Mandamos en bloques de a 90 para burlar el límite de Notion (100)
     chunk_size = 90
     respuesta = None
     for i in range(0, len(bloques_procesados), chunk_size):
@@ -175,9 +198,10 @@ def renderizar_transcriptor():
                     2. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
                     3. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones.
                     4. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
-                    5. NOTAS: Si hay post-its, transcríbelas agregando "[NOTA]: " al inicio.
-                    6. ABREVIATURAS: Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
-                    7. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
+                    5. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
+                    6. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
+                    7. ABREVIATURAS: Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
+                    8. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
                     NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """
 

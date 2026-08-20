@@ -15,13 +15,12 @@ MATERIAS_NOTION = {
 
 def markdown_to_notion_blocks(markdown_text):
     """Convierte el texto Markdown crudo en bloques puros de Notion"""
-    # Limpiamos por si la IA escapó los símbolos de dólar por error
     markdown_text = markdown_text.replace('\\$', '$')
     
     bloques = []
     lineas = markdown_text.split('\n')
     i = 0
-    is_green = False  # Mantiene el estado del color entre renglones y listas
+    is_green = False  
     
     def parse_line(text):
         nonlocal is_green
@@ -43,16 +42,15 @@ def markdown_to_notion_blocks(markdown_text):
                 annotations["color"] = "green"
                 
             if token.startswith('$$') and token.endswith('$$'):
-                rich_text_array.append({"type": "equation", "equation": {"expression": token[2:-2].strip()}})
+                rich_text_array.append({"type": "equation", "equation": {"expression": token[2:-2].strip()}, "annotations": annotations.copy()})
             elif token.startswith('$') and token.endswith('$') and token != '$':
-                rich_text_array.append({"type": "equation", "equation": {"expression": token[1:-1].strip()}})
+                rich_text_array.append({"type": "equation", "equation": {"expression": token[1:-1].strip()}, "annotations": annotations.copy()})
             elif token.startswith('**') and token.endswith('**'):
                 annotations["bold"] = True
                 rich_text_array.append({"type": "text", "text": {"content": token[2:-2]}, "annotations": annotations.copy()})
             else:
                 rich_text_array.append({"type": "text", "text": {"content": token}, "annotations": annotations.copy()})
         
-        # Si la línea era solo etiquetas, mandamos texto vacío para que Notion no crashee
         if not rich_text_array:
             rich_text_array.append({"type": "text", "text": {"content": ""}})
             
@@ -72,23 +70,28 @@ def markdown_to_notion_blocks(markdown_text):
         elif linea.startswith('# '):
             bloques.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": parse_line(linea[2:])}})
             
-        # 2. Listas y Viñetas
+        # 2. Listas Numeradas (Nuevo)
+        elif re.match(r'^\d+\.\s', linea):
+            texto_lista = re.sub(r'^\d+\.\s+', '', linea, count=1)
+            bloques.append({"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": parse_line(texto_lista)}})
+
+        # 3. Listas y Viñetas
         elif linea.startswith('* ') or linea.startswith('- '):
             bloques.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": parse_line(linea[2:])}})
             
-        # 3. Citas / Quotes
+        # 4. Citas / Quotes
         elif linea.startswith('> '):
             bloques.append({"object": "block", "type": "quote", "quote": {"rich_text": parse_line(linea[2:])}})
             
-        # 4. Separador
+        # 5. Separador
         elif linea == '---':
             bloques.append({"object": "block", "type": "divider", "divider": {}})
             
-        # 5. Ecuaciones en bloque grande
+        # 6. Ecuaciones en bloque grande
         elif linea.startswith('$$') and linea.endswith('$$') and len(linea) > 4:
             bloques.append({"object": "block", "type": "equation", "equation": {"expression": linea[2:-2].strip()}})
             
-        # 6. Tablas Mágicas
+        # 7. Tablas Mágicas
         elif linea.startswith('|'):
             table_rows = []
             while i < len(lineas) and lineas[i].strip().startswith('|'):
@@ -113,7 +116,7 @@ def markdown_to_notion_blocks(markdown_text):
                 })
             continue 
             
-        # 7. POST-ITS (Callout Amarillo)
+        # 8. POST-ITS (Callout Amarillo)
         elif linea.startswith('[NOTA]:'):
             texto_nota = linea.replace('[NOTA]:', '').strip()
             bloques.append({
@@ -126,7 +129,7 @@ def markdown_to_notion_blocks(markdown_text):
                 }
             })
             
-        # 8. HUECO PARA IMÁGENES (Callout Azul)
+        # 9. HUECO PARA IMÁGENES (Callout Azul)
         elif '[IMAGEN_ESQUEMA]' in linea:
             bloques.append({
                 "object": "block",
@@ -138,7 +141,7 @@ def markdown_to_notion_blocks(markdown_text):
                 }
             })
             
-        # 9. Párrafos normales
+        # 10. Párrafos normales
         else:
             bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": parse_line(linea)}})
             
@@ -217,15 +220,16 @@ def renderizar_transcriptor():
                     Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes.
                     
                     REGLAS ESTRICTAS:
-                    1. ESTRUCTURA Y FORMATO EXACTO: Respeta los títulos, subtítulos, sangrías y la disposición espacial literalmente igual que en las fotos para que quede limpio y ordenado en la computadora.
-                    2. ABREVIATURAS (¡CRÍTICO!): Identifica y REEMPLAZA todas las abreviaturas por la palabra completa según el contexto. Por ejemplo, "coef." debe transcribirse siempre como "coeficiente". Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
-                    3. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo (presta mucha atención a los textos escritos en lápiz), enciérralo siempre abriendo con <green> y cerrando con </green>. NO dejes etiquetas a medias.
-                    4. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
-                    5. ECUACIONES Y SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas. Escribe las ecuaciones SIEMPRE encerradas entre símbolos de dólar simples ($ecuación$) o dobles ($$ecuación$$), NUNCA escapes el símbolo de dólar con barras invertidas (NUNCA escribas \\$).
-                    6. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
-                    7. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
-                    8. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
-                    9. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
+                    1. CORRECCIÓN Y FORMATO: Respeta la disposición espacial pero MEJORA la presentación. Corrige errores ortográficos evidentes y mantén sangrías y títulos ordenados.
+                    2. LISTAS Y NÚMEROS: Si ves números encerrados en círculos (①, ②), conviértelos a listas numeradas estándar (Ej: 1., 2.). Si hay viñetas, usa un asterisco y un espacio (* ).
+                    3. COMILLAS DE REPETICIÓN: Si ves unas comillas sueltas (") debajo de una palabra indicando repetición, NO transcribas las comillas, escribe la palabra completa que se está repitiendo de arriba.
+                    4. ABREVIATURAS (¡CRÍTICO!): Identifica y REEMPLAZA todas las abreviaturas por la palabra completa según el contexto (Ej: coef. = coeficiente). Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
+                    5. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo o esté escrito en lápiz, enciérralo COMPLETAMENTE abriendo con <green> y cerrando con </green>. NO cortes la etiqueta en la mitad de una fórmula o salto de línea; engloba el bloque completo.
+                    6. ECUACIONES Y SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas. Las ecuaciones SIEMPRE van entre símbolos de dólar ($ecuación$ o $$ecuación$$). NUNCA uses barras invertidas para escapar el dólar.
+                    7. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
+                    8. ESQUEMAS: Si hay un mapa mental o dibujo complejo, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
+                    9. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
+                    10. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
                     NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """
 

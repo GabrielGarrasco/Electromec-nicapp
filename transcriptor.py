@@ -8,48 +8,42 @@ from google.genai import types
 from docx import Document
 from docx.shared import Inches
 
-def add_markdown_runs(paragraph, text):
-    """Mini parser para aplicar negritas en Word basándose en Markdown"""
-    parts = re.split(r'(\*\*.*?\*\*)', text)
-    for part in parts:
-        if part.startswith('**') and part.endswith('**'):
-            run = paragraph.add_run(part[2:-2])
-            run.bold = True
-        else:
-            paragraph.add_run(part)
-
 def generar_docx(texto, imagenes):
     doc = Document()
     doc.add_heading("Apuntes Digitalizados", 0)
     
-    # Procesamos línea por línea para dar formato básico al Word
+    # Procesamos línea por línea limpiando la "basura" de Markdown
     for linea in texto.split('\n'):
         linea = linea.strip()
         if not linea:
-            doc.add_paragraph() # Mantiene los saltos de línea
+            doc.add_paragraph()
             continue
             
+        # Limpiamos asteriscos de negrita y cambiamos el asterisco de lista por un punto
+        texto_limpio = linea.replace('**', '')
+        if texto_limpio.startswith('* '):
+            texto_limpio = texto_limpio.replace('* ', '• ', 1)
+        elif texto_limpio.startswith('- '):
+            texto_limpio = texto_limpio.replace('- ', '• ', 1)
+            
+        # Aplicamos tamaños de título nativos de Word
         if linea.startswith('# '):
-            doc.add_heading(linea[2:], 1)
+            doc.add_heading(texto_limpio.replace('# ', ''), 1)
         elif linea.startswith('## '):
-            doc.add_heading(linea[3:], 2)
+            doc.add_heading(texto_limpio.replace('## ', ''), 2)
         elif linea.startswith('### '):
-            doc.add_heading(linea[4:], 3)
-        elif linea.startswith('* ') or linea.startswith('- '):
-            p = doc.add_paragraph(style='List Bullet')
-            add_markdown_runs(p, linea[2:])
+            doc.add_heading(texto_limpio.replace('### ', ''), 3)
         else:
-            p = doc.add_paragraph()
-            add_markdown_runs(p, linea)
+            doc.add_paragraph(texto_limpio)
     
     # Añadimos las imágenes ordenadas al final del documento
     if imagenes:
         doc.add_page_break()
-        doc.add_heading("Imágenes de Referencia", 1)
+        doc.add_heading("Imágenes Originales", 1)
         for img_dict in imagenes:
             img = img_dict['img']
             img_byte_arr = io.BytesIO()
-            # Convertimos a RGB por si hay PNGs con transparencia que rompen el DOCX
+            # Convertimos a RGB por si hay PNGs con transparencia
             if img.mode in ("RGBA", "P"): 
                 img = img.convert("RGB")
             img.save(img_byte_arr, format='JPEG')
@@ -64,7 +58,7 @@ def generar_docx(texto, imagenes):
 def renderizar_transcriptor():
     st.header("Digitalizar Apuntes")
 
-    # Conectar con la API Key guardada en los Secrets de Streamlit
+    # Conectar con la API Key guardada en los Secrets
     try:
         api_key = st.secrets["GEMINI_API_KEY"]
         client = genai.Client(api_key=api_key)
@@ -75,12 +69,12 @@ def renderizar_transcriptor():
     if 'dicc_abreviaturas' not in st.session_state:
         st.session_state['dicc_abreviaturas'] = "Ej: q = que, cto = circuito, tmb = también"
 
-    # Volvemos a un solo paso, con el expander opcional para que no joda
+    # Diccionario manual opcional
     with st.expander("Mis Abreviaturas (Opcional)"):
-        st.info("La IA es inteligente y saca la mayoría por contexto, pero si querés forzar alguna, anotala acá.")
+        st.info("Anotá acá tus abreviaturas si querés forzar a la IA a que las lea de una manera específica.")
         st.session_state['dicc_abreviaturas'] = st.text_area("Diccionario", st.session_state['dicc_abreviaturas'], height=100, label_visibility="collapsed")
 
-    # Subir múltiples archivos
+    # Subir archivos
     archivos_subidos = st.file_uploader("Subí las fotos de tus apuntes acá", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
     if archivos_subidos:
@@ -101,20 +95,20 @@ def renderizar_transcriptor():
 
         st.divider()
 
-        # PASO ÚNICO: Transcripción Final
+        # Botón único de proceso
         if st.button("🧠 Procesar y Transcribir Todo", type="primary", use_container_width=True):
             with st.spinner("Escaneando documentos..."):
                 try:
                     prompt_maestro = f"""
-                    Actúa como un transcriptor universitario experto. Voy a pasarte fotos de mis apuntes. 
-                    Tu objetivo es transcribir TODO el texto manteniendo estrictamente la estructura original.
+                    Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes manteniendo la estructura original.
                     
-                    REGLAS OBLIGATORIAS:
-                    1. ESTRUCTURA: Respeta los títulos, subtítulos, listas con viñetas y sangrías. Reproduce cuadros o tablas usando formato Markdown.
-                    2. MATEMÁTICA Y SÍMBOLOS: Usa símbolos Unicode convencionales (como →, °, α, β) para el texto normal para que sea legible al exportar. RESERVA el formato LaTeX (delimitado por $ o $$) EXCLUSIVAMENTE para ecuaciones matemáticas complejas.
-                    3. POST-ITS y ESQUEMAS: Si ves notas escritas en papeles amarillos al margen, transcríbelos con el prefijo "[NOTA AL MARGEN]: ". Si detectas un diagrama, dibujo o mapa mental que no se pueda escribir con texto, indica explícitamente "[ACÁ VA IMAGEN DEL ESQUEMA]".
-                    4. ABREVIATURAS: Deduce las abreviaturas por contexto. Si el usuario proveyó un diccionario aquí ({st.session_state['dicc_abreviaturas']}), dale prioridad.
-                    5. DIRECTO AL GRANO: Devuélveme SOLO la transcripción, sin saludos ni introducciones.
+                    REGLAS ESTRICTAS:
+                    1. ESTRUCTURA: Respeta los títulos, subtítulos, listas y sangrías.
+                    2. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). ESTÁ TOTALMENTE PROHIBIDO usar LaTeX (como $\\rightarrow$) para texto normal. Reserva el formato LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas complejas.
+                    3. ESQUEMAS/CUADROS: Si hay un mapa mental o cuadro, transcribe su contenido de forma lógica y estructurada. NO dejes notas indicando que falta una imagen.
+                    4. NOTAS: Si hay post-its o notas al margen, transcríbelas agregando "[NOTA]: " al inicio.
+                    5. ABREVIATURAS: Usa este diccionario provisto para reemplazar las abreviaturas: {st.session_state['dicc_abreviaturas']}.
+                    6. Devuelve SOLO la transcripción directa, sin comentarios extra.
                     """
 
                     response = client.models.generate_content(
@@ -150,4 +144,4 @@ def renderizar_transcriptor():
                     use_container_width=True
                 )
             with c_down2:
-                st.info("💡 Para tenerlo en PDF con las fórmulas perfectas, abrí el .docx que descargaste y dale a 'Guardar como PDF'.")
+                st.info("💡 Para tenerlo en PDF, abrí el archivo .docx descargado y dale a 'Guardar como PDF' en tu procesador de textos.")

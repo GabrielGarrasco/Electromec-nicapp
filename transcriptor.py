@@ -70,13 +70,13 @@ def markdown_to_notion_blocks(markdown_text):
         elif linea.startswith('# '):
             bloques.append({"object": "block", "type": "heading_1", "heading_1": {"rich_text": parse_line(linea[2:])}})
             
-        # 2. Listas Numeradas (Nuevo)
+        # 2. Listas Numeradas
         elif re.match(r'^\d+\.\s', linea):
             texto_lista = re.sub(r'^\d+\.\s+', '', linea, count=1)
             bloques.append({"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": parse_line(texto_lista)}})
 
-        # 3. Listas y Viñetas
-        elif linea.startswith('* ') or linea.startswith('- '):
+        # 3. Listas y Viñetas (Evitando que confunda notas con listas)
+        elif (linea.startswith('* ') or linea.startswith('- ')) and not (linea.startswith('*') and linea.endswith('*') and len(linea) > 2):
             bloques.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": parse_line(linea[2:])}})
             
         # 4. Citas / Quotes
@@ -116,9 +116,11 @@ def markdown_to_notion_blocks(markdown_text):
                 })
             continue 
             
-        # 8. POST-ITS (Callout Amarillo)
-        elif linea.startswith('[NOTA]:'):
+        # 8. POST-ITS y Notas (Soporta [NOTA]: y también si la IA mandó asteriscos por error)
+        elif linea.startswith('[NOTA]:') or (linea.startswith('*') and linea.endswith('*') and len(linea) > 2):
             texto_nota = linea.replace('[NOTA]:', '').strip()
+            if texto_nota.startswith('*') and texto_nota.endswith('*'):
+                texto_nota = texto_nota[1:-1].strip()
             bloques.append({
                 "object": "block",
                 "type": "callout",
@@ -220,15 +222,15 @@ def renderizar_transcriptor():
                     Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes.
                     
                     REGLAS ESTRICTAS:
-                    1. CORRECCIÓN Y FORMATO: Respeta la disposición espacial pero MEJORA la presentación. Corrige errores ortográficos evidentes y mantén sangrías y títulos ordenados.
+                    1. CORRECCIÓN Y FORMATO: Respeta la disposición espacial pero MEJORA la presentación. Corrige errores ortográficos y mantén sangrías y títulos ordenados.
                     2. LISTAS Y NÚMEROS: Si ves números encerrados en círculos (①, ②), conviértelos a listas numeradas estándar (Ej: 1., 2.). Si hay viñetas, usa un asterisco y un espacio (* ).
-                    3. COMILLAS DE REPETICIÓN: Si ves unas comillas sueltas (") debajo de una palabra indicando repetición, NO transcribas las comillas, escribe la palabra completa que se está repitiendo de arriba.
+                    3. COMILLAS DE REPETICIÓN: Si ves comillas sueltas (") debajo de una palabra indicando repetición, NO transcribas las comillas, escribe la palabra completa que se repite arriba.
                     4. ABREVIATURAS (¡CRÍTICO!): Identifica y REEMPLAZA todas las abreviaturas por la palabra completa según el contexto (Ej: coef. = coeficiente). Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
-                    5. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo o esté escrito en lápiz, enciérralo COMPLETAMENTE abriendo con <green> y cerrando con </green>. NO cortes la etiqueta en la mitad de una fórmula o salto de línea; engloba el bloque completo.
+                    5. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo o esté escrito en lápiz, enciérralo COMPLETAMENTE abriendo con <green> y cerrando con </green>. Cierra y abre la etiqueta en el mismo bloque para evitar que se corte el color.
                     6. ECUACIONES Y SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas. Las ecuaciones SIEMPRE van entre símbolos de dólar ($ecuación$ o $$ecuación$$). NUNCA uses barras invertidas para escapar el dólar.
                     7. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
                     8. ESQUEMAS: Si hay un mapa mental o dibujo complejo, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
-                    9. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
+                    9. NOTAS Y APOSTILLAS: Si hay post-its, notas al margen o aclaraciones sueltas, escríbelas empezando estrictamente con: [NOTA]: seguido del texto (NUNCA uses asteriscos para las notas).
                     10. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
                     NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """

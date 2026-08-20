@@ -102,7 +102,7 @@ def markdown_to_notion_blocks(markdown_text):
                     "color": "yellow_background"
                 }
             })
-
+            
         # 8. EJEMPLOS EN LÁPIZ (Texto Verde)
         elif linea.startswith('[EJEMPLO]:'):
             texto_ejemplo = linea.replace('[EJEMPLO]:', '').strip()
@@ -205,15 +205,15 @@ def renderizar_transcriptor():
                     prompt_maestro = f"""
                     Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes manteniendo la estructura original.
                     
-                    REGLAS ESTRICTAS DE JERARQUÍA Y ESTILOS:
-                    1. TÍTULOS Y SUBTÍTULOS: No uses encabezados gigantes (#). Usa EXCLUSIVAMENTE encabezados de nivel 3 (###) para los conceptos, términos o subtítulos que veas subrayados (ej: ### Frecuencia absoluta). NUNCA les pongas viñetas de lista.
-                    2. EJEMPLOS (LÁPIZ): Si detectas texto en lápiz o que claramente es un ejemplo, escríbelo en un renglón nuevo empezando exactamente con: [EJEMPLO]: seguido del texto.
-                    3. LISTAS: Usa siempre un asterisco y un espacio (* ) al inicio del renglón para listas normales.
-                    4. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones complejas.
-                    5. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
-                    6. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
-                    7. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
-                    8. ABREVIATURAS (¡OBLIGATORIO!): Desarrolla TODAS las abreviaturas por su palabra completa (ej: "coef." debe ser "coeficiente", "f. abs" debe ser "frecuencia absoluta"). Usa el contexto y este diccionario: {st.session_state['dicc_abreviaturas']}.
+                    REGLAS ESTRICTAS:
+                    1. ESTRUCTURA: Respeta los títulos, subtítulos y sangrías de la forma más fiel posible a las imágenes.
+                    2. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
+                    3. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones.
+                    4. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
+                    5. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
+                    6. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
+                    7. EJEMPLOS: Si el texto está escrito en lápiz o es un ejemplo claro, escribe en un renglón nuevo empezando exactamente con: [EJEMPLO]: seguido del texto.
+                    8. ABREVIATURAS: Desarrolla TODAS las abreviaturas a su palabra completa (ej: "coef." a "coeficiente") usando el contexto y este diccionario: {st.session_state['dicc_abreviaturas']}.
                     9. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
                     NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """

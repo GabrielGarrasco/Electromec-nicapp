@@ -8,21 +8,25 @@ def parse_float_nota(val_str):
 def calcular_datos_racha(historial):
     if not historial: return 0, 0, 0, 5
     
-    # Limpieza absoluta de fechas para evitar duplicados "fantasmas"
-    fechas_obj = set()
+    # El set() destruye automáticamente cualquier fecha duplicada
+    fechas_unicas = set()
     for h in historial:
-        f_str = str(h.get('FECHA', '')).strip()
-        if f_str:
-            try:
-                fechas_obj.add(datetime.strptime(f_str, "%d/%m/%Y").date())
-            except:
-                pass
-                
-    fechas_obj = sorted(list(fechas_obj))
+        try:
+            # Convertimos estrictamente a fecha pura
+            f_obj = datetime.strptime(h['FECHA'], "%d/%m/%Y").date()
+            fechas_unicas.add(f_obj)
+        except:
+            pass
+            
+    fechas_obj = sorted(list(fechas_unicas))
+    if not fechas_obj: return 0, 0, 0, 5
+    
+    hoy = date.today()
+    # Ignorar fechas del futuro si te equivocaste anotando algo manual
+    fechas_obj = [f for f in fechas_obj if f <= hoy]
     if not fechas_obj: return 0, 0, 0, 5
     
     fecha_inicio = fechas_obj[0]
-    hoy = date.today()
     racha_actual, mejor_racha, protectores, dias_para_protector = 0, 0, 0, 5
     
     fecha_iter = fecha_inicio
@@ -34,7 +38,10 @@ def calcular_datos_racha(historial):
                 protectores = min(3, protectores + 1)
                 dias_para_protector = 5
         else:
-            if protectores > 0:
+            # Si es el día de hoy y TODAVÍA no estudiaste, no te rompe la racha ni gasta protector
+            if fecha_iter == hoy:
+                pass 
+            elif protectores > 0:
                 protectores -= 1
                 racha_actual += 1 
             else:
@@ -47,14 +54,13 @@ def calcular_datos_racha(historial):
     return racha_actual, mejor_racha, protectores, dias_para_protector
 
 def calcular_proximo_repaso(confianza, nivel_actual, fecha_examen_str=None):
-    # Lógica base SM-2 (Repetición Espaciada)
     if confianza <= 2:
         nuevo_nivel = 0
         dias = 1
     elif confianza == 3:
         nuevo_nivel = max(1, nivel_actual)
         dias = 2
-    else: # 4 o 5
+    else:
         nuevo_nivel = nivel_actual + 1
         if nuevo_nivel == 1: dias = 1
         elif nuevo_nivel == 2: dias = 3
@@ -65,13 +71,11 @@ def calcular_proximo_repaso(confianza, nivel_actual, fecha_examen_str=None):
     hoy = date.today()
     prox_fecha_obj = hoy + pd.Timedelta(days=dias)
     
-    # MODO PÁNICO: Si el examen es antes de la fecha recomendada por la curva
     if fecha_examen_str:
         try:
             fecha_examen_obj = date.fromisoformat(fecha_examen_str)
             dias_hasta_examen = (fecha_examen_obj - hoy).days
             
-            # Si el examen es pronto y el repaso caía después del examen
             if dias_hasta_examen > 0 and prox_fecha_obj >= fecha_examen_obj:
                 dias_comprimidos = max(1, dias_hasta_examen // 2)
                 prox_fecha_obj = hoy + pd.Timedelta(days=dias_comprimidos)

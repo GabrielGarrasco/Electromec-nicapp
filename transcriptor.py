@@ -9,7 +9,7 @@ from google.genai import types
 # --- DICCIONARIO DE MATERIAS A NOTION ---
 MATERIAS_NOTION = {
     "FÍSICA 1": "pega_el_id_de_32_caracteres_aca",
-    "PROBABILIDAD Y ESTADÍSTICA": "3c2f8087b7d18038959cd4ee3c84cfc7",
+    "PROBABILIDAD Y ESTADÍSTICA": "pega_el_id_de_32_caracteres_aca",
     "MATEMÁTICA SUPERIOR": "pega_el_id_de_32_caracteres_aca"
 }
 
@@ -102,8 +102,20 @@ def markdown_to_notion_blocks(markdown_text):
                     "color": "yellow_background"
                 }
             })
+
+        # 8. EJEMPLOS EN LÁPIZ (Texto Verde)
+        elif linea.startswith('[EJEMPLO]:'):
+            texto_ejemplo = linea.replace('[EJEMPLO]:', '').strip()
+            bloques.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": parse_rich_text(texto_ejemplo),
+                    "color": "green"
+                }
+            })
             
-        # 8. HUECO PARA IMÁGENES (Callout Azul)
+        # 9. HUECO PARA IMÁGENES (Callout Azul)
         elif '[IMAGEN_ESQUEMA]' in linea:
             bloques.append({
                 "object": "block",
@@ -115,7 +127,7 @@ def markdown_to_notion_blocks(markdown_text):
                 }
             })
             
-        # 9. Párrafos normales
+        # 10. Párrafos normales
         else:
             bloques.append({"object": "block", "type": "paragraph", "paragraph": {"rich_text": parse_rich_text(linea)}})
             
@@ -193,15 +205,16 @@ def renderizar_transcriptor():
                     prompt_maestro = f"""
                     Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes manteniendo la estructura original.
                     
-                    REGLAS ESTRICTAS:
-                    1. ESTRUCTURA: Respeta los títulos, subtítulos y sangrías. 
-                    2. LISTAS: Si hay viñetas, usa siempre un asterisco y un espacio (* ) al inicio del renglón.
-                    3. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones.
-                    4. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
-                    5. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
-                    6. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
-                    7. ABREVIATURAS: Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
-                    8. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
+                    REGLAS ESTRICTAS DE JERARQUÍA Y ESTILOS:
+                    1. TÍTULOS Y SUBTÍTULOS: Si ves texto centrado y subrayado en el apunte, es un TÍTULO PRINCIPAL (usa #). Si ves texto con DOBLE SUBRAYADO, es un SUBTÍTULO (usa ## o ###). NUNCA les pongas viñetas de lista a los títulos o subtítulos.
+                    2. EJEMPLOS (LÁPIZ): Los ejemplos suelen estar escritos en LÁPIZ. Si detectas texto en lápiz o que claramente es un ejemplo, escríbelo en un renglón nuevo empezando exactamente con: [EJEMPLO]: seguido del texto.
+                    3. LISTAS: Usa siempre un asterisco y un espacio (* ) al inicio del renglón para listas normales.
+                    4. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX ($) EXCLUSIVAMENTE para ecuaciones complejas.
+                    5. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
+                    6. ESQUEMAS: Si hay un mapa mental o dibujo que no se puede transcribir, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
+                    7. NOTAS: Si hay post-its o anotaciones sueltas, escribe en un renglón nuevo empezando exactamente con: [NOTA]: seguido del texto.
+                    8. ABREVIATURAS: Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
+                    9. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
                     NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """
 

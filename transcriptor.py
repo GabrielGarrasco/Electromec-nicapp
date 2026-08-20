@@ -1,77 +1,8 @@
 import streamlit as st
 import os
-import io
-import re
 from PIL import Image
 from google import genai
 from google.genai import types
-from docx import Document
-from docx.shared import Inches
-
-def add_markdown_runs(paragraph, text):
-    """Traduce negritas y cursivas de Markdown al formato nativo de Word"""
-    # Separamos por negritas (**texto**)
-    partes = re.split(r'(\*\*.*?\*\*)', text)
-    for part in partes:
-        if part.startswith('**') and part.endswith('**'):
-            run = paragraph.add_run(part[2:-2])
-            run.bold = True
-        else:
-            # Separamos por cursivas (*texto* o _texto_)
-            subpartes = re.split(r'(\*[^\*]+\*|_[^_]+_)', part)
-            for subpart in subpartes:
-                if (subpart.startswith('*') and subpart.endswith('*')) or \
-                   (subpart.startswith('_') and subpart.endswith('_')):
-                    run = paragraph.add_run(subpart[1:-1])
-                    run.italic = True
-                else:
-                    paragraph.add_run(subpart)
-
-def generar_docx(texto, imagenes):
-    doc = Document()
-    doc.add_heading("Apuntes Digitalizados", 0)
-    
-    # Procesamos línea por línea asignando estilos nativos de Word
-    for linea in texto.split('\n'):
-        linea = linea.strip()
-        if not linea:
-            continue
-            
-        if linea.startswith('# '):
-            doc.add_heading(linea[2:].replace('**', ''), 1)
-        elif linea.startswith('## '):
-            doc.add_heading(linea[3:].replace('**', ''), 2)
-        elif linea.startswith('### '):
-            doc.add_heading(linea[4:].replace('**', ''), 3)
-        elif linea.startswith('* ') or linea.startswith('- '):
-            p = doc.add_paragraph(style='List Bullet')
-            add_markdown_runs(p, linea[2:])
-        elif re.match(r'^\d+\.\s', linea):
-            p = doc.add_paragraph(style='List Number')
-            texto_lista = re.sub(r'^\d+\.\s', '', linea)
-            add_markdown_runs(p, texto_lista)
-        else:
-            p = doc.add_paragraph()
-            add_markdown_runs(p, linea)
-    
-    # Añadimos las imágenes ordenadas al final del documento
-    if imagenes:
-        doc.add_page_break()
-        doc.add_heading("Imágenes Originales", 1)
-        for img_dict in imagenes:
-            img = img_dict['img']
-            img_byte_arr = io.BytesIO()
-            # Convertimos a RGB por si hay PNGs con transparencia
-            if img.mode in ("RGBA", "P"): 
-                img = img.convert("RGB")
-            img.save(img_byte_arr, format='JPEG')
-            img_byte_arr.seek(0)
-            doc.add_picture(img_byte_arr, width=Inches(6.0))
-            doc.add_paragraph(f"Página {img_dict['orden']}")
-    
-    bio = io.BytesIO()
-    doc.save(bio)
-    return bio.getvalue()
 
 def renderizar_transcriptor():
     st.header("Digitalizar Apuntes")
@@ -121,12 +52,12 @@ def renderizar_transcriptor():
                     Actúa como un transcriptor universitario experto. Transcribe TODO el texto de estas imágenes manteniendo la estructura original.
                     
                     REGLAS ESTRICTAS:
-                    1. ESTRUCTURA: Respeta los títulos, subtítulos, listas y sangrías.
+                    1. ESTRUCTURA: Respeta los títulos, subtítulos, listas y sangrías. Todo debe estar formateado estrictamente en Markdown.
                     2. SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). ESTÁ TOTALMENTE PROHIBIDO usar LaTeX (como $\\rightarrow$) para texto normal. Reserva el formato LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas complejas.
                     3. ESQUEMAS/CUADROS: Transcribe su contenido de forma lógica y estructurada. ESTÁ PROHIBIDO dejar marcas indicando que falta una imagen o esquema.
                     4. NOTAS: Si hay post-its o notas al margen, transcríbelas agregando "[NOTA]: " al inicio.
                     5. ABREVIATURAS: Usa este diccionario provisto para reemplazar las abreviaturas: {st.session_state['dicc_abreviaturas']}.
-                    6. Devuelve SOLO la transcripción directa, sin comentarios extra.
+                    6. Devuelve SOLO la transcripción directa en texto crudo Markdown, sin comentarios extra.
                     """
 
                     response = client.models.generate_content(
@@ -149,17 +80,16 @@ def renderizar_transcriptor():
             st.container(border=True).markdown(st.session_state['ultima_transcripcion'])
 
             st.divider()
-            st.subheader("📥 Exportar Documento")
+            st.subheader("📥 Exportar a Notion")
             
             c_down1, c_down2 = st.columns(2)
             with c_down1:
-                docx_bytes = generar_docx(st.session_state['ultima_transcripcion'], imagenes_ordenadas)
                 st.download_button(
-                    label="Descargar .docx (Word)", 
-                    data=docx_bytes, 
-                    file_name="Apuntes_Digitalizados.docx", 
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", 
+                    label="Descargar .md (Para Notion)", 
+                    data=st.session_state['ultima_transcripcion'], 
+                    file_name="Apuntes_Digitalizados.md", 
+                    mime="text/markdown", 
                     use_container_width=True
                 )
             with c_down2:
-                st.info("💡 Para tenerlo en PDF, abrí el archivo .docx descargado y dale a 'Guardar como PDF' en tu procesador de textos.")
+                st.info("💡 Arrastrá el archivo .md adentro de una página vacía de Notion, o andá a 'Importar' en Notion y elegí 'Text & Markdown'. Se renderiza todo solo.")

@@ -8,11 +8,9 @@ def parse_float_nota(val_str):
 def calcular_datos_racha(historial):
     if not historial: return 0, 0, 0, 5
     
-    # El set() destruye automáticamente cualquier fecha duplicada
     fechas_unicas = set()
     for h in historial:
         try:
-            # Convertimos estrictamente a fecha pura
             f_obj = datetime.strptime(h['FECHA'], "%d/%m/%Y").date()
             fechas_unicas.add(f_obj)
         except:
@@ -21,8 +19,10 @@ def calcular_datos_racha(historial):
     fechas_obj = sorted(list(fechas_unicas))
     if not fechas_obj: return 0, 0, 0, 5
     
-    hoy = date.today()
-    # Ignorar fechas del futuro si te equivocaste anotando algo manual
+    # LA MAGIA: Forzamos la zona horaria a Argentina (UTC-3)
+    hoy = pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').date()
+    
+    # Si por culpa del servidor quedó una sesión guardada con "fecha de mañana", la ignoramos hasta que sea mañana.
     fechas_obj = [f for f in fechas_obj if f <= hoy]
     if not fechas_obj: return 0, 0, 0, 5
     
@@ -38,7 +38,6 @@ def calcular_datos_racha(historial):
                 protectores = min(3, protectores + 1)
                 dias_para_protector = 5
         else:
-            # Si es el día de hoy y TODAVÍA no estudiaste, no te rompe la racha ni gasta protector
             if fecha_iter == hoy:
                 pass 
             elif protectores > 0:
@@ -68,7 +67,7 @@ def calcular_proximo_repaso(confianza, nivel_actual, fecha_examen_str=None):
         elif nuevo_nivel == 4: dias = 15
         else: dias = 30
         
-    hoy = date.today()
+    hoy = pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').date()
     prox_fecha_obj = hoy + pd.Timedelta(days=dias)
     
     if fecha_examen_str:

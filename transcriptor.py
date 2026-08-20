@@ -57,7 +57,10 @@ def renderizar_transcriptor():
                     3. ESQUEMAS/CUADROS: Transcribe su contenido de forma lógica y estructurada. ESTÁ PROHIBIDO dejar marcas indicando que falta una imagen o esquema.
                     4. NOTAS: Si hay post-its o notas al margen, transcríbelas agregando "[NOTA]: " al inicio.
                     5. ABREVIATURAS: Usa este diccionario provisto para reemplazar las abreviaturas: {st.session_state['dicc_abreviaturas']}.
-                    6. Devuelve SOLO la transcripción directa en texto crudo Markdown, sin comentarios extra.
+                    6. Devuelve la transcripción directa en texto crudo Markdown.
+                    7. IMPORTANTE - NOMBRE DE ARCHIVO: Al final de toda la transcripción, en una nueva y última línea, escribe obligatoriamente el nombre del archivo siguiendo este formato exacto:
+                    NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha.md
+                    (Extrae el número/nombre de unidad o tema, la materia y la fecha del texto que acabas de transcribir. Dale prioridad al título de la Unidad o Tema que aparezca primero).
                     """
 
                     response = client.models.generate_content(
@@ -68,7 +71,21 @@ def renderizar_transcriptor():
                         )
                     )
 
-                    st.session_state['ultima_transcripcion'] = response.text
+                    texto_completo = response.text
+                    nombre_archivo = "Apuntes_Digitalizados.md"
+                    texto_limpio = texto_completo
+                    
+                    # Separamos el nombre del archivo del resto del texto
+                    if "NOMBRE_ARCHIVO:" in texto_completo:
+                        partes = texto_completo.split("NOMBRE_ARCHIVO:")
+                        texto_limpio = partes[0].strip()
+                        nombre_archivo = partes[1].strip()
+                        # Por las dudas que la IA se olvide la extensión
+                        if not nombre_archivo.endswith(".md"):
+                            nombre_archivo += ".md"
+
+                    st.session_state['ultima_transcripcion'] = texto_limpio
+                    st.session_state['ultimo_nombre_archivo'] = nombre_archivo
 
                 except Exception as e:
                     st.error(f"Hubo un error al procesar las imágenes: {e}")
@@ -87,7 +104,7 @@ def renderizar_transcriptor():
                 st.download_button(
                     label="Descargar .md (Para Notion)", 
                     data=st.session_state['ultima_transcripcion'], 
-                    file_name="Apuntes_Digitalizados.md", 
+                    file_name=st.session_state.get('ultimo_nombre_archivo', 'Apuntes_Digitalizados.md'), 
                     mime="text/markdown", 
                     use_container_width=True
                 )

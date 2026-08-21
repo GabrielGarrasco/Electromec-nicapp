@@ -19,10 +19,10 @@ def calcular_datos_racha(historial):
     fechas_obj = sorted(list(fechas_unicas))
     if not fechas_obj: return 0, 0, 0, 5
     
-    # LA MAGIA: Forzamos la zona horaria a Argentina (UTC-3)
+    # Forzamos la zona horaria a Argentina (UTC-3)
     hoy = pd.Timestamp.now(tz='America/Argentina/Buenos_Aires').date()
     
-    # Si por culpa del servidor quedó una sesión guardada con "fecha de mañana", la ignoramos hasta que sea mañana.
+    # Si por culpa del servidor quedó una sesión guardada con "fecha de mañana", la ignoramos.
     fechas_obj = [f for f in fechas_obj if f <= hoy]
     if not fechas_obj: return 0, 0, 0, 5
     
@@ -32,18 +32,23 @@ def calcular_datos_racha(historial):
     fecha_iter = fecha_inicio
     while fecha_iter <= hoy:
         if fecha_iter in fechas_obj:
+            # Estudió ese día
             racha_actual += 1
             dias_para_protector -= 1
             if dias_para_protector <= 0:
                 protectores = min(3, protectores + 1)
                 dias_para_protector = 5
         else:
+            # No estudió ese día
             if fecha_iter == hoy:
-                pass 
+                pass # Hoy todavía tiene tiempo de estudiar
             elif protectores > 0:
+                # Usa protector: la racha NO suma, se mantiene. 
+                # Se resetea el contador para ganar el próximo protector.
                 protectores -= 1
-                racha_actual += 1 
+                dias_para_protector = 5
             else:
+                # Pierde la racha
                 racha_actual = 0
                 dias_para_protector = 5
                 

@@ -239,7 +239,7 @@ def renderizar_transcriptor():
                     """
 
                     response = client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-3.6-flash',
                         contents=[prompt_maestro] + imagenes_pil_final,
                         config=types.GenerateContentConfig(temperature=0.2)
                     )

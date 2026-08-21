@@ -8,7 +8,7 @@ from google.genai import types
 
 # --- DICCIONARIO DE MATERIAS A NOTION ---
 MATERIAS_NOTION = {
-    "FÍSICA 1": "pega_el_id_de_32_caracteres_aca",
+    "FÍSICA 2": "c4f8087b7d180a4a5b2e4d7306922f8",
     "PROBABILIDAD Y ESTADÍSTICA": "3c2f8087b7d18038959cd4ee3c84cfc7",
     "PROGRAMACIÓN": "3c2f8087b7d180e8acd8c096d88815db"
 }

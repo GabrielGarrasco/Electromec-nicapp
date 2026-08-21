@@ -62,8 +62,10 @@ def markdown_to_notion_blocks(markdown_text):
             i += 1
             continue
             
-        # 1. Títulos
-        if linea.startswith('### '):
+        # 1. Títulos (Ahora soporta H4 y los pasa a H3 nativo de Notion)
+        if linea.startswith('#### '):
+            bloques.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": parse_line(linea[5:])}})
+        elif linea.startswith('### '):
             bloques.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": parse_line(linea[4:])}})
         elif linea.startswith('## '):
             bloques.append({"object": "block", "type": "heading_2", "heading_2": {"rich_text": parse_line(linea[3:])}})
@@ -75,7 +77,7 @@ def markdown_to_notion_blocks(markdown_text):
             texto_lista = re.sub(r'^\d+\.\s+', '', linea, count=1)
             bloques.append({"object": "block", "type": "numbered_list_item", "numbered_list_item": {"rich_text": parse_line(texto_lista)}})
 
-        # 3. Listas y Viñetas (Evitando que confunda notas con listas)
+        # 3. Listas y Viñetas
         elif (linea.startswith('* ') or linea.startswith('- ')) and not (linea.startswith('*') and linea.endswith('*') and len(linea) > 2):
             bloques.append({"object": "block", "type": "bulleted_list_item", "bulleted_list_item": {"rich_text": parse_line(linea[2:])}})
             
@@ -116,7 +118,7 @@ def markdown_to_notion_blocks(markdown_text):
                 })
             continue 
             
-        # 8. POST-ITS y Notas (Soporta [NOTA]: y también si la IA mandó asteriscos por error)
+        # 8. POST-ITS y Notas
         elif linea.startswith('[NOTA]:') or (linea.startswith('*') and linea.endswith('*') and len(linea) > 2):
             texto_nota = linea.replace('[NOTA]:', '').strip()
             if texto_nota.startswith('*') and texto_nota.endswith('*'):
@@ -131,7 +133,7 @@ def markdown_to_notion_blocks(markdown_text):
                 }
             })
             
-        # 9. HUECO PARA IMÁGENES (Callout Azul)
+        # 9. HUECO PARA IMÁGENES
         elif '[IMAGEN_ESQUEMA]' in linea:
             bloques.append({
                 "object": "block",
@@ -225,18 +227,19 @@ def renderizar_transcriptor():
                     1. CORRECCIÓN Y FORMATO: Respeta la disposición espacial pero MEJORA la presentación. Corrige errores ortográficos y mantén sangrías y títulos ordenados.
                     2. LISTAS Y NÚMEROS: Si ves números encerrados en círculos (①, ②), conviértelos a listas numeradas estándar (Ej: 1., 2.). Si hay viñetas, usa un asterisco y un espacio (* ).
                     3. COMILLAS DE REPETICIÓN: Si ves comillas sueltas (") debajo de una palabra indicando repetición, NO transcribas las comillas, escribe la palabra completa que se repite arriba.
-                    4. ABREVIATURAS (¡CRÍTICO!): Identifica y REEMPLAZA todas las abreviaturas por la palabra completa según el contexto (Ej: coef. = coeficiente). Usa este diccionario provisto: {st.session_state['dicc_abreviaturas']}.
-                    5. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo o esté escrito en lápiz, enciérralo COMPLETAMENTE abriendo con <green> y cerrando con </green>. Cierra y abre la etiqueta en el mismo bloque para evitar que se corte el color.
-                    6. ECUACIONES Y SÍMBOLOS: Usa caracteres normales para flechas (→) y grados (°). Reserva LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas. Las ecuaciones SIEMPRE van entre símbolos de dólar ($ecuación$ o $$ecuación$$). NUNCA uses barras invertidas para escapar el dólar.
-                    7. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
-                    8. ESQUEMAS: Si hay un mapa mental o dibujo complejo, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
-                    9. NOTAS Y APOSTILLAS: Si hay post-its, notas al margen o aclaraciones sueltas, escríbelas empezando estrictamente con: [NOTA]: seguido del texto (NUNCA uses asteriscos para las notas).
-                    10. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
+                    4. ABREVIATURAS (¡CRÍTICO!): Identifica y REEMPLAZA todas las abreviaturas por la palabra completa según el contexto. Usa este diccionario: {st.session_state['dicc_abreviaturas']}.
+                    5. EJEMPLOS EN VERDE: Todo lo que sea un ejemplo o esté escrito en lápiz, enciérralo COMPLETAMENTE abriendo con <green> y cerrando con </green>.
+                    6. ECUACIONES Y SÍMBOLOS: Usa LaTeX EXCLUSIVAMENTE para ecuaciones matemáticas. SIEMPRE van entre símbolos de dólar ($ecuación$ o $$ecuación$$). NUNCA uses tildes o acentos dentro del código LaTeX (usa \min en lugar de \mín).
+                    7. NEGRITAS Y MATEMÁTICA: NUNCA pongas símbolos de dólar adentro de negritas (**). Cierra la negrita antes de abrir la ecuación. (Ej Mal: **Espacio $x$** -> Ej Bien: **Espacio** $x$).
+                    8. CUADROS: Genera una tabla en formato Markdown puro (separada con |).
+                    9. ESQUEMAS: Si hay un mapa mental o dibujo complejo, escribe en un renglón nuevo exactamente: [IMAGEN_ESQUEMA]
+                    10. NOTAS Y APOSTILLAS: Si hay post-its o notas al margen, escríbelas empezando estrictamente con: [NOTA]: seguido del texto.
+                    11. NOMBRE DE ARCHIVO: Al final, en una nueva línea, escribe obligatoriamente:
                     NOMBRE_ARCHIVO: Unidad/tema xx - Materia - Fecha
                     """
 
                     response = client.models.generate_content(
-                        model='gemini-3.6-flash',
+                        model='gemini-2.5-flash',
                         contents=[prompt_maestro] + imagenes_pil_final,
                         config=types.GenerateContentConfig(temperature=0.2)
                     )

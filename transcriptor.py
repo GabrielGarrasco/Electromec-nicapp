@@ -10,7 +10,7 @@ from google.genai import types
 MATERIAS_NOTION = {
     "FÍSICA 1": "pega_el_id_de_32_caracteres_aca",
     "PROBABILIDAD Y ESTADÍSTICA": "3c2f8087b7d18038959cd4ee3c84cfc7",
-    "MATEMÁTICA SUPERIOR": "pega_el_id_de_32_caracteres_aca"
+    "PROGRAMACIÓN": "3c2f8087b7d180e8acd8c096d88815db"
 }
 
 def markdown_to_notion_blocks(markdown_text):

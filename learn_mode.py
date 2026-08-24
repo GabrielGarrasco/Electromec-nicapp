@@ -76,7 +76,7 @@ def evaluar_respuesta(opcion, flashcards):
 
 def renderizar_modo_aprender():
     init_learn_state()
-    st.header("Modo Aprender 🧠")
+    st.header("Modo Aprender")
     
     flashcards = cargar_flashcards()
     

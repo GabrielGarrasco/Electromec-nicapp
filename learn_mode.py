@@ -1,33 +1,64 @@
 import streamlit as st
 import random
+import time
 from db import cargar_flashcards, guardar_todas_flashcards
 
 def renderizar_modo_aprender():
     st.header("Modo Aprender")
     
     flashcards = cargar_flashcards()
+    
+    # --- SECCIÓN: AGREGAR TARJETAS ---
+    with st.expander("Agregar nuevas flashcards"):
+        with st.form("form_nueva_carta"):
+            # Traemos las materias activas para no tipear a mano
+            materias_activas = [m['nombre'] for m in st.session_state.get('materias', [])]
+            if not materias_activas:
+                st.warning("Agregá materias en 'Organización' primero.")
+            
+            n_mat = st.selectbox("Materia", materias_activas if materias_activas else ["Sin materia"])
+            n_term = st.text_input("Término / Pregunta")
+            n_def = st.text_area("Definición / Respuesta")
+            
+            if st.form_submit_button("Guardar Tarjeta"):
+                if n_term and n_def:
+                    nueva = {
+                        "id_tarjeta": str(time.time()),
+                        "materia": n_mat,
+                        "termino": n_term.strip(),
+                        "definicion": n_def.strip(),
+                        "estado": "Nueva",
+                        "racha_correctas": 0
+                    }
+                    flashcards.append(nueva)
+                    guardar_todas_flashcards(flashcards)
+                    st.success("¡Tarjeta agregada!")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("Completá Término y Definición para guardar.")
+
     if not flashcards:
-        st.info("No hay tarjetas todavía. ¡Agregá algunas para empezar!")
-        # Acá a futuro podés sumar un form para agregar tarjetas
+        st.info("No hay tarjetas todavía. ¡Cargá un par arriba para empezar a estudiar!")
         return
 
+    # --- SECCIÓN: CONFIGURACIÓN DEL JUEGO ---
+    st.divider()
     materias_disponibles = list(set([f['materia'] for f in flashcards]))
-    materia_sel = st.selectbox("Elegí la materia", materias_disponibles)
+    materia_sel = st.selectbox("Elegí la materia para estudiar", materias_disponibles)
     
-    # Filtramos las cartas
     cartas_materia = [f for f in flashcards if f['materia'] == materia_sel]
     
     if not cartas_materia:
-        st.warning("No hay flashcards para esta materia.")
+        st.warning("No tenés flashcards guardadas para esta materia.")
         return
 
-    # Lógica de progreso
+    # Lógica de progreso (Barra estilo Quizlet)
     dominadas = len([c for c in cartas_materia if c['estado'] == 'Dominada'])
     total = len(cartas_materia)
-    st.progress(dominadas / total if total > 0 else 0)
-    st.caption(f"Progreso: {dominadas} / {total} dominadas")
+    progreso_pct = dominadas / total if total > 0 else 0
     
-    st.divider()
+    st.progress(progreso_pct)
+    st.caption(f"Progreso: {dominadas} / {total} conceptos dominados")
     
-    # --- ACÁ VA A IR LA LÓGICA DEL JUEGO ---
-    st.write("Acá vamos a renderizar la pregunta y los botones...")
+    # --- ACÁ ABAJO VA A IR LA LÓGICA DEL MULTIPLE CHOICE ---

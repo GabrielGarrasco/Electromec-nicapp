@@ -2012,5 +2012,5 @@ with col_contenido:
         transcriptor.renderizar_transcriptor()
         
     elif menu_opcion == "Aprender":
-    import learn_mode
-    learn_mode.renderizar_modo_aprender()
+        import learn_mode
+        learn_mode.renderizar_modo_aprender()

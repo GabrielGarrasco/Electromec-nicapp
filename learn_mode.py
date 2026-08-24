@@ -280,20 +280,19 @@ def renderizar_modo_aprender():
         
     st.session_state['learn_target_write'] = target_write
 
-    # --- RENDERIZADO CON ESCUDO ANTI-BLOQUEO ---
+    # --- RENDERIZADO A PRUEBA DE FALLOS ---
     url_img = str(activa.get('imagen', '')).strip()
-    html_img = ""
+    
+    html_card = "<div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 2px solid #365b77;'>"
+    html_card += f"<div style='color: #94b8d7; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px;'>{label_show}</div>"
+    
     if url_img:
-        # El referrerpolicy='no-referrer' engaña a la seguridad de la otra página
-        html_img = f"<img src='{url_img}' referrerpolicy='no-referrer' style='max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 20px; object-fit: contain;' onerror=\"this.outerHTML='<div style=\\'color:#ef4444; font-size:13px; margin-bottom:15px;\\'>⚠️ Error: La página dueña de esta imagen bloqueó su uso. Buscá otra foto en Google.</div>'\"><br>"
+        html_card += f"<img src='{url_img}' referrerpolicy='no-referrer' style='max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 20px; object-fit: contain;' onerror=\"this.outerHTML='<div style=\\'color:#ef4444; font-size:13px; margin-bottom:15px;\\'>⚠️ Error: La pagina dueña de esta imagen bloqueo su uso. Busca otra foto en Google.</div>'\"><br>"
+        
+    html_card += f"<div style='font-size: 28px; font-weight: bold; color: #f8fafc;'>{prompt_show}</div>"
+    html_card += "</div>"
 
-    st.markdown(f"""
-    <div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 2px solid #365b77;'>
-        <div style='color: #94b8d7; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px;'>{label_show}</div>
-        {html_img}
-        <div style='font-size: 28px; font-weight: bold; color: #f8fafc;'>{prompt_show}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(html_card, unsafe_allow_html=True)
 
     if st.session_state['learn_estado_resp'] is None:
         if modo == '4_opciones':

@@ -9,7 +9,7 @@ import random
 import re
 
 # --- IMPORTACIÓN DE MÓDULOS PROPIOS ---
-from db import cargar_datos_sheet, guardar_datos
+from db import cargar_datos_sheet, guardar_datos, cargar_flashcards
 from utils import parse_float_nota, calcular_datos_racha, calcular_proximo_repaso
 from ui import cargar_css
 
@@ -81,7 +81,7 @@ OPCIONES_DIAS = ["---", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "S
 # CÁLCULO DE RACHA
 racha_actual, mejor_racha, protectores, dias_para_protector = calcular_datos_racha(st.session_state['historial'])
 
-# --- DEFINICIÓN Y EVALUACIÓN DE LOGROS (30 en total) ---
+# --- DEFINICIÓN Y EVALUACIÓN DE LOGROS (45 en total) ---
 DEFINICION_LOGROS = [
     {"id": 1, "nombre": "El Bautismo", "desc": "Guardaste tu primera sesión de estudio en el historial."},
     {"id": 2, "nombre": "Máquina", "desc": "Hiciste una sesión de 3 horas o más de corrido."},
@@ -112,7 +112,22 @@ DEFINICION_LOGROS = [
     {"id": 27, "nombre": "Maestro del Repaso", "desc": "Dominaste al menos 10 temas llevándolos a nivel 3 o superior en la curva del olvido."},
     {"id": 28, "nombre": "Titán", "desc": "Alcanzaste las 500 horas totales de estudio (30000 min)."},
     {"id": 29, "nombre": "Amasador de XP", "desc": "Llegaste a acumular 50.000 de XP sin gastar."},
-    {"id": 30, "nombre": "Impecable", "desc": "Te sacaste un 10 clavado en la nota final de algún examen."}
+    {"id": 30, "nombre": "Impecable", "desc": "Te sacaste un 10 clavado en la nota final de algún examen."},
+    {"id": 31, "nombre": "Creador de Mazos", "desc": "Creaste tu primera flashcard en el modo Aprender."},
+    {"id": 32, "nombre": "Mazo Completo", "desc": "Llegaste a crear 50 flashcards en total."},
+    {"id": 33, "nombre": "Mente Brillante", "desc": "Alcanzaste el estado 'Dominada' en 10 flashcards distintas."},
+    {"id": 34, "nombre": "Memoria Fotográfica", "desc": "Llevaste 50 flashcards al estado 'Dominada'."},
+    {"id": 35, "nombre": "Multimateria", "desc": "Creaste flashcards para al menos 3 materias diferentes."},
+    {"id": 36, "nombre": "Escriba Moderno", "desc": "Registraste una sesión usando el método 'Digitalizar' o 'Transcribir'."},
+    {"id": 37, "nombre": "Monje Shaolin", "desc": "Registraste 10 sesiones seguidas con 100% de eficiencia."},
+    {"id": 38, "nombre": "Cumplidor", "desc": "Alcanzaste el 100% de las horas planeadas para un examen."},
+    {"id": 39, "nombre": "Previsor", "desc": "Agendaste una meta de examen con más de 30 días de anticipación."},
+    {"id": 40, "nombre": "Cerebro de Acero", "desc": "Sumaste 50 horas de estudio total manteniendo un 100% de eficiencia."},
+    {"id": 41, "nombre": "Racha Legendaria", "desc": "Alcanzaste una racha de 75 días seguidos estudiando."},
+    {"id": 42, "nombre": "Abundancia", "desc": "Llegaste a acumular 100.000 de XP."},
+    {"id": 43, "nombre": "Estratega", "desc": "Creaste 10 métodos de estudio distintos para organizar tu aprendizaje."},
+    {"id": 44, "nombre": "Excelencia Académica", "desc": "Conseguiste tres notas iguales o mayores a 9 en tus exámenes."},
+    {"id": 45, "nombre": "La Gran Remontada", "desc": "Aprobaste una materia después de haber ido a final 3 veces o más."}
 ]
 
 def evaluar_logros():
@@ -121,6 +136,15 @@ def evaluar_logros():
     hist = st.session_state.get('historial', [])
     plan = st.session_state.get('plan_carrera', [])
     metas = st.session_state.get('metas', [])
+    
+    # Optimizacion: Leemos las flashcards solo si faltan desbloquear logros relacionados a los mazos
+    flashcards = None
+    necesita_flashcards = any(x in [31, 32, 33, 34, 35] for x in [l["id"] for l in DEFINICION_LOGROS if l["id"] not in desbloqueados])
+    if necesita_flashcards:
+        try:
+            flashcards = cargar_flashcards()
+        except:
+            flashcards = []
     
     for logro in DEFINICION_LOGROS:
         l_id = logro["id"]
@@ -199,6 +223,44 @@ def evaluar_logros():
                 if m.get('nota'):
                     n = parse_float_nota(m['nota'])
                     if n is not None and n == 10: cumple = True
+        elif l_id == 31 and flashcards is not None and len(flashcards) >= 1: cumple = True
+        elif l_id == 32 and flashcards is not None and len(flashcards) >= 50: cumple = True
+        elif l_id == 33 and flashcards is not None and len([f for f in flashcards if f.get('estado') == 'Dominada']) >= 10: cumple = True
+        elif l_id == 34 and flashcards is not None and len([f for f in flashcards if f.get('estado') == 'Dominada']) >= 50: cumple = True
+        elif l_id == 35 and flashcards is not None and len(set([f.get('materia') for f in flashcards if f.get('materia')])) >= 3: cumple = True
+        elif l_id == 36 and any("digitalizar" in h.get('MÉTODO', '').lower() or "transcribir" in h.get('MÉTODO', '').lower() for h in hist): cumple = True
+        elif l_id == 37:
+            count = 0
+            for h in hist:
+                if h.get('EFIC.') == '100%':
+                    count += 1
+                    if count >= 10: cumple = True
+                else: count = 0
+        elif l_id == 38 and any(m.get('horas_acumuladas', 0) >= int(m.get('meta_horas', 1)) for m in metas): cumple = True
+        elif l_id == 39:
+            hoy_d = date.today()
+            for m in metas:
+                try:
+                    if (date.fromisoformat(m['fecha_examen']) - hoy_d).days >= 30: cumple = True
+                except: pass
+        elif l_id == 40:
+            horas_100 = sum(int(h.get('TIEMPO (min)', 0)) for h in hist if h.get('EFIC.') == '100%') / 60
+            if horas_100 >= 50: cumple = True
+        elif l_id == 41 and racha_actual >= 75: cumple = True
+        elif l_id == 42 and st.session_state.get('xp_total', 0) >= 100000: cumple = True
+        elif l_id == 43 and len(st.session_state.get('metodos', [])) >= 10: cumple = True
+        elif l_id == 44:
+            notas_altas = 0
+            for m in metas:
+                if m.get('nota'):
+                    n = parse_float_nota(m['nota'])
+                    if n is not None and n >= 9: notas_altas += 1
+            if notas_altas >= 3: cumple = True
+        elif l_id == 45:
+            for m in plan:
+                if m.get('estado') == 'Aprobada/Promocionada':
+                    intentos = [i for i in m.get('intentos', []) if i.strip()]
+                    if len(intentos) >= 3: cumple = True
         
         if cumple:
             desbloqueados.append(l_id)
@@ -904,6 +966,7 @@ col_menu, col_contenido = st.columns([1, 4], gap="large")
 with col_menu:
     st.markdown("### Navegación")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios", "Perfil & Recompensas", "Aprender", "Digitalizar Apuntes"], label_visibility="collapsed")
+    
     # --- FRASES MOTIVACIONALES (FONDO DEL MENÚ) ---
     st.markdown("<br>", unsafe_allow_html=True)
     frases = [
@@ -1447,7 +1510,7 @@ with col_contenido:
                     if st.button(logro['nombre'], key=f"btn_logro_unlocked_{logro['id']}", use_container_width=True):
                         dialog_logro(logro['nombre'], logro['desc'])
                 else:
-                    st.button(f"Logro {i+1}/30", key=f"btn_logro_locked_{logro['id']}", disabled=True, use_container_width=True)
+                    st.button(f"Logro {i+1}/45", key=f"btn_logro_locked_{logro['id']}", disabled=True, use_container_width=True)
 
 
     elif menu_opcion == "Página Principal":
@@ -2007,10 +2070,10 @@ with col_contenido:
                         
                         st.markdown(html_hist, unsafe_allow_html=True)
 
-    elif menu_opcion == "Digitalizar Apuntes":
-        import transcriptor
-        transcriptor.renderizar_transcriptor()
-        
     elif menu_opcion == "Aprender":
         import learn_mode
         learn_mode.renderizar_modo_aprender()
+
+    elif menu_opcion == "Digitalizar Apuntes":
+        import transcriptor
+        transcriptor.renderizar_transcriptor()

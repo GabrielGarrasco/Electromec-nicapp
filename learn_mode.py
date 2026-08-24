@@ -6,6 +6,13 @@ import re
 from datetime import datetime
 from db import cargar_flashcards, guardar_todas_flashcards, guardar_datos
 
+def safe_int(val, default=0):
+    try:
+        if str(val).strip() == "": return default
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
 def normalizar_texto(texto):
     if not texto: return ""
     texto = unicodedata.normalize('NFD', str(texto)).encode('ascii', 'ignore').decode('utf-8')
@@ -32,7 +39,9 @@ def cargar_nueva_tarjeta(flashcards, materia):
         
     elegida = random.choice(pendientes)
     st.session_state['learn_activa'] = elegida
-    racha = int(elegida.get('racha_correctas', 0))
+    
+    # Acá usamos la nueva función para evitar que explote si la celda está vacía
+    racha = safe_int(elegida.get('racha_correctas', 0))
     
     if racha == 0:
         modo = '4_opciones'
@@ -71,7 +80,6 @@ def cargar_nueva_tarjeta(flashcards, materia):
     return True
 
 def evaluar_respuesta(opcion_usuario, flashcards):
-    # Arranca el tiempo o actualiza la actividad SOLO al responder
     if st.session_state.get('learn_start_time') is None:
         st.session_state['learn_start_time'] = time.time()
     st.session_state['learn_last_activity'] = time.time()
@@ -93,7 +101,7 @@ def evaluar_respuesta(opcion_usuario, flashcards):
     for f in flashcards:
         if str(f['id_tarjeta']) == str(activa['id_tarjeta']):
             if es_correcta:
-                f['racha_correctas'] = int(f.get('racha_correctas', 0)) + 1
+                f['racha_correctas'] = safe_int(f.get('racha_correctas', 0)) + 1
                 if f['racha_correctas'] >= 3:
                     f['estado'] = 'Dominada'
                 else:
@@ -108,7 +116,6 @@ def evaluar_respuesta(opcion_usuario, flashcards):
 def renderizar_modo_aprender():
     init_learn_state()
     
-    # Checkeamos si pasaron 5 minutos sin actividad
     if st.session_state.get('learn_start_time') is not None and st.session_state.get('learn_last_activity') is not None:
         inactividad = time.time() - st.session_state['learn_last_activity']
         if inactividad >= 300:
@@ -126,9 +133,9 @@ def renderizar_modo_aprender():
                 })
                 st.session_state['xp_total'] = st.session_state.get('xp_total', 0) + int(mins_reales * 10 * 1.2)
                 guardar_datos(silencioso=True)
-                st.warning(f"⚠️ Sesión cerrada por inactividad. Se guardaron {mins_reales} min reales descontando la pausa.")
+                st.warning(f"⚠️ Sesion cerrada por inactividad. Se guardaron {mins_reales} min reales descontando la pausa.")
             else:
-                st.warning("⚠️ Sesión cerrada por inactividad. No se llegó a 1 min de estudio.")
+                st.warning("⚠️ Sesion cerrada por inactividad. No se llego a 1 min de estudio.")
                 
             st.session_state['learn_start_time'] = None
             st.session_state['learn_last_activity'] = None
@@ -207,7 +214,7 @@ def renderizar_modo_aprender():
         st.caption(f"Progreso de {materia_sel}: {dominadas} / {total} conceptos dominados")
     with c_btn_time:
         if st.session_state.get('learn_start_time'):
-            if st.button(f"Terminar y Guardar Tiempo ({mins_estudio} min)", use_container_width=True):
+            if st.button(f"Terminar y Guardar ({mins_estudio} min)", use_container_width=True):
                 if mins_estudio >= 1:
                     st.session_state['historial'].append({
                         "FECHA": datetime.now().strftime("%d/%m/%Y"),

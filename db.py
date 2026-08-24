@@ -80,3 +80,25 @@ def guardar_datos(silencioso=False):
     except Exception as e:
         st.error(f"Error al guardar: {e}")
         st.stop()
+
+@st.cache_data(ttl=60)
+def cargar_flashcards():
+    try:
+        client = get_gspread_client()
+        sheet = client.open('StudyMeterDB').worksheet('aprender')
+        return sheet.get_all_records()
+    except:
+        return []
+
+def guardar_todas_flashcards(lista_dict):
+    try:
+        client = get_gspread_client()
+        sheet = client.open('StudyMeterDB').worksheet('aprender')
+        sheet.clear()
+        if lista_dict:
+            headers = list(lista_dict[0].keys())
+            valores = [list(d.values()) for d in lista_dict]
+            sheet.update("A1", [headers] + valores)
+        cargar_flashcards.clear()
+    except Exception as e:
+        st.error(f"Error al guardar flashcards: {e}")

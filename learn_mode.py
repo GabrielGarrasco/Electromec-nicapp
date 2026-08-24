@@ -281,7 +281,10 @@ def renderizar_modo_aprender():
     st.session_state['learn_target_write'] = target_write
 
     url_img = str(activa.get('imagen', '')).strip()
-    html_img = f"<img src='{url_img}' style='max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 20px; object-fit: contain;' onerror=\"this.style.display='none'\"><br>" if url_img else ""
+    html_img = ""
+    if url_img:
+        # Si el link no es una foto real, te avisa en rojo en vez de desaparecer
+        html_img = f"<img src='{url_img}' style='max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 20px; object-fit: contain;' onerror=\"this.outerHTML='<div style=\\'color:#ef4444; font-size:13px; margin-bottom:15px;\\'>⚠️ El link cargado no es de una imagen válida. Recordá hacer clic derecho -> Copiar dirección de la imagen.</div>'\"><br>"
 
     st.markdown(f"""
 <div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 2px solid #365b77;'>

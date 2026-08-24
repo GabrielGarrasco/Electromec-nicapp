@@ -966,6 +966,26 @@ col_menu, col_contenido = st.columns([1, 4], gap="large")
 with col_menu:
     st.markdown("### Navegación")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios", "Perfil & Recompensas", "Aprender", "Digitalizar Apuntes"], label_visibility="collapsed")
+
+    # Auto-guardado al salir de la pestaña
+    if menu_opcion != "Aprender" and st.session_state.get('learn_start_time') is not None:
+        import time
+        from datetime import date
+        from db import guardar_datos
+        mins = int((time.time() - st.session_state['learn_start_time']) // 60)
+        if mins >= 1:
+            st.session_state['historial'].append({
+                "FECHA": date.today().strftime("%d/%m/%Y"), 
+                "MATERIA": st.session_state.get('learn_materia_filtro', 'Sin materia'), 
+                "MÉTODO": "Aprender (Flashcards)", 
+                "TIEMPO (min)": mins, 
+                "EFIC.": "100%", 
+                "INTERRUPCIONES": []
+            })
+            st.session_state['xp_total'] = st.session_state.get('xp_total', 0) + int(mins * 10 * 1.2)
+            guardar_datos(silencioso=True)
+        st.session_state['learn_start_time'] = None
+        st.session_state['learn_last_activity'] = None
     
     # --- FRASES MOTIVACIONALES (FONDO DEL MENÚ) ---
     st.markdown("<br>", unsafe_allow_html=True)

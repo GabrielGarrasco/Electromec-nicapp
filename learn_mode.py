@@ -280,19 +280,16 @@ def renderizar_modo_aprender():
         
     st.session_state['learn_target_write'] = target_write
 
-    # --- NUEVO RENDERIZADO CON IMAGEN ADENTRO DE LA TARJETA ---
     url_img = str(activa.get('imagen', '')).strip()
-    html_img = ""
-    if url_img:
-        html_img = f"<img src='{url_img}' style='max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 20px; object-fit: contain;' onerror=\"this.style.display='none'\"><br>"
+    html_img = f"<img src='{url_img}' style='max-width: 100%; max-height: 250px; border-radius: 8px; margin-bottom: 20px; object-fit: contain;' onerror=\"this.style.display='none'\"><br>" if url_img else ""
 
     st.markdown(f"""
-    <div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 2px solid #365b77;'>
-        <div style='color: #94b8d7; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px;'>{label_show}</div>
-        {html_img}
-        <div style='font-size: 28px; font-weight: bold; color: #f8fafc;'>{prompt_show}</div>
-    </div>
-    """, unsafe_allow_html=True)
+<div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 2px solid #365b77;'>
+<div style='color: #94b8d7; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px;'>{label_show}</div>
+{html_img}
+<div style='font-size: 28px; font-weight: bold; color: #f8fafc;'>{prompt_show}</div>
+</div>
+""", unsafe_allow_html=True)
 
     if st.session_state['learn_estado_resp'] is None:
         if modo == '4_opciones':

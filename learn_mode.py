@@ -30,6 +30,8 @@ def init_learn_state():
     if 'learn_target_write' not in st.session_state: st.session_state['learn_target_write'] = None
     if 'learn_start_time' not in st.session_state: st.session_state['learn_start_time'] = None
     if 'learn_last_activity' not in st.session_state: st.session_state['learn_last_activity'] = None
+    if 'flashcards_data' not in st.session_state:
+        st.session_state['flashcards_data'] = cargar_flashcards()
 
 def cargar_nueva_tarjeta(flashcards, materia):
     pendientes = [f for f in flashcards if f['materia'] == materia and f['estado'] != 'Dominada']
@@ -40,7 +42,6 @@ def cargar_nueva_tarjeta(flashcards, materia):
     elegida = random.choice(pendientes)
     st.session_state['learn_activa'] = elegida
     
-    # Acá usamos la nueva función para evitar que explote si la celda está vacía
     racha = safe_int(elegida.get('racha_correctas', 0))
     
     if racha == 0:
@@ -79,7 +80,7 @@ def cargar_nueva_tarjeta(flashcards, materia):
     st.session_state['learn_respuesta_elegida'] = None
     return True
 
-def evaluar_respuesta(opcion_usuario, flashcards):
+def evaluar_respuesta(opcion_usuario):
     if st.session_state.get('learn_start_time') is None:
         st.session_state['learn_start_time'] = time.time()
     st.session_state['learn_last_activity'] = time.time()
@@ -95,9 +96,7 @@ def evaluar_respuesta(opcion_usuario, flashcards):
     else:
         es_correcta = (opcion_usuario == target)
     
-    st.session_state['learn_estado_resp'] = "Correcta" if es_correcta else "Incorrecta"
-    st.session_state['learn_respuesta_elegida'] = opcion_usuario
-    
+    flashcards = st.session_state['flashcards_data']
     for f in flashcards:
         if str(f['id_tarjeta']) == str(activa['id_tarjeta']):
             if es_correcta:
@@ -111,7 +110,15 @@ def evaluar_respuesta(opcion_usuario, flashcards):
                 f['estado'] = 'Aprendiendo'
             break
             
-    guardar_todas_flashcards(flashcards)
+    if es_correcta:
+        st.toast("Correcto")
+        st.session_state['learn_activa'] = None
+        st.session_state['learn_estado_resp'] = None
+        st.rerun()
+    else:
+        st.session_state['learn_estado_resp'] = "Incorrecta"
+        st.session_state['learn_respuesta_elegida'] = opcion_usuario
+        st.rerun()
 
 def renderizar_modo_aprender():
     init_learn_state()
@@ -133,6 +140,7 @@ def renderizar_modo_aprender():
                 })
                 st.session_state['xp_total'] = st.session_state.get('xp_total', 0) + int(mins_reales * 10 * 1.2)
                 guardar_datos(silencioso=True)
+                guardar_todas_flashcards(st.session_state['flashcards_data'])
                 st.warning(f"⚠️ Sesion cerrada por inactividad. Se guardaron {mins_reales} min reales descontando la pausa.")
             else:
                 st.warning("⚠️ Sesion cerrada por inactividad. No se llego a 1 min de estudio.")
@@ -142,7 +150,7 @@ def renderizar_modo_aprender():
 
     st.header("Modo Aprender")
     
-    flashcards = cargar_flashcards()
+    flashcards = st.session_state['flashcards_data']
     
     with st.expander("Crear nuevas tarjetas (Termino, Definicion e Imagen)"):
         with st.form("form_nueva_carta", clear_on_submit=True):
@@ -166,8 +174,8 @@ def renderizar_modo_aprender():
                         "estado": "Nueva",
                         "racha_correctas": 0
                     }
-                    flashcards.append(nueva)
-                    guardar_todas_flashcards(flashcards)
+                    st.session_state['flashcards_data'].append(nueva)
+                    guardar_todas_flashcards(st.session_state['flashcards_data'])
                     st.success("Tarjeta guardada.")
                     time.sleep(1)
                     st.rerun()
@@ -227,12 +235,13 @@ def renderizar_modo_aprender():
                     st.session_state['xp_total'] = st.session_state.get('xp_total', 0) + int(mins_estudio * 10 * 1.2)
                     guardar_datos(silencioso=True)
                     st.success(f"Se guardaron {mins_estudio} min en tu historial.")
-                    time.sleep(1.5)
                 else:
-                    st.warning("⚠️ Menos de 1 min. No se guardo.")
-                    time.sleep(1)
+                    st.warning("⚠️ Menos de 1 min. No se guardo en historial.")
+                
+                guardar_todas_flashcards(st.session_state['flashcards_data'])
                 st.session_state['learn_start_time'] = None
                 st.session_state['learn_last_activity'] = None
+                time.sleep(1.5)
                 st.rerun()
     
     st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
@@ -244,7 +253,7 @@ def renderizar_modo_aprender():
                 if f['materia'] == materia_sel:
                     f['estado'] = 'Nueva'
                     f['racha_correctas'] = 0
-            guardar_todas_flashcards(flashcards)
+            guardar_todas_flashcards(st.session_state['flashcards_data'])
             st.session_state['learn_activa'] = None
             st.rerun()
         return
@@ -257,8 +266,8 @@ def renderizar_modo_aprender():
     activa = st.session_state['learn_activa']
     modo = st.session_state['learn_modo_pregunta']
     
-    len_term = len(activa['termino'])
-    len_def = len(activa['definicion'])
+    len_term = len(str(activa['termino']))
+    len_def = len(str(activa['definicion']))
     
     if modo == 'escribir' and len_term < len_def:
         prompt_show = activa['definicion']
@@ -271,6 +280,12 @@ def renderizar_modo_aprender():
         
     st.session_state['learn_target_write'] = target_write
 
+    if activa.get('imagen') and str(activa['imagen']).strip():
+        try:
+            st.image(str(activa['imagen']).strip(), use_container_width=True)
+        except:
+            st.caption("⚠️ Error al cargar la imagen. Revisa la URL.")
+
     st.markdown(f"""
     <div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 2px solid #365b77;'>
         <div style='color: #94b8d7; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px;'>{label_show}</div>
@@ -278,55 +293,43 @@ def renderizar_modo_aprender():
     </div>
     """, unsafe_allow_html=True)
 
-    if activa.get('imagen'):
-        try:
-            st.image(activa['imagen'], use_container_width=True)
-        except:
-            st.caption("⚠️ Error al cargar la imagen. Revisa la URL.")
-
     if st.session_state['learn_estado_resp'] is None:
         if modo == '4_opciones':
             st.caption("Fase 1/3: Selecciona la definicion correcta")
             opciones = st.session_state['learn_opciones']
             c1, c2 = st.columns(2)
             c3, c4 = st.columns(2)
-            if c1.button(opciones[0], key="btn_opc_0", use_container_width=True): evaluar_respuesta(opciones[0], flashcards); st.rerun()
-            if c2.button(opciones[1], key="btn_opc_1", use_container_width=True): evaluar_respuesta(opciones[1], flashcards); st.rerun()
-            if c3.button(opciones[2], key="btn_opc_2", use_container_width=True): evaluar_respuesta(opciones[2], flashcards); st.rerun()
-            if c4.button(opciones[3], key="btn_opc_3", use_container_width=True): evaluar_respuesta(opciones[3], flashcards); st.rerun()
+            if c1.button(opciones[0], key="btn_opc_0", use_container_width=True): evaluar_respuesta(opciones[0])
+            if c2.button(opciones[1], key="btn_opc_1", use_container_width=True): evaluar_respuesta(opciones[1])
+            if c3.button(opciones[2], key="btn_opc_2", use_container_width=True): evaluar_respuesta(opciones[2])
+            if c4.button(opciones[3], key="btn_opc_3", use_container_width=True): evaluar_respuesta(opciones[3])
             
         elif modo == '2_opciones':
             st.caption("Fase 2/3: Selecciona la correcta")
             opciones = st.session_state['learn_opciones']
             c1, c2 = st.columns(2)
-            if c1.button(opciones[0], key="btn_opc_0", use_container_width=True): evaluar_respuesta(opciones[0], flashcards); st.rerun()
-            if c2.button(opciones[1], key="btn_opc_1", use_container_width=True): evaluar_respuesta(opciones[1], flashcards); st.rerun()
+            if c1.button(opciones[0], key="btn_opc_0", use_container_width=True): evaluar_respuesta(opciones[0])
+            if c2.button(opciones[1], key="btn_opc_1", use_container_width=True): evaluar_respuesta(opciones[1])
             
         elif modo == 'escribir':
             st.caption("Fase 3/3: Escribi la respuesta")
             with st.form("form_escribir_resp", clear_on_submit=True):
                 resp_usuario = st.text_input("Tu respuesta", placeholder="Escribi aca...")
                 if st.form_submit_button("Responder", type="primary", use_container_width=True):
-                    evaluar_respuesta(resp_usuario, flashcards)
-                    st.rerun()
+                    evaluar_respuesta(resp_usuario)
             
     else:
-        es_correcta = st.session_state['learn_estado_resp'] == "Correcta"
-        color_msj = "#10b981" if es_correcta else "#ef4444"
-        msj = "Correcto" if es_correcta else "Incorrecto"
+        st.markdown("<h3 style='color: #ef4444; text-align: center;'>Incorrecto</h3>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style='background-color: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 8px; border: 1px solid #ef4444; margin-bottom: 20px;'>
+            <p style='margin:0; color:#f8fafc;'><b>Elegiste / Escribiste:</b> {st.session_state['learn_respuesta_elegida']}</p>
+            <hr style='border-color: #ef4444; opacity: 0.3;'>
+            <p style='margin:0; color:#10b981;'><b>La correcta era:</b> {target_write}</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        st.markdown(f"<h3 style='color: {color_msj}; text-align: center;'>{msj}</h3>", unsafe_allow_html=True)
-        
-        if not es_correcta:
-            st.markdown(f"""
-            <div style='background-color: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 8px; border: 1px solid #ef4444; margin-bottom: 20px;'>
-                <p style='margin:0; color:#f8fafc;'><b>Elegiste / Escribiste:</b> {st.session_state['learn_respuesta_elegida']}</p>
-                <hr style='border-color: #ef4444; opacity: 0.3;'>
-                <p style='margin:0; color:#10b981;'><b>La correcta era:</b> {target_write}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-        c_space1, c_btn, c_space2 = st.columns([1, 2, 1])
-        if c_btn.button("Continuar", type="primary", use_container_width=True):
-            st.session_state['learn_activa'] = None
-            st.rerun()
+        # Streamlit va a pausar acá para que leas y después avanza solo
+        time.sleep(3.5)
+        st.session_state['learn_activa'] = None
+        st.session_state['learn_estado_resp'] = None
+        st.rerun()

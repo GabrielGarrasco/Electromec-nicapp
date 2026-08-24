@@ -3,16 +3,17 @@ import random
 import time
 import unicodedata
 import re
-from db import cargar_flashcards, guardar_todas_flashcards
+from datetime import datetime
+from db import cargar_flashcards, guardar_todas_flashcards, guardar_datos
 
 def normalizar_texto(texto):
     if not texto: return ""
-    # Normaliza a NFD para remover tildes y acentos
+    # Saca tildes y acentos
     texto = unicodedata.normalize('NFD', str(texto)).encode('ascii', 'ignore').decode('utf-8')
     texto = texto.lower()
-    # Removemos puntuación típica para que no te rebote por un punto o coma
+    # Saca signos de puntuación molestos
     texto = re.sub(r'[.,;¿?¡!()"\'\-]', '', texto)
-    # Limpiamos los espacios extra
+    # Limpia espacios dobles
     texto = re.sub(r'\s+', ' ', texto).strip()
     return texto
 
@@ -27,6 +28,10 @@ def init_learn_state():
         st.session_state['learn_respuesta_elegida'] = None
     if 'learn_modo_pregunta' not in st.session_state:
         st.session_state['learn_modo_pregunta'] = '4_opciones'
+    if 'learn_target_write' not in st.session_state:
+        st.session_state['learn_target_write'] = None
+    if 'learn_start_time' not in st.session_state:
+        st.session_state['learn_start_time'] = None
 
 def cargar_nueva_tarjeta(flashcards, materia):
     pendientes = [f for f in flashcards if f['materia'] == materia and f['estado'] != 'Dominada']
@@ -38,7 +43,7 @@ def cargar_nueva_tarjeta(flashcards, materia):
     st.session_state['learn_activa'] = elegida
     racha = int(elegida.get('racha_correctas', 0))
     
-    # Curva de dificultad en 3 Fases
+    # Curva de dificultad
     if racha == 0:
         modo = '4_opciones'
         num_distractores = 3
@@ -78,14 +83,14 @@ def cargar_nueva_tarjeta(flashcards, materia):
 def evaluar_respuesta(opcion_usuario, flashcards):
     activa = st.session_state['learn_activa']
     modo = st.session_state['learn_modo_pregunta']
+    target = st.session_state.get('learn_target_write', activa['definicion'])
     
     if modo == 'escribir':
-        # Pasamos las dos respuestas por el filtro flexible antes de comparar
         resp_norm = normalizar_texto(opcion_usuario)
-        def_norm = normalizar_texto(activa['definicion'])
+        def_norm = normalizar_texto(target)
         es_correcta = (resp_norm == def_norm)
     else:
-        es_correcta = (opcion_usuario == activa['definicion'])
+        es_correcta = (opcion_usuario == target)
     
     st.session_state['learn_estado_resp'] = "Correcta" if es_correcta else "Incorrecta"
     st.session_state['learn_respuesta_elegida'] = opcion_usuario
@@ -94,7 +99,6 @@ def evaluar_respuesta(opcion_usuario, flashcards):
         if str(f['id_tarjeta']) == str(activa['id_tarjeta']):
             if es_correcta:
                 f['racha_correctas'] = int(f.get('racha_correctas', 0)) + 1
-                # A las 3 correctas seguidas pasa a dominada definitivamente
                 if f['racha_correctas'] >= 3:
                     f['estado'] = 'Dominada'
                 else:
@@ -108,11 +112,11 @@ def evaluar_respuesta(opcion_usuario, flashcards):
 
 def renderizar_modo_aprender():
     init_learn_state()
-    st.header("Modo Aprender 🧠")
+    st.header("Modo Aprender")
     
     flashcards = cargar_flashcards()
     
-    with st.expander("Crear nuevas tarjetas (Término y Definición)"):
+    with st.expander("Crear nuevas tarjetas (Término, Definición e Imagen)"):
         with st.form("form_nueva_carta"):
             materias_activas = [m['nombre'] for m in st.session_state.get('materias', [])]
             if not materias_activas:
@@ -121,6 +125,7 @@ def renderizar_modo_aprender():
             n_mat = st.selectbox("Materia", materias_activas if materias_activas else ["Sin materia"])
             n_term = st.text_input("Término / Pregunta")
             n_def = st.text_area("Definición / Respuesta")
+            n_img = st.text_input("URL de la imagen (Opcional)", placeholder="https://ejemplo.com/imagen.png")
             
             if st.form_submit_button("Guardar Tarjeta"):
                 if n_term and n_def:
@@ -129,6 +134,7 @@ def renderizar_modo_aprender():
                         "materia": n_mat,
                         "termino": n_term.strip(),
                         "definicion": n_def.strip(),
+                        "imagen": n_img.strip(),
                         "estado": "Nueva",
                         "racha_correctas": 0
                     }
@@ -138,7 +144,7 @@ def renderizar_modo_aprender():
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("Completá ambos campos para guardar.")
+                    st.error("Completá Término y Definición para guardar.")
 
     if not flashcards:
         st.info("No hay tarjetas todavía. ¡Cargá un par arriba para empezar!")
@@ -160,6 +166,7 @@ def renderizar_modo_aprender():
     if materia_sel != st.session_state['learn_materia_filtro']:
         st.session_state['learn_materia_filtro'] = materia_sel
         st.session_state['learn_activa'] = None
+        st.session_state['learn_start_time'] = None # Resetea el tiempo si cambias de materia
         st.rerun()
 
     cartas_materia = [f for f in flashcards if f['materia'] == materia_sel]
@@ -168,8 +175,40 @@ def renderizar_modo_aprender():
     total = len(cartas_materia)
     progreso_pct = dominadas / total if total > 0 else 0
     
-    st.progress(progreso_pct)
-    st.caption(f"Progreso de {materia_sel}: {dominadas} / {total} conceptos dominados")
+    # --- CRONÓMETRO INVISIBLE Y BARRA DE PROGRESO ---
+    if st.session_state['learn_start_time'] is None and total > 0 and dominadas < total:
+        st.session_state['learn_start_time'] = time.time()
+        
+    mins_estudio = 0
+    if st.session_state['learn_start_time']:
+        mins_estudio = int((time.time() - st.session_state['learn_start_time']) // 60)
+
+    c_prog, c_btn_time = st.columns([3, 1])
+    with c_prog:
+        st.progress(progreso_pct)
+        st.caption(f"Progreso de {materia_sel}: {dominadas} / {total} conceptos dominados")
+    with c_btn_time:
+        if st.session_state['learn_start_time']:
+            if st.button(f"Guardar Tiempo ({mins_estudio} min)", use_container_width=True):
+                if mins_estudio >= 1:
+                    nueva_sesion = {
+                        "FECHA": datetime.now().strftime("%d/%m/%Y"),
+                        "MATERIA": materia_sel, 
+                        "MÉTODO": "Aprender (Flashcards)",
+                        "TIEMPO (min)": mins_estudio, 
+                        "EFIC.": "100%", 
+                        "INTERRUPCIONES": []
+                    }
+                    st.session_state['historial'].append(nueva_sesion)
+                    st.session_state['xp_total'] = st.session_state.get('xp_total', 0) + int(mins_estudio * 10 * 1.2)
+                    guardar_datos(silencioso=True)
+                    st.success(f"¡{mins_estudio} min guardados!")
+                    time.sleep(1.5)
+                else:
+                    st.warning("Menos de 1 min. No se guardó.")
+                    time.sleep(1)
+                st.session_state['learn_start_time'] = None
+                st.rerun()
     
     st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
 
@@ -193,13 +232,37 @@ def renderizar_modo_aprender():
     activa = st.session_state['learn_activa']
     modo = st.session_state['learn_modo_pregunta']
     
+    # --- LÓGICA DE INVERSIÓN (TEXTO MÁS CORTO SE ESCRIBE) ---
+    len_term = len(activa['termino'])
+    len_def = len(activa['definicion'])
+    
+    if modo == 'escribir' and len_term < len_def:
+        prompt_show = activa['definicion']
+        target_write = activa['termino']
+        label_show = "Definición (Escribí el término correspondiente)"
+    else:
+        prompt_show = activa['termino']
+        target_write = activa['definicion']
+        label_show = "Término" if modo != 'escribir' else "Término (Escribí la definición)"
+        
+    st.session_state['learn_target_write'] = target_write
+
+    # Render de la tarjeta gigante
     st.markdown(f"""
-    <div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 30px; border: 2px solid #365b77;'>
-        <div style='color: #94b8d7; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px;'>Término</div>
-        <div style='font-size: 28px; font-weight: bold; color: #f8fafc;'>{activa['termino']}</div>
+    <div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 2px solid #365b77;'>
+        <div style='color: #94b8d7; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 10px;'>{label_show}</div>
+        <div style='font-size: 28px; font-weight: bold; color: #f8fafc;'>{prompt_show}</div>
     </div>
     """, unsafe_allow_html=True)
 
+    # Render de la imagen si la tiene
+    if activa.get('imagen'):
+        try:
+            st.image(activa['imagen'], use_column_width=True)
+        except:
+            st.caption("⚠️ Error al cargar la imagen. Revisá la URL.")
+
+    # Render de los botones o input
     if st.session_state['learn_estado_resp'] is None:
         if modo == '4_opciones':
             st.caption("Fase 1/3: Seleccioná la definición correcta")
@@ -219,7 +282,7 @@ def renderizar_modo_aprender():
             if c2.button(opciones[1], key="btn_opc_1", use_container_width=True): evaluar_respuesta(opciones[1], flashcards); st.rerun()
             
         elif modo == 'escribir':
-            st.caption("Fase 3/3: Escribí la definición (no importa mayúsculas ni tildes)")
+            st.caption("Fase 3/3: Escribí la respuesta (no importa mayúsculas ni tildes)")
             with st.form("form_escribir_resp"):
                 resp_usuario = st.text_input("Tu respuesta", placeholder="Escribí acá...")
                 if st.form_submit_button("Responder", type="primary", use_container_width=True):
@@ -238,7 +301,7 @@ def renderizar_modo_aprender():
             <div style='background-color: rgba(239, 68, 68, 0.1); padding: 20px; border-radius: 8px; border: 1px solid #ef4444; margin-bottom: 20px;'>
                 <p style='margin:0; color:#f8fafc;'><b>Elegiste / Escribiste:</b> {st.session_state['learn_respuesta_elegida']}</p>
                 <hr style='border-color: #ef4444; opacity: 0.3;'>
-                <p style='margin:0; color:#10b981;'><b>La correcta era:</b> {activa['definicion']}</p>
+                <p style='margin:0; color:#10b981;'><b>La correcta era:</b> {target_write}</p>
             </div>
             """, unsafe_allow_html=True)
             

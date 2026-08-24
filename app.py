@@ -903,8 +903,7 @@ col_menu, col_contenido = st.columns([1, 4], gap="large")
 
 with col_menu:
     st.markdown("### Navegación")
-    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios", "Perfil & Recompensas", "Digitalizar Apuntes"], label_visibility="collapsed")
-    
+    menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios", "Perfil & Recompensas", "Aprender", "Digitalizar Apuntes"], label_visibility="collapsed")
     # --- FRASES MOTIVACIONALES (FONDO DEL MENÚ) ---
     st.markdown("<br>", unsafe_allow_html=True)
     frases = [
@@ -2011,3 +2010,7 @@ with col_contenido:
     elif menu_opcion == "Digitalizar Apuntes":
         import transcriptor
         transcriptor.renderizar_transcriptor()
+        
+    elif menu_opcion == "Aprender":
+    import learn_mode
+    learn_mode.renderizar_modo_aprender()

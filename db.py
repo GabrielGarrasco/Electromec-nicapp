@@ -45,11 +45,16 @@ def cargar_datos_sheet():
 
 def guardar_datos(silencioso=False):
     try:
+        # Aca estaba el error: Faltaba guardar 'actividades_fijas'
         datos = {
-            'materias': st.session_state['materias'], 'metodos': st.session_state['metodos'],
-            'distracciones': st.session_state['distracciones'], 'historial': st.session_state['historial'],
-            'metas': st.session_state['metas'], 'plan_carrera': st.session_state['plan_carrera'],
+            'materias': st.session_state.get('materias', []), 
+            'metodos': st.session_state.get('metodos', []),
+            'distracciones': st.session_state.get('distracciones', []), 
+            'historial': st.session_state.get('historial', []),
+            'metas': st.session_state.get('metas', []), 
+            'plan_carrera': st.session_state.get('plan_carrera', []),
             'horarios': st.session_state.get('horarios', []),
+            'actividades_fijas': st.session_state.get('actividades_fijas', []),
             'xp_total': st.session_state.get('xp_total', 0),
             'recompensas': st.session_state.get('recompensas', []),
             'logros_desbloqueados': st.session_state.get('logros_desbloqueados', [])
@@ -81,7 +86,8 @@ def guardar_datos(silencioso=False):
         st.error(f"Error al guardar: {e}")
         st.stop()
 
-@st.cache_data(ttl=60)
+# Caché aumentado a 10 min para no comer recursos al pedo
+@st.cache_data(ttl=600)
 def cargar_flashcards():
     try:
         client = get_gspread_client()

@@ -272,7 +272,6 @@ def evaluar_logros():
         st.session_state['logros_desbloqueados'] = desbloqueados
         guardar_datos(silencioso=True)
 
-# Llamamos a la función apenas arranca para chequear de fondo
 evaluar_logros()
 
 # --- MODO INVASIÓN ---
@@ -305,7 +304,7 @@ if modo_invasion:
 
 
 # --- MODALES (DIALOGS) ---
-@st.dialog("Tu Sesión Ideal 🔮")
+@st.dialog("Tu Sesión Ideal")
 def dialog_armar_sesion():
     st.markdown("### Plan de Acción Propuesto")
     
@@ -326,7 +325,6 @@ def dialog_armar_sesion():
         materia_urgente = meta_urgente['materia']
         temas_materia = st.session_state.get('temarios', {}).get(materia_urgente, [])
         
-        # Filtramos por las unidades del examen si las hay
         unidades_examen = meta_urgente.get('unidades_examen', [])
         if unidades_examen:
             temas_materia = [t for t in temas_materia if t.get('unidad', 'General') in unidades_examen]
@@ -336,25 +334,25 @@ def dialog_armar_sesion():
         
         faltan_dias = (date.fromisoformat(meta_urgente['fecha_examen']) - hoy).days
         
-        st.markdown(f"<div style='font-size: 16px; color: #10b981; font-weight: bold;'>🎯 Prioridad #1: {meta_urgente['nombre']}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size: 16px; color: #10b981; font-weight: bold;'>Prioridad #1: {meta_urgente['nombre']}</div>", unsafe_allow_html=True)
         st.markdown(f"<div style='color: #7498b6; margin-bottom: 15px;'>Materia: {materia_urgente} | Faltan {faltan_dias} días</div>", unsafe_allow_html=True)
         
         horas_faltantes = max(0.0, meta_urgente['meta_horas'] - meta_urgente['horas_acumuladas'])
         horas_hoy = 2 if horas_faltantes >= 2 else max(1, int(horas_faltantes))
         
-        st.markdown(f"**⏳ Tiempo sugerido hoy:** Metele al menos **{horas_hoy} horas** a esta materia para mantener el ritmo.")
+        st.markdown(f"**Tiempo sugerido hoy:** Metele al menos **{horas_hoy} horas** a esta materia para mantener el ritmo.")
         
         if temas_vencidos:
-            st.markdown("**📚 Temas urgentes que la curva del olvido te pide repasar:**")
-            for tv in temas_vencidos[:5]: # Mostramos máx 5 para no abrumar
+            st.markdown("**Temas urgentes que la curva del olvido te pide repasar:**")
+            for tv in temas_vencidos[:5]: 
                 st.markdown(f"<div style='background-color: #450a0a; border-left: 3px solid #ef4444; padding: 5px 10px; margin-bottom: 5px; font-size: 13px;'>{tv}</div>", unsafe_allow_html=True)
             if len(temas_vencidos) > 5:
                 st.caption(f"...y {len(temas_vencidos) - 5} temas más.")
         else:
-            st.success("¡Venís al día con los repasos de esta materia! Podés avanzar con temas nuevos o hacer pura práctica.")
+            st.success("Venís al día con los repasos de esta materia. Podés avanzar con temas nuevos o hacer pura práctica.")
             
         st.write("<br>", unsafe_allow_html=True)
-        if st.button("¡Entendido! Vamos a darle", type="primary", use_container_width=True):
+        if st.button("Entendido. Vamos a darle", type="primary", use_container_width=True):
             st.rerun()
 
 @st.dialog("Racha de Estudio", width="small")
@@ -465,14 +463,12 @@ def renderizar_analitica():
         mins_hoy = df_hoy['TIEMPO (min)'].sum() if not df_hoy.empty else 0
         h_hoy, m_hoy = int(mins_hoy // 60), int(mins_hoy % 60)
         
-        # --- CRUZAR DATOS: MEJOR MÉTODO ---
         try:
             df_metodos = df_hist.groupby('MÉTODO')['EFIC_NUM'].agg(['mean', 'count']).reset_index()
-            # Filtramos los métodos que se usaron al menos 2 veces para que sea representativo
             df_metodos_validos = df_metodos[df_metodos['count'] >= 2]
             if not df_metodos_validos.empty:
                 mejor_fila = df_metodos_validos.loc[df_metodos_validos['mean'].idxmax()]
-                mejor_metodo_texto = f"Tu método estrella es **{mejor_fila['MÉTODO']}** con un promedio de **{int(mejor_fila['mean'])}%** de eficiencia."
+                mejor_metodo_texto = f"Tu método de mayor rendimiento es **{mejor_fila['MÉTODO']}** con un promedio de **{int(mejor_fila['mean'])}%** de eficiencia."
         except: pass
             
     else:
@@ -527,53 +523,114 @@ def renderizar_analitica():
                 )
                 st.plotly_chart(fig_bars, use_container_width=True, config={'displayModeBar': False})
 
-    # --- BLOQUE INTELIGENCIA DE ESTUDIO ---
     st.markdown(f"""
     <div style="background-color: transparent; border: 1px solid #10b981; border-radius: 8px; padding: 15px; margin-top: 15px;">
-        <div style="font-size: 12px; color: #10b981; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;">💡 Inteligencia de Estudio</div>
-        <div style="color: #f8fafc; font-size: 14px;">{mejor_metodo_texto} Intentá usarlo más seguido cuando te sientas trabado.</div>
+        <div style="font-size: 12px; color: #10b981; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;">Inteligencia de Estudio</div>
+        <div style="color: #f8fafc; font-size: 14px;">{mejor_metodo_texto} Recomendado para momentos de bloqueo.</div>
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>DESEMPEÑO POR AÑO (PROMEDIOS)</div>", unsafe_allow_html=True)
-    notas_por_anio = {1: [], 2: [], 3: [], 4: [], 5: [], 6: []}
+    # --- ANÁLISIS AVANZADO ---
+    st.markdown("<div class='analitica-title' style='margin-top: 25px;'>ANÁLISIS AVANZADO</div>", unsafe_allow_html=True)
     
-    for mat in st.session_state['plan_carrera']:
-        if not str(mat['año']).isdigit():
-            continue
-        anio = int(mat['año'])
-        notas_mat = []
-        nf = parse_float_nota(mat.get('nota', ''))
-        if nf is not None: notas_mat.append(nf)
-            
-        for meta in st.session_state['metas']:
-            if meta['materia'] == mat['nombre'] and meta.get('nota'):
-                nm = parse_float_nota(meta['nota'])
-                if nm is not None: notas_mat.append(nm)
-                    
-        if notas_mat:
-            promedio_mat = sum(notas_mat) / len(notas_mat)
-            if anio in notas_por_anio: notas_por_anio[anio].append(promedio_mat)
-            
-    data_radar = []
-    for a in range(1, 7):
-        if notas_por_anio[a]:
-            data_radar.append({'Año': f"Año {a}", 'Promedio': sum(notas_por_anio[a])/len(notas_por_anio[a])})
+    # Cálculo del Índice de Realismo
+    metas_pasadas = []
+    hoy_str = date.today().isoformat()
+    for m in st.session_state['metas']:
+        is_past = False
+        if m.get('nota') is not None and str(m['nota']).strip() != "":
+            is_past = True
         else:
-            data_radar.append({'Año': f"Año {a}", 'Promedio': 0})
-            
-    df_radar = pd.DataFrame(data_radar)
-    fig = px.line_polar(df_radar, r='Promedio', theta='Año', line_close=True, range_r=[0,10])
-    fig.update_traces(fill='toself', line_color='#10b981')
-    fig.update_layout(
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='#7498b6',
-        margin=dict(l=20, r=20, t=20, b=20), height=300,
-        polar=dict(radialaxis=dict(visible=True, range=[0, 10], color='#7498b6', gridcolor='#153f59'),
-                   angularaxis=dict(color='#f8fafc', gridcolor='#153f59'))
-    )
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+            try:
+                if m.get('fecha_examen') < hoy_str:
+                    is_past = True
+            except: pass
+        if is_past:
+            metas_pasadas.append(m)
 
-    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>HISTÓRICO</div>", unsafe_allow_html=True)
+    if metas_pasadas:
+        h_planeadas = sum(float(m.get('meta_horas', 0)) for m in metas_pasadas)
+        h_reales = sum(float(m.get('horas_acumuladas', 0)) for m in metas_pasadas)
+        indice_realismo = (h_reales / h_planeadas * 100) if h_planeadas > 0 else 0
+        color_realismo = "#10b981" if indice_realismo >= 80 else ("#eab308" if indice_realismo >= 50 else "#ef4444")
+        
+        st.markdown(f"""
+        <div style="background-color: transparent; border: 1px solid #153f59; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center;">
+            <div style="font-size: 12px; color: #7498b6; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;">Índice de Realismo</div>
+            <div style="color: {color_realismo}; font-size: 28px; font-weight: 800;">{indice_realismo:.1f}%</div>
+            <div style="color: #f8fafc; font-size: 12px;">Cumplimiento de horas planeadas vs. reales en exámenes pasados.</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    c_adv1, c_adv2 = st.columns(2)
+    
+    with c_adv1:
+        with st.container(border=True):
+            st.markdown("<div style='font-size:12px; font-weight:bold; color:#7498b6; text-transform:uppercase;'>Desglose de Distracciones</div>", unsafe_allow_html=True)
+            if not df_hist.empty:
+                interrupciones = []
+                for i_list in df_hist['INTERRUPCIONES'].dropna():
+                    if isinstance(i_list, list):
+                        interrupciones.extend(i_list)
+                if interrupciones:
+                    df_int = pd.DataFrame(interrupciones, columns=['Distracción'])
+                    df_int_counts = df_int.value_counts().reset_index(name='Cantidad')
+                    fig_int = px.pie(df_int_counts, names='Distracción', values='Cantidad', hole=0.5)
+                    fig_int.update_traces(textposition='inside', textinfo='percent+label')
+                    fig_int.update_layout(showlegend=False, margin=dict(t=10, b=10, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=220)
+                    st.plotly_chart(fig_int, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    st.info("Sin registro de distracciones.")
+            else:
+                st.info("Sin datos.")
+
+        with st.container(border=True):
+            st.markdown("<div style='font-size:12px; font-weight:bold; color:#7498b6; text-transform:uppercase;'>Horario Prime de Eficiencia</div>", unsafe_allow_html=True)
+            if not df_hist.empty and 'HORA' in df_hist.columns and not df_hist['HORA'].isnull().all():
+                df_h = df_hist.copy()
+                df_h['Hora_Num'] = df_h['HORA'].astype(str).str.split(':').str[0]
+                df_h['Hora_Num'] = pd.to_numeric(df_h['Hora_Num'], errors='coerce')
+                df_h = df_h.dropna(subset=['Hora_Num'])
+                if not df_h.empty:
+                    df_prime = df_h.groupby('Hora_Num')['EFIC_NUM'].mean().reset_index()
+                    fig_prime = px.bar(df_prime, x='Hora_Num', y='EFIC_NUM')
+                    fig_prime.update_traces(marker_color='#10b981')
+                    fig_prime.update_layout(margin=dict(t=10, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=220, font_color='#7498b6', xaxis_title="Hora del día", yaxis_title="% Efic.")
+                    st.plotly_chart(fig_prime, use_container_width=True, config={'displayModeBar': False})
+                else:
+                    st.info("No hay datos de hora en el historial.")
+            else:
+                st.info("Las sesiones registradas no tienen horario.")
+
+    with c_adv2:
+        with st.container(border=True):
+            st.markdown("<div style='font-size:12px; font-weight:bold; color:#7498b6; text-transform:uppercase;'>Curva de Fatiga</div>", unsafe_allow_html=True)
+            if not df_hist.empty and df_hist['TIEMPO (min)'].sum() > 0:
+                fig_fatiga = px.scatter(df_hist, x='TIEMPO (min)', y='EFIC_NUM', color='EFIC_NUM', color_continuous_scale='RdYlGn')
+                fig_fatiga.update_layout(margin=dict(t=10, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=220, font_color='#7498b6', coloraxis_showscale=False, xaxis_title="Duración (min)", yaxis_title="% Efic.")
+                st.plotly_chart(fig_fatiga, use_container_width=True, config={'displayModeBar': False})
+            else:
+                st.info("Faltan datos de sesiones.")
+
+        with st.container(border=True):
+            st.markdown("<div style='font-size:12px; font-weight:bold; color:#7498b6; text-transform:uppercase;'>ROI del Estudio</div>", unsafe_allow_html=True)
+            metas_roi = []
+            for m in st.session_state['metas']:
+                n = parse_float_nota(m.get('nota', ''))
+                if n is not None:
+                    m_copy = m.copy()
+                    m_copy['Nota_Num'] = n
+                    metas_roi.append(m_copy)
+                    
+            if metas_roi:
+                df_roi = pd.DataFrame(metas_roi)
+                fig_roi = px.scatter(df_roi, x='horas_acumuladas', y='Nota_Num', hover_name='nombre', color='materia')
+                fig_roi.update_layout(margin=dict(t=10, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', height=220, font_color='#7498b6', xaxis_title="Horas Invertidas", yaxis_title="Nota Final", showlegend=False)
+                st.plotly_chart(fig_roi, use_container_width=True, config={'displayModeBar': False})
+            else:
+                st.info("Sin exámenes evaluados.")
+
+    st.markdown("<div class='analitica-title' style='margin-top: 15px;'>HISTÓRICO GENERAL</div>", unsafe_allow_html=True)
     ch1, ch2, ch3, ch4 = st.columns(4)
     with ch1:
         with st.container(border=True):
@@ -894,7 +951,6 @@ def dialog_nueva_meta():
     
     st.divider()
     temas_materia = st.session_state.get('temarios', {}).get(materia, [])
-    # --- Cambio a Unidades ---
     opciones_unidades = list(dict.fromkeys([t.get('unidad', 'General') for t in temas_materia]))
     unidades_examen = st.multiselect("Unidades que entran (Opcional)", opciones_unidades, help="Si dejás esto vacío, se asume que entran todas las unidades de la materia.")
     
@@ -936,7 +992,6 @@ def dialog_editar_meta(meta_idx):
     
     st.divider()
     temas_materia = st.session_state.get('temarios', {}).get(materia, [])
-    # --- Cambio a Unidades ---
     opciones_unidades = list(dict.fromkeys([t.get('unidad', 'General') for t in temas_materia]))
     unidades_actuales = [u for u in meta.get('unidades_examen', []) if u in opciones_unidades]
     unidades_examen = st.multiselect("Unidades que entran (Opcional)", opciones_unidades, default=unidades_actuales)
@@ -1025,27 +1080,33 @@ def dialog_agregar_sesion():
     eficiencia = round((tiempo_neto / total_min * 100) if total_min > 0 else 0)
     col5.metric("EFICIENCIA", f"{eficiencia}%")
     st.divider()
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     fecha = c1.date_input("FECHA")
-    materia = c2.selectbox("MATERIA", nombres_materias)
-    metodo = c3.selectbox("MÉTODO", st.session_state['metodos'])
+    hora = c2.time_input("HORA", value=datetime.now().time())
+    materia = c3.selectbox("MATERIA", nombres_materias)
+    metodo = c4.selectbox("MÉTODO", st.session_state['metodos'])
+    
     metas_disponibles = [m for m in st.session_state['metas'] if m['materia'] == materia]
     opciones_obj = {"-- Sin vincular --": None}
     for m in metas_disponibles: opciones_obj[f"{m['nombre']} ({m['materia']})"] = m['id']
     objetivo_sel = st.selectbox("VINCULAR OBJETIVO", list(opciones_obj.keys()))
+    
     if st.button("Guardar Sesión", type="primary", use_container_width=True):
-        # --- DETECTOR DE BURNOUT ---
         if eficiencia < 50 and tiempo_neto > 90:
             st.warning("⚠️ DETECTOR DE BURNOUT: Estás metiendo mucho tiempo pero la eficiencia está por el piso. Cortá la bocha, andá a descansar un rato porque no estás reteniendo nada.")
             time.sleep(3)
             
         nueva_sesion = {
-            "FECHA": fecha.strftime("%d/%m/%Y"), "MATERIA": materia, "MÉTODO": metodo,
-            "TIEMPO (min)": tiempo_neto, "EFIC.": f"{eficiencia}%", "INTERRUPCIONES": []
+            "FECHA": fecha.strftime("%d/%m/%Y"), 
+            "HORA": hora.strftime("%H:%M"),
+            "MATERIA": materia, 
+            "MÉTODO": metodo,
+            "TIEMPO (min)": tiempo_neto, 
+            "EFIC.": f"{eficiencia}%", 
+            "INTERRUPCIONES": []
         }
         st.session_state['historial'].append(nueva_sesion)
         
-        # XP LOGIC PARA SESION MANUAL
         xp_ganada = int(tiempo_neto * 10 * multiplicador_xp)
         if eficiencia == 100:
             xp_ganada = int(xp_ganada * 1.2)
@@ -1090,7 +1151,6 @@ with col_menu:
     st.markdown("### Navegación")
     menu_opcion = st.radio("Navegación", ["Página Principal", "Resumen", "Organización", "Carrera", "Plan de Estudios", "Perfil & Recompensas", "Aprender", "Digitalizar Apuntes"], label_visibility="collapsed")
     
-    # Auto-guardado al salir de la pestaña Aprender
     if menu_opcion != "Aprender" and st.session_state.get('learn_start_time') is not None:
         import time
         from datetime import date
@@ -1099,6 +1159,7 @@ with col_menu:
         if mins >= 1:
             st.session_state['historial'].append({
                 "FECHA": date.today().strftime("%d/%m/%Y"),
+                "HORA": datetime.now().strftime("%H:%M"),
                 "MATERIA": st.session_state.get('learn_materia_filtro', 'Sin materia'),
                 "MÉTODO": "Aprender (Flashcards)",
                 "TIEMPO (min)": mins,
@@ -1110,7 +1171,6 @@ with col_menu:
         st.session_state['learn_start_time'] = None
         st.session_state['learn_last_activity'] = None
     
-    # --- FRASES MOTIVACIONALES (FONDO DEL MENÚ) ---
     st.markdown("<br>", unsafe_allow_html=True)
     frases = [
         '"El éxito es la suma de pequeños esfuerzos repetidos día tras día."<br>- Robert Collier',
@@ -1139,13 +1199,12 @@ with col_menu:
     frase_diaria = random.choice(frases)
     st.markdown(f"<div style='background-color: #02152b; padding: 10px; border-radius: 8px; border: 1px solid #153f59; font-size: 11px; color: #94b8d7; font-style: italic; text-align: center; line-height: 1.4;'>{frase_diaria}</div>", unsafe_allow_html=True)
     
-    # --- NUEVA FUNCIÓN: PROGRESO DIARIO ---
     st.markdown("<hr class='custom-hr' style='margin: 10px 0;'>", unsafe_allow_html=True)
     st.markdown("<div style='font-size: 11px; color: #7498b6; font-weight: bold; text-transform: uppercase; margin-bottom: 5px;'>Progreso Diario</div>", unsafe_allow_html=True)
     
     hoy_str = date.today().strftime("%d/%m/%Y")
     mins_hoy = sum([h['TIEMPO (min)'] for h in st.session_state['historial'] if h['FECHA'] == hoy_str])
-    meta_diaria = 120 # Meta de 2 horas
+    meta_diaria = 120
     progreso = min(mins_hoy / meta_diaria, 1.0)
     
     st.markdown(f"<div style='font-size: 13px; color: #f8fafc; font-weight: bold; margin-bottom: 5px;'>Estudiado: {mins_hoy} min</div>", unsafe_allow_html=True)
@@ -1706,7 +1765,6 @@ with col_contenido:
 
     elif menu_opcion == "Página Principal":
         
-        # --- ALINEACIÓN BOTÓN DE RACHA (FLOTANTE JUNTO A PESTAÑAS) ---
         c_empty, c_racha = st.columns([6, 1])
         with c_racha:
             if st.button(f"Racha: {racha_actual} días", help="Ver detalles", use_container_width=True):
@@ -1774,14 +1832,13 @@ with col_contenido:
                     m_pd_int = int((h_pd - h_pd_int) * 60)
                     txt_diario = f"{h_pd_int}h {m_pd_int:02d}m / día"
                     
-                    # --- PROYECCIÓN CRÍTICA DE EXAMEN ---
                     if h_pd > 4:
-                        st.markdown(f"<div style='text-align:right; font-size: 11px; color: #ef4444; font-weight:bold;'>⚠️ Proyección crítica: Te pide {txt_diario}. Ajustá tu ritmo o vas a llegar corto de tiempo.</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='text-align:right; font-size: 11px; color: #ef4444; font-weight:bold;'>⚠️ Proyección crítica: Te pide {txt_diario}. Ajustá tu ritmo.</div>", unsafe_allow_html=True)
                     else:
                         st.markdown(f"<div style='text-align:right; font-size: 11px; color: #7498b6; font-weight:bold;'>Estudiar: {txt_diario} (Total: {meta['meta_horas']}h)</div>", unsafe_allow_html=True)
                 else:
                     if horas_faltantes > 0:
-                        st.markdown(f"<div style='text-align:right; font-size: 11px; color: #ef4444; font-weight:bold;'>¡Último día! Faltan {int(horas_faltantes)}h.</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='text-align:right; font-size: 11px; color: #ef4444; font-weight:bold;'>Último día. Faltan {int(horas_faltantes)}h.</div>", unsafe_allow_html=True)
                     else:
                         st.markdown(f"<div style='text-align:right; font-size: 11px; color: #7498b6; font-weight:bold;'>0h 00m / día (Completado)</div>", unsafe_allow_html=True)
             
@@ -1795,8 +1852,7 @@ with col_contenido:
 
         with tabs[0]:
             if st.session_state['timer']['state'] == 'IDLE':
-                # --- BOTON DE ARMAR SESION ---
-                if st.button("🔮 Armame la sesión de hoy", type="secondary", use_container_width=True):
+                if st.button("Armame la sesión de hoy", type="secondary", use_container_width=True):
                     dialog_armar_sesion()
                     
                 st.write("<br>", unsafe_allow_html=True)
@@ -1813,7 +1869,7 @@ with col_contenido:
                         
                     if not metas_actuales:
                         with st.container(border=True):
-                            st.info("No tenés metas próximas. ¡Todo al día!")
+                            st.info("No tenés metas próximas. Todo al día.")
                     else:
                         idx, meta_priority = metas_actuales[0]
                         with st.container(border=True):
@@ -1887,10 +1943,9 @@ with col_contenido:
                         st.session_state['timer']['interruptions'].append(motivo)
                         st.session_state['timer']['pause_start'] = time.time()
                         
-                        # --- PENALIDAD DISTRACCION TOXICA ---
                         if "☠️" in motivo:
                             st.session_state['xp_total'] -= 150
-                            st.toast("⚠️ Distracción Tóxica! Perdiste 150 XP.", icon="💀")
+                            st.toast("⚠️ Distracción Tóxica Penalizada (-150 XP).", icon="💀")
                             guardar_datos(silencioso=True)
                             
                         st.session_state['timer']['state'] = 'PAUSED'
@@ -1918,7 +1973,7 @@ with col_contenido:
                         
                         if (delta >= 2700000) {{
                             document.getElementById("pause_clock").style.color = "#ef4444";
-                            document.getElementById("pause_msg").innerHTML = "¡Tiempo de pausa muy largo, volver al estudio!";
+                            document.getElementById("pause_msg").innerHTML = "Pausa extensa. Volver al estudio.";
                             document.getElementById("pause_msg").style.color = "#ef4444";
                             document.getElementById("pause_msg").style.fontWeight = "bold";
                         }}
@@ -1990,13 +2045,13 @@ with col_contenido:
                         total_min = minutos_estudio + minutos_pausa
                         eficiencia_calc = round((minutos_estudio / total_min * 100)) if total_min > 0 else 100
                         
-                        # --- DETECTOR DE BURNOUT ---
                         if eficiencia_calc < 50 and minutos_estudio > 90:
-                            st.warning("⚠️ DETECTOR DE BURNOUT: Estás metiendo mucho tiempo pero la eficiencia está por el piso. Cortá la bocha, andá a descansar un rato porque no estás reteniendo nada.")
+                            st.warning("⚠️ DETECTOR DE BURNOUT: Estás metiendo mucho tiempo pero la eficiencia está por el piso. Cortá la sesión y descansá.")
                             time.sleep(3)
                         
                         nueva_sesion = {
                             "FECHA": datetime.now().strftime("%d/%m/%Y"),
+                            "HORA": datetime.now().strftime("%H:%M"),
                             "MATERIA": materia_sel, "MÉTODO": metodo_sel,
                             "TIEMPO (min)": minutos_estudio, "EFIC.": f"{eficiencia_calc}%",
                             "INTERRUPCIONES": st.session_state['timer']['interruptions']
@@ -2093,7 +2148,7 @@ with col_contenido:
                 if not sorted_times:
                     st.info("No tenés horarios cargados.")
                 else:
-                    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+                    dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
                     matriz = {t: {d: [] for d in dias_semana} for t in sorted_times}
                     
                     for hc in horarios_completos:
@@ -2168,7 +2223,6 @@ with col_contenido:
                     metas_activas = [m for m in st.session_state['metas'] if m['materia'] == mat_sel_temario and date.fromisoformat(m['fecha_examen']) >= date.today()]
                     if metas_activas:
                         metas_activas.sort(key=lambda x: date.fromisoformat(x['fecha_examen']))
-                        # --- FILTRO POR UNIDADES ---
                         unidades_del_examen = metas_activas[0].get('unidades_examen', [])
                         if unidades_del_examen:
                             temas = [t for t in temas if t.get('unidad', 'General') in unidades_del_examen]
@@ -2293,7 +2347,8 @@ with col_contenido:
                         html_hist += "<tr><th>FECHA</th><th></th><th>TIEMPO</th><th>EFIC.</th></tr>"
                         for _, row in df_hist_view.iterrows():
                             fecha_str = row.get('FECHA', '')
-                            fecha_disp = f"<div style='font-weight:900; font-size:14px; color:#f8fafc;'>{fecha_str}</div><div style='font-size:11px; font-weight:600; color:#7498b6; margin-top:2px;'>--:--</div>"
+                            hora_str = row.get('HORA', '--:--')
+                            fecha_disp = f"<div style='font-weight:900; font-size:14px; color:#f8fafc;'>{fecha_str}</div><div style='font-size:11px; font-weight:600; color:#7498b6; margin-top:2px;'>{hora_str}</div>"
                             mat_str = row.get('MATERIA', '')
                             tiempo_str = f"<span style='color:#7498b6; font-weight:700; font-size:13px;'>{row.get('TIEMPO (min)', '')} min</span>"
                             efic_str = row.get('EFIC.', '')

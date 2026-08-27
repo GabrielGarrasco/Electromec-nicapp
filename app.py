@@ -984,20 +984,28 @@ def dialog_agregar_sesion():
 @st.dialog("Nueva Actividad Fija")
 def dialog_nueva_actividad():
     n_act = st.text_input("Nombre de la actividad", placeholder="Ej: Muay Thai, Viajar...")
-    d_act = st.selectbox("Día", OPCIONES_DIAS[1:])
+    # Cambiado a multiselect para elegir varios días a la vez
+    dias_act = st.multiselect("Días", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"])
+    
     c1, c2 = st.columns(2)
     i_act = c1.text_input("Hora Inicio", placeholder="Ej: 19:00")
     f_act = c2.text_input("Hora Fin", placeholder="Ej: 21:00")
     
     if st.button("Guardar Actividad", type="primary", use_container_width=True):
-        if n_act and d_act != "---" and i_act.strip():
-            st.session_state['actividades_fijas'].append({
-                "nombre": n_act,
-                "dia": d_act,
-                "inicio": i_act.strip(),
-                "fin": f_act.strip()
-            })
-            if guardar_datos(): st.rerun()
+        if n_act and dias_act and i_act.strip():
+            # Chequeo de seguridad para evitar el KeyError
+            if 'actividades_fijas' not in st.session_state:
+                st.session_state['actividades_fijas'] = []
+                
+            # Guardamos una entrada individual por cada día seleccionado
+            for dia in dias_act:
+                st.session_state['actividades_fijas'].append({
+                    "nombre": n_act,
+                    "dia": dia,
+                    "inicio": i_act.strip(),
+                    "fin": f_act.strip()
+                })
+            if guardar_datos(): st.rerun()    
 
 # ==========================================
 # --- LAYOUT PRINCIPAL (MENÚ FIJO) ---

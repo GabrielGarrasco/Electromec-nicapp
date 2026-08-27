@@ -41,6 +41,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['materias'] = datos_generales.get('materias', [])
         st.session_state['metodos'] = datos_generales.get('metodos', [])
         st.session_state['distracciones'] = datos_generales.get('distracciones', [])
+        st.session_state['actividades_fijas'] = datos_generales.get('actividades_fijas', [])
         st.session_state['historial'] = datos_generales.get('historial', [])
         st.session_state['metas'] = datos_generales.get('metas', [])
         st.session_state['plan_carrera'] = datos_generales.get('plan_carrera', [])
@@ -58,6 +59,7 @@ if 'datos_cargados' not in st.session_state:
         st.session_state['materias'] = []
         st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
         st.session_state['distracciones'] = ["Descanso", "Celular", "Llamada", "Comida"]
+        st.session_state['actividades_fijas'] = []
         st.session_state['historial'] = []
         st.session_state['metas'] = [] 
         st.session_state['plan_carrera'] = []
@@ -548,6 +550,8 @@ def dialog_detalle_materia(mat_id):
         opciones_estado = ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"]
         idx_estado = opciones_estado.index(mat['estado']) if mat['estado'] in opciones_estado else 0
         nuevo_estado = col3.selectbox("Estado", opciones_estado, index=idx_estado)
+
+        dificultad = st.slider("Dificultad (1 al 10)", 1, 10, int(mat.get('dificultad', 5)), help="A mayor dificultad, mayor prioridad en tu lista.")
         
         nueva_nota = mat.get('nota', '')
         nuevos_intentos = mat.get('intentos', ["", "", "", ""])
@@ -594,11 +598,19 @@ def dialog_detalle_materia(mat_id):
         st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #7498b6;'>Temario</div>", unsafe_allow_html=True)
         nombre_mat_actual = mat['nombre']
         temario_actual = st.session_state.get('temarios', {}).get(nombre_mat_actual, [])
-        texto_temario_default = "\n".join([t['tema'] for t in temario_actual])
+        
+        texto_temario_default = ""
+        unidad_actual = None
+        for t in temario_actual:
+            if t.get('unidad') != unidad_actual:
+                if t.get('unidad') and t.get('unidad') != 'General':
+                    texto_temario_default += f"{t.get('unidad')}\n"
+                unidad_actual = t.get('unidad')
+            texto_temario_default += f"{t['tema']}\n"
         
         with st.expander("Ver / Editar Temario"):
-            st.info("Pegá acá la lista de temas (uno por renglón).")
-            texto_temario_nuevo = st.text_area("Temas", value=texto_temario_default, height=150, label_visibility="collapsed")
+            st.info("Pegá la lista de temas. Si querés agruparlos, escribí '# Unidad X' y los temas de abajo se asocian a esa unidad.")
+            texto_temario_nuevo = st.text_area("Temas", value=texto_temario_default.strip(), height=150, label_visibility="collapsed")
         
         st.write("<br>", unsafe_allow_html=True)
         c_btn1, c_btn2 = st.columns(2)
@@ -634,15 +646,24 @@ def dialog_detalle_materia(mat_id):
                 mat['nota'] = nota_definitiva
                 mat['intentos'] = nuevos_intentos
                 mat['horarios_clase'] = nuevos_horarios
+                mat['dificultad'] = dificultad
                 
-                temas_list = [t.strip() for t in texto_temario_nuevo.split('\n') if t.strip()]
+                temas_raw = texto_temario_nuevo.split('\n')
                 temario_guardar = []
-                for t_nombre in temas_list:
-                    tema_previo = next((t for t in temario_actual if t['tema'] == t_nombre), None)
+                curr_u = "General"
+                for line in temas_raw:
+                    line = line.strip()
+                    if not line: continue
+                    if line.startswith('#'):
+                        curr_u = line
+                        continue
+                    
+                    tema_previo = next((t for t in temario_actual if t['tema'] == line), None)
                     if tema_previo:
+                        tema_previo['unidad'] = curr_u
                         temario_guardar.append(tema_previo)
                     else:
-                        temario_guardar.append({'tema': t_nombre, 'nivel': 0, 'proximo_repaso': None})
+                        temario_guardar.append({'tema': line, 'nivel': 0, 'proximo_repaso': None, 'unidad': curr_u})
                         
                 if nuevo_nombre != nombre_mat_actual and nombre_mat_actual in st.session_state['temarios']:
                     del st.session_state['temarios'][nombre_mat_actual]
@@ -724,6 +745,8 @@ def dialog_nueva_materia_plan():
     cuatri = col2.selectbox("Cuatrimestre", ["1er Cuatrimestre", "2do Cuatrimestre", "Anual"])
     estado = col3.selectbox("Estado", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
     
+    dificultad = st.slider("Dificultad (1 al 10)", 1, 10, 5, help="A mayor dificultad, mayor prioridad en tu lista.")
+
     nota_final = ""
     intentos = ["", "", "", ""]
     nuevos_horarios = []
@@ -778,7 +801,8 @@ def dialog_nueva_materia_plan():
             st.session_state['plan_carrera'].append({
                 "id": str(time.time()), "nombre": nombre, "año": anio, "cuatrimestre": cuatri,
                 "estado": estado_final, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas,
-                "nota": nota_def, "intentos": intentos, "horarios_clase": nuevos_horarios
+                "nota": nota_def, "intentos": intentos, "horarios_clase": nuevos_horarios,
+                "dificultad": dificultad
             })
             if guardar_datos(): st.rerun()
         else:
@@ -957,6 +981,24 @@ def dialog_agregar_sesion():
                     break
         if guardar_datos(): st.rerun()
 
+@st.dialog("Nueva Actividad Fija")
+def dialog_nueva_actividad():
+    n_act = st.text_input("Nombre de la actividad", placeholder="Ej: Muay Thai, Viajar...")
+    d_act = st.selectbox("Día", OPCIONES_DIAS[1:])
+    c1, c2 = st.columns(2)
+    i_act = c1.text_input("Hora Inicio", placeholder="Ej: 19:00")
+    f_act = c2.text_input("Hora Fin", placeholder="Ej: 21:00")
+    
+    if st.button("Guardar Actividad", type="primary", use_container_width=True):
+        if n_act and d_act != "---" and i_act.strip():
+            st.session_state['actividades_fijas'].append({
+                "nombre": n_act,
+                "dia": d_act,
+                "inicio": i_act.strip(),
+                "fin": f_act.strip()
+            })
+            if guardar_datos(): st.rerun()
+
 # ==========================================
 # --- LAYOUT PRINCIPAL (MENÚ FIJO) ---
 # ==========================================
@@ -1070,17 +1112,51 @@ with col_contenido:
             st.divider()
             col_izq, col_der = st.columns(2, gap="large")
             
-            def calcular_prioridad(nombre_mat):
-                count = 0
-                for m in st.session_state['plan_carrera']:
-                    if nombre_mat in m.get('req_regulares', []): count += 1
-                    if nombre_mat in m.get('req_aprobadas', []): count += 1
-                return count
+            # --- NUEVA LÓGICA DE PRIORIDADES ---
+            temarios_db = st.session_state.get('temarios', {})
+            count_semestral = 0
+            temas_semestral = 0
+            count_anual = 0
+            temas_anual = 0
+            
+            for m_plan in st.session_state['plan_carrera']:
+                t_count = len(temarios_db.get(m_plan['nombre'], []))
+                if m_plan.get('cuatrimestre') == 'Anual':
+                    count_anual += 1
+                    temas_anual += t_count
+                else:
+                    count_semestral += 1
+                    temas_semestral += t_count
+                    
+            avg_anual = temas_anual / count_anual if count_anual > 0 else 1
+            avg_semestral = temas_semestral / count_semestral if count_semestral > 0 else 1
+            if avg_anual == 0: avg_anual = 1
+            if avg_semestral == 0: avg_semestral = 1
+
+            def calcular_prioridad(mat):
+                nombre_mat = mat['nombre']
+                
+                # 1. Ponderación por destrabe (lo más importante)
+                destrabe = sum(1 for m in st.session_state['plan_carrera'] if nombre_mat in m.get('req_regulares', []) or nombre_mat in m.get('req_aprobadas', []))
+                
+                # 2. Densidad del temario
+                t_count = len(temarios_db.get(nombre_mat, []))
+                if mat.get('cuatrimestre') == 'Anual':
+                    densidad = t_count / avg_anual
+                else:
+                    densidad = t_count / avg_semestral
+                    
+                # 3. Dificultad (del 1 al 10)
+                dificultad = int(mat.get('dificultad', 5))
+                
+                # Fórmula final de puntuación
+                score = (destrabe * 1000) + (densidad * 100) + (dificultad * 10)
+                return score
 
             with col_izq:
                 st.markdown("### Cursando y Regulares")
                 mat_cursando = [m for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]]
-                mat_cursando.sort(key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
+                mat_cursando.sort(key=lambda x: calcular_prioridad(x), reverse=True)
                 
                 if not mat_cursando: st.info("No tenés materias en estado 'Cursando' o 'Regular'.")
                 else:
@@ -1113,7 +1189,7 @@ with col_contenido:
                         req_apr_ok = all(is_met_carr(r, 'apr') for r in m.get('req_aprobadas', []))
                         if req_reg_ok and req_apr_ok: puedo_cursar.append(m)
                             
-                puedo_cursar.sort(key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
+                puedo_cursar.sort(key=lambda x: calcular_prioridad(x), reverse=True)
                             
                 if not puedo_cursar: st.info("No hay materias nuevas habilitadas.")
                 else:
@@ -1416,6 +1492,27 @@ with col_contenido:
                         st.session_state['materias'].pop(i)
                         if guardar_datos(): st.rerun()
                         
+        st.write("<br>", unsafe_allow_html=True)
+        with st.container(border=True):
+            c_act1, c_act2 = st.columns([4, 1])
+            with c_act1: st.markdown("### Gestionar Actividades Fijas")
+            with c_act2:
+                if st.button("Nueva Actividad", type="secondary", use_container_width=True):
+                    dialog_nueva_actividad()
+
+            cols_act = st.columns(3)
+            for i, act in enumerate(st.session_state.get('actividades_fijas', [])):
+                with cols_act[i % 3]:
+                    st.markdown(f"""
+                    <div style="border: 1px solid #153f59; border-radius: 10px; padding: 10px; text-align: center; background-color: transparent; margin-bottom: 5px;">
+                        <div style="font-weight: 600; font-size: 14px;">{act['nombre']}</div>
+                        <div style="font-size: 11px; color: #7498b6;">{act['dia']} | {act['inicio']} - {act.get('fin','')}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("Eliminar", key=f"del_act_{i}", use_container_width=True):
+                        st.session_state['actividades_fijas'].pop(i)
+                        if guardar_datos(): st.rerun()
+
         st.write("<br>", unsafe_allow_html=True)
         with st.container(border=True):
             c_dist1, c_dist2 = st.columns([4, 1])
@@ -1873,6 +1970,24 @@ with col_contenido:
                                     "inicio_orig": hc['inicio'], "fin_orig": hc.get('fin', '')
                                 })
                 
+                for act in st.session_state.get('actividades_fijas', []):
+                    if act.get('dia') != "---" and act.get('inicio'):
+                        ini_c = act['inicio'].strip()
+                        if ":" not in ini_c: ini_c += ":00"
+                        if len(ini_c.split(":")[0]) == 1: ini_c = "0" + ini_c
+                        
+                        fin_c = act.get('fin', '').strip()
+                        if fin_c:
+                            if ":" not in fin_c: fin_c += ":00"
+                            if len(fin_c.split(":")[0]) == 1: fin_c = "0" + fin_c
+                            
+                        horarios_completos.append({
+                            "materia": f"📌 {act['nombre']}",
+                            "dia": act['dia'],
+                            "inicio": ini_c, "fin": fin_c,
+                            "inicio_orig": act['inicio'], "fin_orig": act.get('fin', '')
+                        })
+                
                 def get_sortable_time(t_str):
                     try: return datetime.strptime(t_str, "%H:%M").time()
                     except: return datetime.strptime("23:59", "%H:%M").time()
@@ -1949,6 +2064,12 @@ with col_contenido:
             else:
                 mat_sel_temario = st.selectbox("Seleccionar Materia", materias_con_temario, label_visibility="collapsed")
                 temas = st.session_state['temarios'][mat_sel_temario]
+                
+                unidades_disponibles = list(dict.fromkeys([t.get('unidad', 'General') for t in temas]))
+                if len(unidades_disponibles) > 1 or (len(unidades_disponibles) == 1 and unidades_disponibles[0] != 'General'):
+                    filtro_u = st.selectbox("Seleccionar Unidad", ["Todas"] + unidades_disponibles)
+                    if filtro_u != "Todas":
+                        temas = [t for t in temas if t.get('unidad', 'General') == filtro_u]
                 
                 solo_examen = st.toggle("Mostrar solo temas del próximo examen")
                 

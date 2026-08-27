@@ -594,10 +594,11 @@ def dialog_detalle_materia(mat_id):
         st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color: #7498b6;'>Temario</div>", unsafe_allow_html=True)
         nombre_mat_actual = mat['nombre']
         temario_actual = st.session_state.get('temarios', {}).get(nombre_mat_actual, [])
-        texto_temario_default = "\n".join([t['tema'] for t in temario_actual])
+        
+        texto_temario_default = "\n".join([t.get('tema_original', t['tema']) for t in temario_actual])
         
         with st.expander("Ver / Editar Temario"):
-            st.info("Pegá acá la lista de temas (uno por renglón).")
+            st.info("Pegá acá los temas. Si empezás una línea con 'Unidad' o '#', los temas de abajo se agrupan adentro.")
             texto_temario_nuevo = st.text_area("Temas", value=texto_temario_default, height=150, label_visibility="collapsed")
         
         st.write("<br>", unsafe_allow_html=True)
@@ -637,12 +638,21 @@ def dialog_detalle_materia(mat_id):
                 
                 temas_list = [t.strip() for t in texto_temario_nuevo.split('\n') if t.strip()]
                 temario_guardar = []
-                for t_nombre in temas_list:
-                    tema_previo = next((t for t in temario_actual if t['tema'] == t_nombre), None)
+                unidad_actual = ""
+                for t_crudo in temas_list:
+                    if t_crudo.lower().startswith('unidad') or t_crudo.startswith('#'):
+                        unidad_actual = t_crudo.replace('#', '').strip()
+                        continue # No guarda la unidad como tema suelto, solo agrupa
+                    
+                    nombre_final = f"{unidad_actual}: {t_crudo}" if unidad_actual else t_crudo
+                    tema_previo = next((t for t in temario_actual if t['tema'] == nombre_final or t.get('tema_original') == t_crudo), None)
+                    
                     if tema_previo:
+                        tema_previo['tema'] = nombre_final
+                        tema_previo['tema_original'] = t_crudo
                         temario_guardar.append(tema_previo)
                     else:
-                        temario_guardar.append({'tema': t_nombre, 'nivel': 0, 'proximo_repaso': None})
+                        temario_guardar.append({'tema': nombre_final, 'tema_original': t_crudo, 'nivel': 0, 'proximo_repaso': None})
                         
                 if nuevo_nombre != nombre_mat_actual and nombre_mat_actual in st.session_state['temarios']:
                     del st.session_state['temarios'][nombre_mat_actual]
@@ -723,6 +733,7 @@ def dialog_nueva_materia_plan():
     anio = col1.selectbox("Año", [1, 2, 3, 4, 5, 6, "Extracurricular"])
     cuatri = col2.selectbox("Cuatrimestre", ["1er Cuatrimestre", "2do Cuatrimestre", "Anual"])
     estado = col3.selectbox("Estado", ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"])
+    dificultad = st.slider("Dificultad (1 = Trámite, 10 = Inhumana)", 1, 10, 5)
     
     nota_final = ""
     intentos = ["", "", "", ""]
@@ -777,8 +788,9 @@ def dialog_nueva_materia_plan():
 
             st.session_state['plan_carrera'].append({
                 "id": str(time.time()), "nombre": nombre, "año": anio, "cuatrimestre": cuatri,
-                "estado": estado_final, "req_regulares": req_regulares, "req_aprobadas": req_aprobadas,
-                "nota": nota_def, "intentos": intentos, "horarios_clase": nuevos_horarios
+                "estado": estado_final, "dificultad": dificultad, "req_regulares": req_regulares, 
+                "req_aprobadas": req_aprobadas, "nota": nota_def, "intentos": intentos, 
+                "horarios_clase": nuevos_horarios
             })
             if guardar_datos(): st.rerun()
         else:
@@ -1071,11 +1083,20 @@ with col_contenido:
             col_izq, col_der = st.columns(2, gap="large")
             
             def calcular_prioridad(nombre_mat):
-                count = 0
-                for m in st.session_state['plan_carrera']:
-                    if nombre_mat in m.get('req_regulares', []): count += 1
-                    if nombre_mat in m.get('req_aprobadas', []): count += 1
-                return count
+                mat_obj = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == nombre_mat), None)
+                if not mat_obj: return 0
+                
+                # 1. Correlativas (50 pts por destrabe, es lo más pesado)
+                destraba = sum(1 for m in st.session_state['plan_carrera'] if nombre_mat in m.get('req_regulares', []) or nombre_mat in m.get('req_aprobadas', []))
+                
+                # 2. Dificultad (10 pts por nivel)
+                dificultad = mat_obj.get('dificultad', 5)
+                
+                # 3. Temario (2 pts x unidad, x1.5 si es semestral)
+                largo_temario = len(st.session_state.get('temarios', {}).get(nombre_mat, []))
+                es_sem = 1.5 if mat_obj.get('cuatrimestre') in ["1er Cuatrimestre", "2do Cuatrimestre"] else 1
+                
+                return (destraba * 50) + (dificultad * 10) + (largo_temario * 2 * es_sem)
 
             with col_izq:
                 st.markdown("### Cursando y Regulares")
@@ -1381,6 +1402,38 @@ with col_contenido:
                                 html_reqs += f"<div style='font-size: 10px; color: #7498b6;'><b>Apr:</b> {', '.join(row['req_aprobadas'])}</div>"
                             
                             if html_reqs: st.markdown(html_reqs, unsafe_allow_html=True)
+                            
+        st.divider()
+        st.subheader("Tiempos Fijos (Rutina y Viajes)")
+        st.caption("Agregá tus horarios fijos (ej: Thai, Micro, Merienda) para que el sistema calcule los huecos de estudio y te los sugiera en tu calendario.")
+        
+        with st.expander("Añadir nueva actividad fija"):
+            c_act1, c_act2, c_act3, c_act4 = st.columns(4)
+            act_nombre = c_act1.text_input("Actividad (Ej: Thai, Micro)")
+            act_dia = c_act2.selectbox("Día", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo", "Todos los días"])
+            act_ini = c_act3.text_input("Hora Inicio (Ej: 17:30)")
+            act_fin = c_act4.text_input("Hora Fin (Ej: 18:30)")
+            if st.button("Guardar Actividad", type="primary"):
+                if act_nombre and act_ini and act_fin:
+                    st.session_state['horarios'].append({
+                        "id": str(time.time()), "nombre": act_nombre, 
+                        "dia": act_dia, "inicio": act_ini, "fin": act_fin
+                    })
+                    if guardar_datos(): st.rerun()
+        
+        if st.session_state.get('horarios'):
+            cols_act = st.columns(4)
+            for idx_act, actividad in enumerate(st.session_state['horarios']):
+                with cols_act[idx_act % 4]:
+                    st.markdown(f"""
+                    <div style="border: 1px solid #153f59; border-radius: 8px; padding: 10px; margin-bottom: 10px; background-color: transparent;">
+                        <b>{actividad['nombre']}</b><br>
+                        <span style="font-size: 12px; color: #7498b6;">{actividad['dia']} | {actividad['inicio']} a {actividad['fin']}</span>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    if st.button("Eliminar", key=f"del_act_{idx_act}"):
+                        st.session_state['horarios'].pop(idx_act)
+                        if guardar_datos(): st.rerun()
 
     elif menu_opcion == "Resumen":
         renderizar_analitica()
@@ -1870,8 +1923,52 @@ with col_contenido:
                                 horarios_completos.append({
                                     "materia": m['nombre'], "dia": hc['dia'],
                                     "inicio": ini_c, "fin": fin_c,
-                                    "inicio_orig": hc['inicio'], "fin_orig": hc.get('fin', '')
+                                    "inicio_orig": hc['inicio'], "fin_orig": hc.get('fin', ''),
+                                    "color": "#1e293b" # Color default cursado
                                 })
+                                
+                # Sumamos las actividades fijas al calendario para tapar huecos
+                for act in st.session_state.get('horarios', []):
+                    dias_loop = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"] if act['dia'] == "Todos los días" else [act['dia']]
+                    for d in dias_loop:
+                        ini_a = act['inicio'].strip() if ":" in act['inicio'] else act['inicio'].strip() + ":00"
+                        if len(ini_a.split(":")[0]) == 1: ini_a = "0" + ini_a
+                        fin_a = act['fin'].strip() if ":" in act['fin'] else act['fin'].strip() + ":00"
+                        if len(fin_a.split(":")[0]) == 1: fin_a = "0" + fin_a
+                        
+                        horarios_completos.append({
+                            "materia": act['nombre'], "dia": d,
+                            "inicio": ini_a, "fin": fin_a,
+                            "inicio_orig": act['inicio'], "fin_orig": act['fin'],
+                            "color": "transparent" # Las rutinas quedan limpias
+                        })
+                        
+                # Lógica de sugerencias en huecos largos (Saca la Top Prioridad)
+                mat_prioridad = sorted([m for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]], key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
+                materia_sugerida = mat_prioridad[0]['nombre'] if mat_prioridad else "Estudiar"
+                
+                # Buscamos los huecos por día
+                por_dia = {d: [] for d in ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]}
+                for h in horarios_completos: 
+                    if h['dia'] in por_dia: por_dia[h['dia']].append(h)
+                
+                for d, eventos in por_dia.items():
+                    eventos.sort(key=lambda x: x['inicio'])
+                    for i in range(len(eventos) - 1):
+                        fin_actual = datetime.strptime(eventos[i]['fin'], "%H:%M")
+                        ini_siguiente = datetime.strptime(eventos[i+1]['inicio'], "%H:%M")
+                        delta_mins = (ini_siguiente - fin_actual).total_seconds() / 60
+                        
+                        # Si hay un hueco mayor a 2hs (contemplando q tenes viaje y descanso, te quedan 60m netos)
+                        if delta_mins >= 120:
+                            sug_ini = fin_actual.strftime("%H:%M")
+                            sug_fin = ini_siguiente.strftime("%H:%M")
+                            horarios_completos.append({
+                                "materia": f"PROPUESTA: {materia_sugerida}", "dia": d,
+                                "inicio": sug_ini, "fin": sug_fin,
+                                "inicio_orig": sug_ini, "fin_orig": sug_fin,
+                                "color": "#A3C1AD" # Verde menta grisáceo como pediste
+                            })
                 
                 def get_sortable_time(t_str):
                     try: return datetime.strptime(t_str, "%H:%M").time()
@@ -1931,7 +2028,10 @@ with col_contenido:
                                 if mat['fin_orig']: 
                                     texto += f"<br><span style='font-size: 10px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
                                 
-                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
+                                color_fondo = mat.get('color', 'transparent')
+                                color_texto = "#0f172a" if color_fondo == "#A3C1AD" else "#f8fafc"
+                                bordes = "border: 1px solid #153f59; border-radius: 6px;" if color_fondo != 'transparent' else "border: 1px dashed #153f59; border-radius: 6px;"
+                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center; background-color: {color_fondo}; color: {color_texto}; {bordes}'>{texto}</div></td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"

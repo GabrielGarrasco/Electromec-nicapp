@@ -1409,16 +1409,25 @@ with col_contenido:
         st.caption("Agregá tus horarios fijos (ej: Thai, Micro, Merienda) para que el sistema calcule los huecos de estudio y te los sugiera en tu calendario.")
         
         with st.expander("Añadir nueva actividad fija"):
-            c_act1, c_act2, c_act3, c_act4 = st.columns(4)
+            c_act1, c_act2 = st.columns(2)
+            c_act3, c_act4, c_act5 = st.columns(3)
+            
             act_nombre = c_act1.text_input("Actividad (Ej: Thai, Micro)")
-            act_dia = c_act2.selectbox("Día", ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo", "Todos los días"])
+            dias_semana = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+            act_dias = c_act2.multiselect("Días", dias_semana, default=["Lunes"])
+            
             act_ini = c_act3.text_input("Hora Inicio (Ej: 17:30)")
             act_fin = c_act4.text_input("Hora Fin (Ej: 18:30)")
+            
+            colores_fijos = {"Gris Oscuro": "transparent", "Azul": "#365b77", "Verde": "#22c55e", "Amarillo": "#eab308", "Violeta": "#a855f7", "Naranja": "#f97316", "Rosa": "#ec4899"}
+            act_color_nom = c_act5.selectbox("Color en agenda", list(colores_fijos.keys()))
+            
             if st.button("Guardar Actividad", type="primary"):
-                if act_nombre and act_ini and act_fin:
+                if act_nombre and act_ini and act_fin and act_dias:
                     st.session_state['horarios'].append({
                         "id": str(time.time()), "nombre": act_nombre, 
-                        "dia": act_dia, "inicio": act_ini, "fin": act_fin
+                        "dias": act_dias, "inicio": act_ini, "fin": act_fin, 
+                        "color": colores_fijos[act_color_nom]
                     })
                     if guardar_datos(): st.rerun()
         
@@ -1426,10 +1435,15 @@ with col_contenido:
             cols_act = st.columns(4)
             for idx_act, actividad in enumerate(st.session_state['horarios']):
                 with cols_act[idx_act % 4]:
+                    # Mantiene compatibilidad por si ya tenías guardado un "Lunes" o "Todos los días" como string
+                    dias_texto = ", ".join(actividad['dias']) if 'dias' in actividad else actividad.get('dia', '')
+                    color_borde = actividad.get('color', '#153f59')
+                    color_borde = '#153f59' if color_borde == 'transparent' else color_borde
+                    
                     st.markdown(f"""
-                    <div style="border: 1px solid #153f59; border-radius: 8px; padding: 10px; margin-bottom: 10px; background-color: transparent;">
+                    <div style="border: 2px solid {color_borde}; border-radius: 8px; padding: 10px; margin-bottom: 10px; background-color: transparent;">
                         <b>{actividad['nombre']}</b><br>
-                        <span style="font-size: 12px; color: #7498b6;">{actividad['dia']} | {actividad['inicio']} a {actividad['fin']}</span>
+                        <span style="font-size: 12px; color: #7498b6;">{dias_texto} | {actividad['inicio']} a {actividad['fin']}</span>
                     </div>
                     """, unsafe_allow_html=True)
                     if st.button("Eliminar", key=f"del_act_{idx_act}"):
@@ -1938,38 +1952,80 @@ with col_contenido:
                         if len(fin_a.split(":")[0]) == 1: fin_a = "0" + fin_a
                         
                         horarios_completos.append({
+                                    "materia": m['nombre'], "dia": hc['dia'],
+                                    "inicio": ini_c, "fin": fin_c,
+                                    "inicio_orig": hc['inicio'], "fin_orig": hc.get('fin', ''),
+                                    "color": "#A3C1AD" # Materias = Color verde menta / celeste claro
+                                })
+                                
+                # Sumamos las actividades fijas al calendario para tapar huecos
+                for act in st.session_state.get('horarios', []):
+                    # Soporte para el multiselect nuevo y para los strings guardados viejos
+                    if 'dias' in act:
+                        dias_loop = act['dias']
+                    else:
+                        dias_loop = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"] if act.get('dia') == "Todos los días" else [act.get('dia')]
+                    
+                    color_act = act.get('color', 'transparent')
+                        
+                    for d in dias_loop:
+                        ini_a = act['inicio'].strip() if ":" in act['inicio'] else act['inicio'].strip() + ":00"
+                        if len(ini_a.split(":")[0]) == 1: ini_a = "0" + ini_a
+                        fin_a = act['fin'].strip() if ":" in act['fin'] else act['fin'].strip() + ":00"
+                        if len(fin_a.split(":")[0]) == 1: fin_a = "0" + fin_a
+                        
+                        horarios_completos.append({
                             "materia": act['nombre'], "dia": d,
                             "inicio": ini_a, "fin": fin_a,
                             "inicio_orig": act['inicio'], "fin_orig": act['fin'],
-                            "color": "transparent" # Las rutinas quedan limpias
+                            "color": color_act # Usa el color de la paleta que seleccionaste
                         })
                         
-                # Lógica de sugerencias en huecos largos (Saca la Top Prioridad)
+                # Lógica de sugerencias Inteligentes
                 mat_prioridad = sorted([m for m in st.session_state['plan_carrera'] if m['estado'] in ["Cursando", "Regular"]], key=lambda x: calcular_prioridad(x['nombre']), reverse=True)
-                materia_sugerida = mat_prioridad[0]['nombre'] if mat_prioridad else "Estudiar"
                 
-                # Buscamos los huecos por día
                 por_dia = {d: [] for d in ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]}
                 for h in horarios_completos: 
                     if h['dia'] in por_dia: por_dia[h['dia']].append(h)
                 
                 for d, eventos in por_dia.items():
                     eventos.sort(key=lambda x: x['inicio'])
-                    for i in range(len(eventos) - 1):
-                        fin_actual = datetime.strptime(eventos[i]['fin'], "%H:%M")
-                        ini_siguiente = datetime.strptime(eventos[i+1]['inicio'], "%H:%M")
-                        delta_mins = (ini_siguiente - fin_actual).total_seconds() / 60
+                    sugerencias_dia = 0 # Contador para rotar las materias a estudiar
+                    
+                    if eventos:
+                        # 1. Chequeamos hueco a la MAÑANA (desde las 09:00 hasta tu primer evento)
+                        ini_first = datetime.strptime(eventos[0]['inicio'], "%H:%M")
+                        morning_start = datetime.strptime("09:00", "%H:%M")
+                        delta_morning = (ini_first - morning_start).total_seconds() / 60
                         
-                        # Si hay un hueco mayor a 2hs (contemplando q tenes viaje y descanso, te quedan 60m netos)
-                        if delta_mins >= 120:
-                            sug_ini = fin_actual.strftime("%H:%M")
-                            sug_fin = ini_siguiente.strftime("%H:%M")
+                        if delta_morning >= 120:
+                            sug_mat = mat_prioridad[sugerencias_dia % len(mat_prioridad)]['nombre'] if mat_prioridad else "Estudiar"
+                            sugerencias_dia += 1
                             horarios_completos.append({
-                                "materia": f"PROPUESTA: {materia_sugerida}", "dia": d,
-                                "inicio": sug_ini, "fin": sug_fin,
-                                "inicio_orig": sug_ini, "fin_orig": sug_fin,
-                                "color": "#A3C1AD" # Verde menta grisáceo como pediste
+                                "materia": f"PROPUESTA: {sug_mat}", "dia": d,
+                                "inicio": "09:00", "fin": eventos[0]['inicio'],
+                                "inicio_orig": "09:00", "fin_orig": eventos[0]['inicio'],
+                                "color": "#1e293b" # Propuestas = Color gris oscuro
                             })
+                    
+                        # 2. Chequeamos los huecos intermedios
+                        for i in range(len(eventos) - 1):
+                            fin_actual = datetime.strptime(eventos[i]['fin'], "%H:%M")
+                            ini_siguiente = datetime.strptime(eventos[i+1]['inicio'], "%H:%M")
+                            delta_mins = (ini_siguiente - fin_actual).total_seconds() / 60
+                            
+                            # Si hay hueco mayor a 2hs (te quedan 60m netos)
+                            if delta_mins >= 120:
+                                sug_mat = mat_prioridad[sugerencias_dia % len(mat_prioridad)]['nombre'] if mat_prioridad else "Estudiar"
+                                sugerencias_dia += 1
+                                sug_ini = fin_actual.strftime("%H:%M")
+                                sug_fin = ini_siguiente.strftime("%H:%M")
+                                horarios_completos.append({
+                                    "materia": f"PROPUESTA: {sug_mat}", "dia": d,
+                                    "inicio": sug_ini, "fin": sug_fin,
+                                    "inicio_orig": sug_ini, "fin_orig": sug_fin,
+                                    "color": "#1e293b" # Propuestas = Color gris oscuro
+                                })
                 
                 def get_sortable_time(t_str):
                     try: return datetime.strptime(t_str, "%H:%M").time()

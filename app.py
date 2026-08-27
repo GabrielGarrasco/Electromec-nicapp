@@ -969,6 +969,22 @@ def dialog_agregar_sesion():
                     break
         if guardar_datos(): st.rerun()
 
+def calcular_prioridad(nombre_mat):
+    mat_obj = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == nombre_mat), None)
+    if not mat_obj: return 0
+    
+    # 1. Correlativas (50 pts por destrabe)
+    destraba = sum(1 for m in st.session_state['plan_carrera'] if nombre_mat in m.get('req_regulares', []) or nombre_mat in m.get('req_aprobadas', []))
+    
+    # 2. Dificultad (10 pts por nivel)
+    dificultad = int(mat_obj.get('dificultad', 5))
+    
+    # 3. Temario (2 pts x unidad, x1.5 si es semestral)
+    largo_temario = len(st.session_state.get('temarios', {}).get(nombre_mat, []))
+    es_sem = 1.5 if mat_obj.get('cuatrimestre') in ["1er Cuatrimestre", "2do Cuatrimestre"] else 1
+    
+    return (destraba * 50) + (dificultad * 10) + (largo_temario * 2 * es_sem)
+
 # ==========================================
 # --- LAYOUT PRINCIPAL (MENÚ FIJO) ---
 # ==========================================
@@ -1082,21 +1098,6 @@ with col_contenido:
             st.divider()
             col_izq, col_der = st.columns(2, gap="large")
             
-            def calcular_prioridad(nombre_mat):
-                mat_obj = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == nombre_mat), None)
-                if not mat_obj: return 0
-                
-                # 1. Correlativas (50 pts por destrabe, es lo más pesado)
-                destraba = sum(1 for m in st.session_state['plan_carrera'] if nombre_mat in m.get('req_regulares', []) or nombre_mat in m.get('req_aprobadas', []))
-                
-                # 2. Dificultad (10 pts por nivel)
-                dificultad = mat_obj.get('dificultad', 5)
-                
-                # 3. Temario (2 pts x unidad, x1.5 si es semestral)
-                largo_temario = len(st.session_state.get('temarios', {}).get(nombre_mat, []))
-                es_sem = 1.5 if mat_obj.get('cuatrimestre') in ["1er Cuatrimestre", "2do Cuatrimestre"] else 1
-                
-                return (destraba * 50) + (dificultad * 10) + (largo_temario * 2 * es_sem)
 
             with col_izq:
                 st.markdown("### Cursando y Regulares")

@@ -45,7 +45,6 @@ def cargar_datos_sheet():
 
 def guardar_datos(silencioso=False):
     try:
-        # Aca estaba el error: Faltaba guardar 'actividades_fijas'
         datos = {
             'materias': st.session_state.get('materias', []), 
             'metodos': st.session_state.get('metodos', []),
@@ -57,7 +56,8 @@ def guardar_datos(silencioso=False):
             'actividades_fijas': st.session_state.get('actividades_fijas', []),
             'xp_total': st.session_state.get('xp_total', 0),
             'recompensas': st.session_state.get('recompensas', []),
-            'logros_desbloqueados': st.session_state.get('logros_desbloqueados', [])
+            'logros_desbloqueados': st.session_state.get('logros_desbloqueados', []),
+            'timer': st.session_state.get('timer', {}) # <--- ACÁ ESTÁ LA MAGIA
         }
         temarios = st.session_state.get('temarios', {})
         
@@ -86,7 +86,6 @@ def guardar_datos(silencioso=False):
         st.error(f"Error al guardar: {e}")
         st.stop()
 
-# Caché aumentado a 10 min para no comer recursos al pedo
 @st.cache_data(ttl=600)
 def cargar_flashcards():
     try:

@@ -2098,10 +2098,15 @@ with col_contenido:
                                     t['proximo_repaso'] = prox_fecha
                         
                         if guardar_datos():
-                            # Primero reseteamos el estado del timer
+                # Primero reseteamos el estado del timer
                         st.session_state['timer']['state'] = 'IDLE'
                         st.session_state['timer']['elapsed'] = 0.0
                         st.session_state['timer']['pause_elapsed'] = 0.0
+                        
+                        # Ahora mandamos a guardar a Sheets, así graba que está en IDLE
+                        if guardar_datos():
+                            time.sleep(1)
+                            st.rerun()
                         
                         # Ahora mandamos a guardar a Sheets, así graba que está en IDLE
                         if guardar_datos():

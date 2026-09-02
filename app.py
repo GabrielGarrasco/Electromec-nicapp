@@ -2011,8 +2011,10 @@ with col_contenido:
             elif st.session_state['timer']['state'] == 'FINISHED':
                 c_back, c_title, c_empty = st.columns([1, 10, 1])
                 with c_back:
-                    if st.button("Volver", help="Regresar a Pausa"):
-                        st.session_state['timer']['state'] = 'PAUSED'
+                    if st.button("Volver", help="Regresar al cronómetro"):
+                        st.session_state['timer']['state'] = 'RUNNING'
+                        st.session_state['timer']['start'] = time.time()
+                        guardar_datos(silencioso=True)
                         st.rerun()
                 with c_title:
                     st.markdown("<h2 style='text-align: center; margin-top: -10px;'>Sesión Finalizada</h2>", unsafe_allow_html=True)

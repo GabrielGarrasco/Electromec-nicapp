@@ -53,6 +53,11 @@ if 'datos_cargados' not in st.session_state:
             {"nombre": "Tarde libre sin culpa", "costo": 5000}
         ])
         st.session_state['logros_desbloqueados'] = datos_generales.get('logros_desbloqueados', [])
+        
+        # --- NUEVO: Recuperamos el estado del timer si existe en la base de datos ---
+        if 'timer' in datos_generales:
+            st.session_state['timer'].update(datos_generales['timer'])
+            
         for m in st.session_state['metas']:
             if 'nota' not in m: m['nota'] = None
     else:
@@ -1892,6 +1897,7 @@ with col_contenido:
                         if st.button("Iniciar Estudio", type="primary", use_container_width=True):
                             st.session_state['timer']['start'] = time.time()
                             st.session_state['timer']['state'] = 'RUNNING'
+                            guardar_datos(silencioso=True) # <-- NUEVO
                             st.rerun()
                         st.write("<br>", unsafe_allow_html=True)
 
@@ -1918,16 +1924,19 @@ with col_contenido:
                     if st.button("Cancelar", use_container_width=True):
                         st.session_state['timer']['state'] = 'IDLE'
                         st.session_state['timer']['elapsed'] = 0.0
+                        guardar_datos(silencioso=True) # <-- NUEVO
                         st.rerun()
                 with c2:
                     if st.button("Pausar", use_container_width=True):
                         st.session_state['timer']['elapsed'] += time.time() - st.session_state['timer']['start']
                         st.session_state['timer']['state'] = 'INTERRUPT'
+                        guardar_datos(silencioso=True) # <-- NUEVO
                         st.rerun()
                 with c3:
                     if st.button("Terminar", type="primary", use_container_width=True):
                         st.session_state['timer']['elapsed'] += time.time() - st.session_state['timer']['start']
                         st.session_state['timer']['state'] = 'FINISHED'
+                        guardar_datos(silencioso=True) # <-- NUEVO
                         st.rerun()
 
             elif st.session_state['timer']['state'] == 'INTERRUPT':
@@ -1946,14 +1955,15 @@ with col_contenido:
                         if "☠️" in motivo:
                             st.session_state['xp_total'] -= 150
                             st.toast("⚠️ Distracción Tóxica Penalizada (-150 XP).", icon="💀")
-                            guardar_datos(silencioso=True)
                             
                         st.session_state['timer']['state'] = 'PAUSED'
+                        guardar_datos(silencioso=True) # <-- NUEVO
                         st.rerun()
                 st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                 if st.button("Volver al Cronómetro", use_container_width=True):
                     st.session_state['timer']['state'] = 'RUNNING'
                     st.session_state['timer']['start'] = time.time()
+                    guardar_datos(silencioso=True) # <-- NUEVO
                     st.rerun()
 
             elif st.session_state['timer']['state'] == 'PAUSED':
@@ -1995,7 +2005,8 @@ with col_contenido:
                         st.session_state['timer']['pause_elapsed'] += time.time() - st.session_state['timer']['pause_start']
                         st.session_state['timer']['start'] = time.time()
                         st.session_state['timer']['state'] = 'RUNNING'
-                        st.rerun()
+                        guardar_datos(silencioso=True) # <-- NUEVO
+                        st.rerun()    
 
             elif st.session_state['timer']['state'] == 'FINISHED':
                 c_back, c_title, c_empty = st.columns([1, 10, 1])
@@ -2087,9 +2098,13 @@ with col_contenido:
                                     t['proximo_repaso'] = prox_fecha
                         
                         if guardar_datos():
-                            st.session_state['timer']['state'] = 'IDLE'
-                            st.session_state['timer']['elapsed'] = 0.0
-                            st.session_state['timer']['pause_elapsed'] = 0.0
+                            # Primero reseteamos el estado del timer
+                        st.session_state['timer']['state'] = 'IDLE'
+                        st.session_state['timer']['elapsed'] = 0.0
+                        st.session_state['timer']['pause_elapsed'] = 0.0
+                        
+                        # Ahora mandamos a guardar a Sheets, así graba que está en IDLE
+                        if guardar_datos():
                             time.sleep(1)
                             st.rerun()
 

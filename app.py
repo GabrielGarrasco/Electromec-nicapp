@@ -2097,8 +2097,7 @@ with col_contenido:
                                     t['nivel'] = nuevo_nivel
                                     t['proximo_repaso'] = prox_fecha
                         
-                        if guardar_datos():
-                # Primero reseteamos el estado del timer
+                        # Primero reseteamos el estado del timer
                         st.session_state['timer']['state'] = 'IDLE'
                         st.session_state['timer']['elapsed'] = 0.0
                         st.session_state['timer']['pause_elapsed'] = 0.0

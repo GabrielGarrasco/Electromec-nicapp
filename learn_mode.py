@@ -92,7 +92,12 @@ def evaluar_respuesta(opcion_usuario):
     if modo == 'escribir':
         resp_norm = normalizar_texto(opcion_usuario)
         def_norm = normalizar_texto(target)
-        es_correcta = (resp_norm == def_norm)
+        
+        # Separamos por / o por " o "
+        def_norm_modificada = def_norm.replace('/', ' o ')
+        opciones_validas = [op.strip() for op in def_norm_modificada.split(' o ')]
+        
+        es_correcta = resp_norm in opciones_validas
     else:
         es_correcta = (opcion_usuario == target)
     
@@ -106,6 +111,8 @@ def evaluar_respuesta(opcion_usuario):
                 else:
                     f['estado'] = 'Aprendiendo'
             else:
+                # Guardamos la racha antes de matarla a 0 por si tocás forzar
+                st.session_state['racha_previa'] = safe_int(f.get('racha_correctas', 0))
                 f['racha_correctas'] = 0
                 f['estado'] = 'Aprendiendo'
             break
@@ -280,7 +287,6 @@ def renderizar_modo_aprender():
         
     st.session_state['learn_target_write'] = target_write
 
-    # --- RENDERIZADO A PRUEBA DE FALLOS ---
     url_img = str(activa.get('imagen', '')).strip()
     
     html_card = "<div style='background-color: #153f59; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 20px; border: 2px solid #365b77;'>"
@@ -329,8 +335,25 @@ def renderizar_modo_aprender():
         </div>
         """, unsafe_allow_html=True)
         
-        # Streamlit va a pausar acá para que leas y después avanza solo
-        time.sleep(3.5)
-        st.session_state['learn_activa'] = None
-        st.session_state['learn_estado_resp'] = None
-        st.rerun()
+        col1, col2 = st.columns(2)
+        
+        if col1.button("Siguiente (Aceptar error)", type="primary", use_container_width=True):
+            st.session_state['learn_activa'] = None
+            st.session_state['learn_estado_resp'] = None
+            st.rerun()
+            
+        if col2.button("La tuve bien (Forzar)", use_container_width=True):
+            activa = st.session_state['learn_activa']
+            for f in st.session_state['flashcards_data']:
+                if str(f['id_tarjeta']) == str(activa['id_tarjeta']):
+                    f['racha_correctas'] = st.session_state.get('racha_previa', 0) + 1
+                    if f['racha_correctas'] >= 3:
+                        f['estado'] = 'Dominada'
+                    else:
+                        f['estado'] = 'Aprendiendo'
+                    break
+            
+            st.toast("Forzada como correcta 😎")
+            st.session_state['learn_activa'] = None
+            st.session_state['learn_estado_resp'] = None
+            st.rerun()

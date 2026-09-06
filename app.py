@@ -2127,8 +2127,17 @@ with col_contenido:
                     st.error("No hay materias o métodos cargados. Andá al menú 'Organización' para agregarlos.")
                 else:
                     with st.container(border=True):
+                        # Detectar si había sesión recomendada y preguntar
+                        sug = st.session_state.get('sesion_sugerida_activa')
+                        es_sugerida = False
+                        if sug:
+                            es_sugerida = st.toggle(f"✨ ¿Completaste la sesión sugerida de {sug['materia']}?", value=True)
+                            if es_sugerida:
+                                st.success("¡Excelente! Autocompletando los temas y materia por vos.")
+                        
                         st.caption("MATERIA")
-                        materia_sel = st.radio("MATERIA", nombres_materias, horizontal=True, label_visibility="collapsed")
+                        idx_materia = nombres_materias.index(sug['materia']) if (es_sugerida and sug['materia'] in nombres_materias) else 0
+                        materia_sel = st.radio("MATERIA", nombres_materias, index=idx_materia, horizontal=True, label_visibility="collapsed")
                         st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                         
                         st.caption("VINCULAR OBJETIVO")
@@ -2147,7 +2156,11 @@ with col_contenido:
                         st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                         st.caption("EVALUAR TEMA (Curva del Olvido)")
                         
-                        temas_sel = st.multiselect("¿Qué temas estudiaste hoy?", opciones_temas)
+                        # Precargar temas si cumplió la meta sugerida
+                        default_temas = sug['temas'] if (es_sugerida and sug) else []
+                        default_temas = [t for t in default_temas if t in opciones_temas] # Filtro de seguridad
+                        
+                        temas_sel = st.multiselect("¿Qué temas estudiaste hoy?", opciones_temas, default=default_temas)
                         
                         confianza = 3
                         if temas_sel: 
@@ -2334,7 +2347,13 @@ with col_contenido:
                                 if mat['fin_orig']: 
                                     texto += f"<br><span style='font-size: 10px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
                                 
-                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
+                                # Le damos estilo distintivo si es sugerencia y metemos los temas en el popup/title
+                                if mat.get('es_sugerencia'):
+                                    temas_str = " • ".join(mat['temas'])
+                                    tooltip = f"Sugerencia del sistema:\\n{temas_str}"
+                                    html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' title='{tooltip}' onclick='alert(\"{tooltip}\")' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center; background-color: #7c3aed !important; border: 1px solid #c084fc; cursor: pointer;'>{texto}</div></td>"
+                                else:
+                                    html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"

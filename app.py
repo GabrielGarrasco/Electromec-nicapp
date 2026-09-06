@@ -278,99 +278,7 @@ def evaluar_logros():
         guardar_datos(silencioso=True)
 
 evaluar_logros()
-# --- MOTOR DE SUGERENCIAS DE ESTUDIO ---
-def generar_plan_diario():
-    from datetime import date
-    hoy_d = date.today()
-    dias_espanol = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-    dia_hoy = dias_espanol[hoy_d.weekday()]
 
-    # 1. Buscar en qué horarios estás ocupado hoy (Clases + Actividades fijas)
-    ocupado = []
-    for m in st.session_state.get('plan_carrera', []):
-        if m.get('estado') == "Cursando":
-            for hc in m.get('horarios_clase', []):
-                if hc.get('dia') == dia_hoy and hc.get('inicio'):
-                    ocupado.append((hc['inicio'], hc.get('fin', '23:59')))
-
-    for act in st.session_state.get('actividades_fijas', []):
-        if act.get('dia') == dia_hoy and act.get('inicio'):
-            ocupado.append((act['inicio'], act.get('fin', '23:59')))
-
-    def t_to_m(t_str):
-        try:
-            h, m = map(int, t_str.split(':'))
-            return h * 60 + m
-        except: return 23 * 60 + 59
-
-    def m_to_t(m_int):
-        return f"{m_int//60:02d}:{m_int%60:02d}"
-
-    ocupado = sorted([(t_to_m(i), t_to_m(f)) for i, f in ocupado])
-
-    # 2. Buscar huecos libres entre las 09:00 y las 22:00
-    jornada_inicio = 9 * 60
-    jornada_fin = 22 * 60
-    huecos = []
-    tiempo_actual = jornada_inicio
-
-    for o_ini, o_fin in ocupado:
-        if o_ini > tiempo_actual:
-            if (o_ini - tiempo_actual) >= 45: # Mínimo 45 min libres para que valga la pena
-                huecos.append({"inicio": tiempo_actual, "fin": o_ini, "minutos": o_ini - tiempo_actual})
-        tiempo_actual = max(tiempo_actual, o_fin)
-
-    if tiempo_actual < jornada_fin and (jornada_fin - tiempo_actual) >= 45:
-        huecos.append({"inicio": tiempo_actual, "fin": jornada_fin, "minutos": jornada_fin - tiempo_actual})
-
-    if not huecos: return []
-
-    # 3. Calcular qué materia es prioridad
-    materias_pri = []
-    hoy_str = hoy_d.isoformat()
-    for m in st.session_state.get('metas', []):
-        if m.get('nota') is None and m.get('fecha_examen') >= hoy_str:
-            dias_restantes = max(1, (date.fromisoformat(m['fecha_examen']) - hoy_d).days)
-            info_mat = next((x for x in st.session_state.get('plan_carrera', []) if x['nombre'] == m['materia']), {})
-            dificultad = int(info_mat.get('dificultad', 5))
-            temas = st.session_state.get('temarios', {}).get(m['materia'], [])
-
-            # Filtramos los temas que urgen repasar o los nuevos
-            temas_pendientes = [t for t in temas if not t.get('proximo_repaso') or t['proximo_repaso'] <= hoy_str]
-            if not temas_pendientes: continue
-
-            # Fórmula: Más dificultad + más temas - menos días = MAYOR prioridad
-            score = (dificultad * 10) + (len(temas_pendientes) * 5) - dias_restantes
-            materias_pri.append({'materia': m['materia'], 'score': score, 'temas': temas_pendientes})
-
-    materias_pri = sorted(materias_pri, key=lambda x: x['score'], reverse=True)
-    if not materias_pri: return []
-
-    # 4. Asignar los temas a los huecos libres siendo realistas (aprox 40 min por tema)
-    sugerencias = []
-    mat_idx = 0
-    for h in huecos:
-        if mat_idx >= len(materias_pri): break
-        mat_actual = materias_pri[mat_idx]
-        temas_para_hueco = []
-        minutos_disp = h['minutos']
-
-        while minutos_disp >= 35 and mat_actual['temas']:
-            t_asig = mat_actual['temas'].pop(0)
-            temas_para_hueco.append(t_asig['tema'])
-            minutos_disp -= 40 
-
-        if temas_para_hueco:
-            sugerencias.append({
-                "materia": mat_actual['materia'],
-                "inicio": m_to_t(h['inicio']),
-                "fin": m_to_t(h['fin'] - minutos_disp), # Cortamos a la hora real que terminás
-                "temas": temas_para_hueco
-            })
-
-        if not mat_actual['temas']: mat_idx += 1
-
-    return sugerencias
 # --- MODO INVASIÓN ---
 hoy_date = date.today()
 examenes_proximos = []
@@ -1974,17 +1882,6 @@ with col_contenido:
 
                 with col_der:
                     with st.container(border=True):
-                        st.markdown("<h4 style='color: #10b981; margin-bottom: 5px;'>Sugerencia de Hoy</h4>", unsafe_allow_html=True)
-                        sugerencias_hoy = generar_plan_diario()
-                        
-                        if sugerencias_hoy:
-                            sug = sugerencias_hoy[0] # Mostramos el bloque más urgente primero
-                            st.info(f"**{sug['materia']}**\n\n**Temas:** {', '.join(sug['temas'])}\n\n**Horario:** {sug['inicio']} a {sug['fin']}")
-                            st.session_state['sesion_sugerida_activa'] = sug
-                        else:
-                            st.success("Estás al día o no tenés horarios libres cargados hoy. ¡Modo libre!")
-                            st.session_state['sesion_sugerida_activa'] = None
-
                         st.write("<br>", unsafe_allow_html=True)
                         modo_sel = st.radio("Modo", ["Libre", "Pomodoro"], horizontal=True, label_visibility="collapsed")
                         st.session_state['timer']['mode'] = modo_sel
@@ -2000,7 +1897,7 @@ with col_contenido:
                         if st.button("Iniciar Estudio", type="primary", use_container_width=True):
                             st.session_state['timer']['start'] = time.time()
                             st.session_state['timer']['state'] = 'RUNNING'
-                            guardar_datos(silencioso=True)
+                            guardar_datos(silencioso=True) # <-- NUEVO
                             st.rerun()
                         st.write("<br>", unsafe_allow_html=True)
 
@@ -2127,17 +2024,8 @@ with col_contenido:
                     st.error("No hay materias o métodos cargados. Andá al menú 'Organización' para agregarlos.")
                 else:
                     with st.container(border=True):
-                        # Detectar si había sesión recomendada y preguntar
-                        sug = st.session_state.get('sesion_sugerida_activa')
-                        es_sugerida = False
-                        if sug:
-                            es_sugerida = st.toggle(f"✨ ¿Completaste la sesión sugerida de {sug['materia']}?", value=True)
-                            if es_sugerida:
-                                st.success("¡Excelente! Autocompletando los temas y materia por vos.")
-                        
                         st.caption("MATERIA")
-                        idx_materia = nombres_materias.index(sug['materia']) if (es_sugerida and sug['materia'] in nombres_materias) else 0
-                        materia_sel = st.radio("MATERIA", nombres_materias, index=idx_materia, horizontal=True, label_visibility="collapsed")
+                        materia_sel = st.radio("MATERIA", nombres_materias, horizontal=True, label_visibility="collapsed")
                         st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                         
                         st.caption("VINCULAR OBJETIVO")
@@ -2156,11 +2044,7 @@ with col_contenido:
                         st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                         st.caption("EVALUAR TEMA (Curva del Olvido)")
                         
-                        # Precargar temas si cumplió la meta sugerida
-                        default_temas = sug['temas'] if (es_sugerida and sug) else []
-                        default_temas = [t for t in default_temas if t in opciones_temas] # Filtro de seguridad
-                        
-                        temas_sel = st.multiselect("¿Qué temas estudiaste hoy?", opciones_temas, default=default_temas)
+                        temas_sel = st.multiselect("¿Qué temas estudiaste hoy?", opciones_temas)
                         
                         confianza = 3
                         if temas_sel: 
@@ -2234,22 +2118,6 @@ with col_contenido:
                 st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                 st.markdown("### Mi Horario de Cursado")
                 horarios_completos = []
-                
-                # Inyectar sugerencias dinámicas al calendario
-                dias_espanol = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
-                dia_hoy = dias_espanol[date.today().weekday()]
-                sugerencias_hoy = generar_plan_diario()
-                
-                for sug in sugerencias_hoy:
-                    horarios_completos.append({
-                        "materia": sug['materia'],
-                        "dia": dia_hoy,
-                        "inicio": sug['inicio'], "fin": sug['fin'],
-                        "inicio_orig": sug['inicio'], "fin_orig": sug['fin'],
-                        "es_sugerencia": True,
-                        "temas": sug['temas']
-                    })
-
                 for m in st.session_state['plan_carrera']:
                     if m['estado'] == "Cursando" and 'horarios_clase' in m:
                         for hc in m['horarios_clase']:
@@ -2266,8 +2134,7 @@ with col_contenido:
                                 horarios_completos.append({
                                     "materia": m['nombre'], "dia": hc['dia'],
                                     "inicio": ini_c, "fin": fin_c,
-                                    "inicio_orig": hc['inicio'], "fin_orig": hc.get('fin', ''),
-                                    "es_sugerencia": False
+                                    "inicio_orig": hc['inicio'], "fin_orig": hc.get('fin', '')
                                 })
                 
                 for act in st.session_state.get('actividades_fijas', []):
@@ -2285,8 +2152,7 @@ with col_contenido:
                             "materia": f"📌 {act['nombre']}",
                             "dia": act['dia'],
                             "inicio": ini_c, "fin": fin_c,
-                            "inicio_orig": act['inicio'], "fin_orig": act.get('fin', ''),
-                            "es_sugerencia": False
+                            "inicio_orig": act['inicio'], "fin_orig": act.get('fin', '')
                         })
                 
                 def get_sortable_time(t_str):
@@ -2347,13 +2213,7 @@ with col_contenido:
                                 if mat['fin_orig']: 
                                     texto += f"<br><span style='font-size: 10px; font-weight: normal; opacity: 0.8;'>{mat['fin_orig']}</span>"
                                 
-                                # Le damos estilo distintivo si es sugerencia y metemos los temas en el popup/title
-                                if mat.get('es_sugerencia'):
-                                    temas_str = " • ".join(mat['temas'])
-                                    tooltip = f"Sugerencia del sistema:\\n{temas_str}"
-                                    html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' title='{tooltip}' onclick='alert(\"{tooltip}\")' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center; background-color: #7c3aed !important; border: 1px solid #c084fc; cursor: pointer;'>{texto}</div></td>"
-                                else:
-                                    html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
+                                html_tabla += f"<td rowspan='{span}'><div class='materia-bloque' style='height: 100%; min-height: 55px; display: flex; flex-direction: column; justify-content: center;'>{texto}</div></td>"
                             else:
                                 html_tabla += "<td></td>"
                         html_tabla += "</tr>"

@@ -93,7 +93,6 @@ def evaluar_respuesta(opcion_usuario):
         resp_norm = normalizar_texto(opcion_usuario)
         def_norm = normalizar_texto(target)
         
-        # Separamos por / o por " o "
         def_norm_modificada = def_norm.replace('/', ' o ')
         opciones_validas = [op.strip() for op in def_norm_modificada.split(' o ')]
         
@@ -111,7 +110,6 @@ def evaluar_respuesta(opcion_usuario):
                 else:
                     f['estado'] = 'Aprendiendo'
             else:
-                # Guardamos la racha antes de matarla a 0 por si tocás forzar
                 st.session_state['racha_previa'] = safe_int(f.get('racha_correctas', 0))
                 f['racha_correctas'] = 0
                 f['estado'] = 'Aprendiendo'
@@ -128,22 +126,24 @@ def evaluar_respuesta(opcion_usuario):
         st.rerun()
 
 def renderizar_modo_aprender():
-    # ACÁ ESTÁ LA MAGIA PARA ACHICAR EL MARGEN Y QUE LOS BOTONES NO CORTEN EL TEXTO
     st.markdown("""
     <style>
-    /* Subir todo achicando el padding superior */
-    .block-container {
-        padding-top: 1.5rem !important; 
+    /* Forzar margen superior bien arriba apuntando a la clase interna de Streamlit */
+    .appview-container .main .block-container {
+        padding-top: 1rem !important; 
     }
-    /* Hacer que el texto de los botones baje y no se trunque */
+    
+    /* Destruir el truncado de los botones para que el texto baje */
     div[data-testid="stButton"] button {
-        white-space: normal !important;
         height: auto !important;
-        min-height: 50px !important;
-        padding: 12px 10px !important;
+        min-height: 60px !important;
     }
+    div[data-testid="stButton"] button div, 
     div[data-testid="stButton"] button p {
+        white-space: normal !important;
         word-wrap: break-word !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
     }
     </style>
     """, unsafe_allow_html=True)

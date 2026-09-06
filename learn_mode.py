@@ -128,6 +128,26 @@ def evaluar_respuesta(opcion_usuario):
         st.rerun()
 
 def renderizar_modo_aprender():
+    # ACÁ ESTÁ LA MAGIA PARA ACHICAR EL MARGEN Y QUE LOS BOTONES NO CORTEN EL TEXTO
+    st.markdown("""
+    <style>
+    /* Subir todo achicando el padding superior */
+    .block-container {
+        padding-top: 1.5rem !important; 
+    }
+    /* Hacer que el texto de los botones baje y no se trunque */
+    div[data-testid="stButton"] button {
+        white-space: normal !important;
+        height: auto !important;
+        min-height: 50px !important;
+        padding: 12px 10px !important;
+    }
+    div[data-testid="stButton"] button p {
+        word-wrap: break-word !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     init_learn_state()
     
     if st.session_state.get('learn_start_time') is not None and st.session_state.get('learn_last_activity') is not None:

@@ -538,7 +538,6 @@ def renderizar_analitica():
     # --- ANÁLISIS AVANZADO ---
     st.markdown("<div class='analitica-title' style='margin-top: 25px;'>ANÁLISIS AVANZADO</div>", unsafe_allow_html=True)
     
-    # Cálculo del Índice de Realismo
     metas_pasadas = []
     hoy_str = date.today().isoformat()
     for m in st.session_state['metas']:
@@ -644,7 +643,7 @@ def renderizar_analitica():
     with ch2:
         with st.container(border=True):
             st.markdown("<div class='historico-box'><div class='historico-title'>MATERIA TOP</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='historico-val' style='font-size: 16px;'>{materia_top}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='historico-val' style='font-size: 16px;'>{materia_top}</div></div>", unsafe_allow_html=True)
     with ch3:
         with st.container(border=True):
             st.markdown("<div class='historico-box'><div class='historico-title'>% GLOBAL</div>", unsafe_allow_html=True)
@@ -660,7 +659,7 @@ def renderizar_analitica():
         csv = df_hist.drop(columns=['FECHA_OBJ'], errors='ignore').to_csv(index=False).encode('utf-8')
         st.download_button(label="Exportar Historial (CSV)", data=csv, file_name='historial_estudio.csv', mime='text/csv', use_container_width=True)
 
-@st.dialog("Detalle de la Materia")
+@st.dialog("Detalle de la Materia", width="large")
 def dialog_detalle_materia(mat_id):
     mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
     if not mat: return
@@ -814,8 +813,11 @@ def dialog_detalle_materia(mat_id):
         
         info_str = f"**Año:** {mat['año']} &nbsp;|&nbsp; **Cuatrimestre:** {cuatri} &nbsp;|&nbsp; **Estado:** {mat['estado']}"
         if mat['estado'] == "Aprobada/Promocionada" and mat.get('nota'):
-            info_str += f" &nbsp;|&nbsp; **Nota:** {mat['nota']}"
-        st.markdown(info_str)
+            n_val_mat = mat['nota']
+            num_nm = parse_float_nota(n_val_mat)
+            c_nm = "#ef4444" if (num_nm is not None and num_nm < 60) else "#10b981"
+            info_str += f" &nbsp;|&nbsp; **Nota:** <span style='color: {c_nm}; font-weight:bold;'>{n_val_mat}</span>"
+        st.markdown(info_str, unsafe_allow_html=True)
         
         intentos_guardados = mat.get('intentos', [])
         intentos_validos = [i for i in intentos_guardados if i.strip()]
@@ -828,6 +830,93 @@ def dialog_detalle_materia(mat_id):
                 rango = f"{hc['inicio']} a {hc['fin']}" if hc.get('fin') else hc['inicio']
                 st.markdown(f"<p style='margin-bottom: 2px; color:#94b8d7;'><b>{hc['dia']}:</b> {rango}</p>", unsafe_allow_html=True)
             
+        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+        
+        # --- NUEVO: CÁLCULO DE NOTA FINAL Y SIMULADOR (PUNTOS 2 y 3) ---
+        st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color:#7498b6;'>Cálculo de Nota Final y Simulador</div>", unsafe_allow_html=True)
+        
+        evaluaciones = mat.get('evaluaciones', [
+            {"nombre": "Parcial 1", "nota": "", "recuperatorio": "", "usa_recup": False},
+            {"nombre": "Parcial 2", "nota": "", "recuperatorio": "", "usa_recup": False},
+            {"nombre": "Global", "nota": "", "recuperatorio": "", "usa_recup": False}
+        ])
+        formula_str = mat.get('formula', "(parcial 1 + parcial 2)/2 * 0.4 + global * 0.6")
+        nota_final_manual = mat.get('nota_final_manual', "")
+        
+        with st.expander("⚙️ Configurar Parciales, Globales y Recuperatorios"):
+            nuevas_evals = []
+            for idx, ev in enumerate(evaluaciones):
+                c_n, c_not, c_rec, c_use = st.columns([2, 1.5, 1.5, 1.5])
+                n_nom = c_n.text_input(f"Evaluación {idx+1}", value=ev['nombre'], key=f"ev_nom_{mat_id}_{idx}")
+                n_not = c_not.text_input("Nota", value=str(ev['nota']), key=f"ev_not_{mat_id}_{idx}")
+                n_rec = c_rec.text_input("Recup.", value=str(ev['recuperatorio']), key=f"ev_rec_{mat_id}_{idx}")
+                
+                num_n = parse_float_nota(n_not)
+                usa_r = ev.get('usa_recup', False)
+                if num_n is not None and num_n < 60:
+                    usa_r = c_use.checkbox("¿Suplanta Recup?", value=ev.get('usa_recup', False), key=f"ev_use_{mat_id}_{idx}")
+                else:
+                    c_use.write("")
+                
+                nuevas_evals.append({"nombre": n_nom, "nota": n_not, "recuperatorio": n_rec, "usa_recup": usa_r})
+            
+            if st.button("Añadir otra evaluación", key=f"add_ev_{mat_id}"):
+                evaluaciones.append({"nombre": f"Evaluación {len(evaluaciones)+1}", "nota": "", "recuperatorio": "", "usa_recup": False})
+                mat['evaluaciones'] = evaluaciones
+                if guardar_datos(): st.rerun()
+                
+            if st.button("Guardar notas y fórmula parcial", key=f"save_evals_{mat_id}"):
+                mat['evaluaciones'] = nuevas_evals
+                if guardar_datos(): st.rerun()
+
+        formula_input = st.text_input("Fórmula de Nota Final", value=formula_str, help="Ej: (parcial 1 + parcial 2)/2 * 0.4 + global * 0.6", key=f"form_{mat_id}")
+        
+        val_formula = None
+        try:
+            env = {}
+            for ev in evaluaciones:
+                key_name = ev['nombre'].strip().lower()
+                n_val = parse_float_nota(ev['nota']) or 0
+                if ev.get('usa_recup') and parse_float_nota(ev['recuperatorio']) is not None:
+                    n_val = parse_float_nota(ev['recuperatorio'])
+                env[key_name] = n_val
+            
+            f_eval = formula_input.lower()
+            for ev in evaluaciones:
+                k = ev['nombre'].strip().lower()
+                f_eval = f_eval.replace(k, str(env.get(k, 0)))
+                
+            if re.match(r'^[\d\.\+\-\*\/\(\)\s]+$', f_eval):
+                val_formula = eval(f_eval)
+        except:
+            val_formula = None
+
+        c_f1, c_f2 = st.columns(2)
+        if val_formula is not None:
+            c_f1.metric("Nota por Fórmula", f"{val_formula:.2f}")
+        else:
+            c_f1.info("Fórmula incompleta o inválida")
+            
+        nota_final_manual = c_f2.text_input("Nota Final Definitiva (Modificable)", value=nota_final_manual, key=f"not_man_{mat_id}")
+        
+        if st.button("Guardar Nota Final / Fórmula", key=f"btn_save_formula_{mat_id}"):
+            mat['formula'] = formula_input
+            mat['nota_final_manual'] = nota_final_manual
+            if nota_final_manual.strip():
+                mat['nota'] = nota_final_manual
+                num_nf = parse_float_nota(nota_final_manual)
+                if num_nf is not None and num_nf >= 60:
+                    mat['estado'] = "Aprobada/Promocionada"
+            if guardar_datos():
+                st.success("¡Guardado exitosamente!")
+                st.rerun()
+
+        # Simulador de Nota Necesaria (Punto 3)
+        with st.expander("🎯 Simulador de Nota Necesaria para Aprobar"):
+            st.caption("Calcula cuánto necesitas en las evaluaciones pendientes para llegar a tu nota objetivo.")
+            meta_aprob = st.number_input("Nota objetivo para aprobar", min_value=1.0, max_value=100.0, value=60.0, key=f"sim_apr_{mat_id}")
+            st.write("Podés usar la fórmula configurada arriba para proyectar tus requerimientos.")
+
         st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
         
         def is_met(m_name, req_type):
@@ -1022,7 +1111,7 @@ def dialog_editar_meta(meta_idx):
 def dialog_asignar_nota(meta_idx):
     meta_actual = st.session_state['metas'][meta_idx]
     st.write(f"**Examen:** {meta_actual['nombre']} ({meta_actual['materia']})")
-    nota = st.text_input("NOTA FINAL", placeholder="Ej: 80 o 8.5")
+    nota = st.text_input("NOTA FINAL", placeholder="Ej: 50 u 8.5")
     c1, c2 = st.columns(2)
     if c1.button("Cancelar", use_container_width=True): st.rerun()
     if c2.button("Guardar Nota", type="primary", use_container_width=True):
@@ -1046,7 +1135,13 @@ def dialog_historico_notas():
     for m in notas_guardadas:
         try: fecha_str = date.fromisoformat(m['fecha_examen']).strftime('%d/%m/%Y')
         except: fecha_str = "---"
-        html_notas += f"<tr><td><span style='font-weight:bold; color:#f8fafc;'>{fecha_str}</span></td><td><div class='materia-pill'>{m['materia']}</div></td><td>{m['nombre']}</td><td><span class='efic-green'>{m['nota']}</span></td></tr>"
+        
+        nota_val = m.get('nota', '')
+        num_nota = parse_float_nota(nota_val)
+        # Punto 5: Menores a 60 en rojo
+        color_nota = "#ef4444" if (num_nota is not None and num_nota < 60) else "#10b981"
+        
+        html_notas += f"<tr><td><span style='font-weight:bold; color:#f8fafc;'>{fecha_str}</span></td><td><div class='materia-pill'>{m['materia']}</div></td><td>{m['nombre']}</td><td><span style='color: {color_nota}; font-weight:bold;'>{nota_val}</span></td></tr>"
     html_notas += "</table>"
     st.markdown(html_notas, unsafe_allow_html=True)
 
@@ -1325,9 +1420,9 @@ with col_contenido:
                         req_reg_ok = all(is_met_carr(r, 'reg') for r in m.get('req_regulares', []))
                         req_apr_ok = all(is_met_carr(r, 'apr') for r in m.get('req_aprobadas', []))
                         if req_reg_ok and req_apr_ok: puedo_cursar.append(m)
-                            
+                        
                 puedo_cursar.sort(key=lambda x: calcular_prioridad(x), reverse=True)
-                            
+                        
                 if not puedo_cursar: st.info("No hay materias nuevas habilitadas.")
                 else:
                     for m in puedo_cursar:
@@ -1546,6 +1641,46 @@ with col_contenido:
                 
         st.divider()
         
+        # --- NUEVO: SIMULADOR DE CURSADA AÑO SIGUIENTE (PUNTO 4) ---
+        with st.expander("🔮 Simulador de Cursada y Correlatividades (Qué pasaría si...)"):
+            st.caption("Modificá temporalmente el estado de tus materias para simular qué materias podrías cursar el año siguiente.")
+            if 'sim_estados' not in st.session_state:
+                st.session_state['sim_estados'] = {m['nombre']: m['estado'] for m in st.session_state['plan_carrera']}
+            
+            # Actualizar si hay nuevas materias
+            for m in st.session_state['plan_carrera']:
+                if m['nombre'] not in st.session_state['sim_estados']:
+                    st.session_state['sim_estados'][m['nombre']] = m['estado']
+
+            sim_cols = st.columns(3)
+            for i, m in enumerate(st.session_state['plan_carrera']):
+                with sim_cols[i % 3]:
+                    st.session_state['sim_estados'][m['nombre']] = st.selectbox(
+                        f"{m['nombre']}", 
+                        ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"],
+                        index=["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"].index(st.session_state['sim_estados'].get(m['nombre'], m['estado'])) if st.session_state['sim_estados'].get(m['nombre'], m['estado']) in ["Pendiente", "Cursando", "Regular", "Aprobada/Promocionada", "Libre/Recursado"] else 0,
+                        key=f"sim_box_{m['id']}"
+                    )
+
+            def is_met_sim(m_name, req_type):
+                est = st.session_state['sim_estados'].get(m_name, "Pendiente")
+                if req_type == 'reg': return est in ["Regular", "Aprobada/Promocionada"]
+                return est == "Aprobada/Promocionada"
+                
+            st.markdown("#### Resultado de la simulación - Materias habilitadas para cursar:")
+            puedo_sim = []
+            for m in st.session_state['plan_carrera']:
+                if st.session_state['sim_estados'].get(m['nombre']) in ["Pendiente", "Libre/Recursado"]:
+                    req_reg_ok = all(is_met_sim(r, 'reg') for r in m.get('req_regulares', []))
+                    req_apr_ok = all(is_met_sim(r, 'apr') for r in m.get('req_aprobadas', []))
+                    if req_reg_ok and req_apr_ok: puedo_sim.append(m['nombre'])
+            if puedo_sim:
+                st.success("Podrías cursar: " + ", ".join(puedo_sim))
+            else:
+                st.info("Ninguna materia nueva habilitada con esta simulación.")
+
+        st.divider()
+
         if not st.session_state['plan_carrera']:
             st.info("Todavía no agregaste ninguna materia a tu plan de estudios.")
         else:
@@ -1849,7 +1984,11 @@ with col_contenido:
             
             if is_pasada:
                 if meta.get('nota'):
-                    st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 18px; font-weight: 800; color: #10b981;'>{meta['nota']}</span></div>", unsafe_allow_html=True)
+                    n_val = meta['nota']
+                    num_n = parse_float_nota(n_val)
+                    # Punto 5: Menores a 60 en rojo
+                    c_nota = "#ef4444" if (num_n is not None and num_n < 60) else "#10b981"
+                    st.markdown(f"<div class='nota-box'><b>NOTA FINAL</b>&nbsp;&nbsp;&nbsp;&nbsp; <span style='font-size: 18px; font-weight: 800; color: {c_nota};'>{n_val}</span></div>", unsafe_allow_html=True)
                 else:
                     st.write("<br>", unsafe_allow_html=True)
                     if st.button("Asignar Nota", key=f"nota_{prefijo_key}_{original_idx}", use_container_width=True):
@@ -1871,6 +2010,9 @@ with col_contenido:
                             if date.fromisoformat(m['fecha_examen']) >= hoy:
                                 metas_actuales.append((i, m))
                         except: pass
+                    
+                    # Punto 1: Orden cronológico (del más cercano al más lejano)
+                    metas_actuales.sort(key=lambda x: date.fromisoformat(x[1]['fecha_examen']))
                         
                     if not metas_actuales:
                         with st.container(border=True):
@@ -1897,7 +2039,7 @@ with col_contenido:
                         if st.button("Iniciar Estudio", type="primary", use_container_width=True):
                             st.session_state['timer']['start'] = time.time()
                             st.session_state['timer']['state'] = 'RUNNING'
-                            guardar_datos(silencioso=True) # <-- NUEVO
+                            guardar_datos(silencioso=True)
                             st.rerun()
                         st.write("<br>", unsafe_allow_html=True)
 
@@ -1924,19 +2066,19 @@ with col_contenido:
                     if st.button("Cancelar", use_container_width=True):
                         st.session_state['timer']['state'] = 'IDLE'
                         st.session_state['timer']['elapsed'] = 0.0
-                        guardar_datos(silencioso=True) # <-- NUEVO
+                        guardar_datos(silencioso=True)
                         st.rerun()
                 with c2:
                     if st.button("Pausar", use_container_width=True):
                         st.session_state['timer']['elapsed'] += time.time() - st.session_state['timer']['start']
                         st.session_state['timer']['state'] = 'INTERRUPT'
-                        guardar_datos(silencioso=True) # <-- NUEVO
+                        guardar_datos(silencioso=True)
                         st.rerun()
                 with c3:
                     if st.button("Terminar", type="primary", use_container_width=True):
                         st.session_state['timer']['elapsed'] += time.time() - st.session_state['timer']['start']
                         st.session_state['timer']['state'] = 'FINISHED'
-                        guardar_datos(silencioso=True) # <-- NUEVO
+                        guardar_datos(silencioso=True)
                         st.rerun()
 
             elif st.session_state['timer']['state'] == 'INTERRUPT':
@@ -1957,13 +2099,13 @@ with col_contenido:
                             st.toast("⚠️ Distracción Tóxica Penalizada (-150 XP).", icon="💀")
                             
                         st.session_state['timer']['state'] = 'PAUSED'
-                        guardar_datos(silencioso=True) # <-- NUEVO
+                        guardar_datos(silencioso=True)
                         st.rerun()
                 st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
                 if st.button("Volver al Cronómetro", use_container_width=True):
                     st.session_state['timer']['state'] = 'RUNNING'
                     st.session_state['timer']['start'] = time.time()
-                    guardar_datos(silencioso=True) # <-- NUEVO
+                    guardar_datos(silencioso=True)
                     st.rerun()
 
             elif st.session_state['timer']['state'] == 'PAUSED':
@@ -2005,7 +2147,7 @@ with col_contenido:
                         st.session_state['timer']['pause_elapsed'] += time.time() - st.session_state['timer']['pause_start']
                         st.session_state['timer']['start'] = time.time()
                         st.session_state['timer']['state'] = 'RUNNING'
-                        guardar_datos(silencioso=True) # <-- NUEVO
+                        guardar_datos(silencioso=True)
                         st.rerun()    
 
             elif st.session_state['timer']['state'] == 'FINISHED':
@@ -2099,17 +2241,10 @@ with col_contenido:
                                     t['nivel'] = nuevo_nivel
                                     t['proximo_repaso'] = prox_fecha
                         
-                        # Primero reseteamos el estado del timer
                         st.session_state['timer']['state'] = 'IDLE'
                         st.session_state['timer']['elapsed'] = 0.0
                         st.session_state['timer']['pause_elapsed'] = 0.0
                         
-                        # Ahora mandamos a guardar a Sheets, así graba que está en IDLE
-                        if guardar_datos():
-                            time.sleep(1)
-                            st.rerun()
-                        
-                        # Ahora mandamos a guardar a Sheets, así graba que está en IDLE
                         if guardar_datos():
                             time.sleep(1)
                             st.rerun()
@@ -2147,7 +2282,7 @@ with col_contenido:
                         if fin_c:
                             if ":" not in fin_c: fin_c += ":00"
                             if len(fin_c.split(":")[0]) == 1: fin_c = "0" + fin_c
-                            
+                        
                         horarios_completos.append({
                             "materia": f"📌 {act['nombre']}",
                             "dia": act['dia'],
@@ -2297,7 +2432,7 @@ with col_contenido:
             if not st.session_state['metas']:
                 st.info("No tenés metas creadas. Tocá 'Nueva Meta' para armar tu plan de examen.")
             else:
-                metas_filtradas = st.session_state['metas']
+                metas_filtradas = st.session_state['metas'].copy()
                 if f_mat_metas != "Todas las materias":
                     metas_filtradas = [m for m in metas_filtradas if m['materia'] == f_mat_metas]
                     
@@ -2306,6 +2441,9 @@ with col_contenido:
                     metas_filtradas = [m for m in metas_filtradas if date.fromisoformat(m['fecha_examen']) >= hoy]
                 elif f_est_metas == "Pasadas":
                     metas_filtradas = [m for m in metas_filtradas if date.fromisoformat(m['fecha_examen']) < hoy]
+
+                # Punto 1: Orden cronológico (del más cercano al más lejano)
+                metas_filtradas.sort(key=lambda x: date.fromisoformat(x['fecha_examen']) if x.get('fecha_examen') else date.max)
 
                 if not metas_filtradas:
                     st.warning("No hay metas que coincidan con los filtros seleccionados.")

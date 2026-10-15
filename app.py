@@ -832,7 +832,7 @@ def dialog_detalle_materia(mat_id):
             
         st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
         
-        # --- NUEVO: CÁLCULO DE NOTA FINAL Y SIMULADOR (PUNTOS 2 y 3) ---
+        # --- CÁLCULO DE NOTA FINAL Y SIMULADOR MEJORADO ---
         st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color:#7498b6;'>Cálculo de Nota Final y Simulador</div>", unsafe_allow_html=True)
         
         evaluaciones = mat.get('evaluaciones', [
@@ -843,63 +843,141 @@ def dialog_detalle_materia(mat_id):
         formula_str = mat.get('formula', "(parcial 1 + parcial 2)/2 * 0.4 + global * 0.6")
         nota_final_manual = mat.get('nota_final_manual', "")
         
-        with st.expander("⚙️ Configurar Parciales, Globales y Recuperatorios"):
+        # Opciones para vincular a Metas
+        metas_materia = [m for m in st.session_state['metas'] if m['materia'] == mat['nombre']]
+        opciones_metas = ["-- Escribir a mano --"] + [m['nombre'] for m in metas_materia]
+        
+        with st.expander("⚙️ Configurar Parciales, Laboratorios y Globales"):
             nuevas_evals = []
             for idx, ev in enumerate(evaluaciones):
-                c_n, c_not, c_rec, c_use = st.columns([2, 1.5, 1.5, 1.5])
-                n_nom = c_n.text_input(f"Evaluación {idx+1}", value=ev['nombre'], key=f"ev_nom_{mat_id}_{idx}")
-                n_not = c_not.text_input("Nota", value=str(ev['nota']), key=f"ev_not_{mat_id}_{idx}")
-                n_rec = c_rec.text_input("Recup.", value=str(ev['recuperatorio']), key=f"ev_rec_{mat_id}_{idx}")
-                
-                num_n = parse_float_nota(n_not)
-                usa_r = ev.get('usa_recup', False)
-                if num_n is not None and num_n < 60:
-                    usa_r = c_use.checkbox("¿Suplanta Recup?", value=ev.get('usa_recup', False), key=f"ev_use_{mat_id}_{idx}")
-                else:
-                    c_use.write("")
-                
-                nuevas_evals.append({"nombre": n_nom, "nota": n_not, "recuperatorio": n_rec, "usa_recup": usa_r})
+                with st.container(border=True):
+                    c_n, c_meta, c_not, c_rec, c_use = st.columns([1.5, 2, 1, 1, 1])
+                    
+                    n_nom = c_n.text_input("Variable en fórmula", value=ev.get('nombre', f'Eval {idx+1}'), key=f"ev_nom_{mat_id}_{idx}", help="Este nombre usás en la fórmula, ej: 'Parcial 1'")
+                    
+                    val_sel = ev.get('meta_vinculada', '-- Escribir a mano --')
+                    if val_sel not in opciones_metas: val_sel = '-- Escribir a mano --'
+                    meta_sel = c_meta.selectbox("Origen de Nota", opciones_metas, index=opciones_metas.index(val_sel), key=f"ev_meta_{mat_id}_{idx}")
+                    
+                    # Determinar la nota a mostrar
+                    nota_mostrar = str(ev.get('nota', ''))
+                    if meta_sel != "-- Escribir a mano --":
+                        m_obj = next((m for m in metas_materia if m['nombre'] == meta_sel), None)
+                        if m_obj and m_obj.get('nota'):
+                            nota_mostrar = str(m_obj['nota'])
+                    
+                    n_not = c_not.text_input("Nota", value=nota_mostrar, disabled=(meta_sel != "-- Escribir a mano --"), key=f"ev_not_{mat_id}_{idx}")
+                    n_rec = c_rec.text_input("Recup.", value=str(ev.get('recuperatorio', '')), key=f"ev_rec_{mat_id}_{idx}")
+                    
+                    num_n = parse_float_nota(n_not)
+                    usa_r = ev.get('usa_recup', False)
+                    if num_n is not None and num_n < 60:
+                        usa_r = c_use.checkbox("Suplanta", value=ev.get('usa_recup', False), key=f"ev_use_{mat_id}_{idx}", help="Usa la nota del recup. en vez de la original")
+                    else:
+                        c_use.write("")
+                        
+                    # Sección Laboratorio
+                    st.markdown("<div style='margin-top:-10px; margin-bottom:5px; font-size:12px; color:#7498b6;'>⚡ Laboratorio Vinculado</div>", unsafe_allow_html=True)
+                    c_l_check, c_l_nom, c_l_meta, c_l_not = st.columns([1.5, 1.5, 2, 2])
+                    
+                    tiene_lab = c_l_check.checkbox("Añadir Lab", value=ev.get('tiene_lab', False), key=f"ev_hlab_{mat_id}_{idx}")
+                    
+                    lab_nom = ev.get('lab_nombre', f"Laboratorio {idx+1}")
+                    lab_meta = ev.get('lab_meta', '-- Escribir a mano --')
+                    lab_not = str(ev.get('lab_nota', ''))
+                    
+                    if tiene_lab:
+                        lab_nom = c_l_nom.text_input("Variable Lab", value=lab_nom, key=f"ev_lnom_{mat_id}_{idx}")
+                        if lab_meta not in opciones_metas: lab_meta = '-- Escribir a mano --'
+                        lab_meta_sel = c_l_meta.selectbox("Origen Lab", opciones_metas, index=opciones_metas.index(lab_meta), key=f"ev_lmeta_{mat_id}_{idx}")
+                        
+                        if lab_meta_sel != "-- Escribir a mano --":
+                            l_obj = next((m for m in metas_materia if m['nombre'] == lab_meta_sel), None)
+                            if l_obj and l_obj.get('nota'):
+                                lab_not = str(l_obj['nota'])
+                                
+                        lab_not_input = c_l_not.text_input("Nota Lab", value=lab_not, disabled=(lab_meta_sel != "-- Escribir a mano --"), key=f"ev_lnot_{mat_id}_{idx}")
+                    else:
+                        lab_meta_sel = '-- Escribir a mano --'
+                        lab_not_input = ev.get('lab_nota', '')
+                    
+                    nuevas_evals.append({
+                        "nombre": n_nom, 
+                        "nota": n_not if meta_sel == "-- Escribir a mano --" else ev.get('nota', ''), 
+                        "recuperatorio": n_rec, 
+                        "usa_recup": usa_r,
+                        "meta_vinculada": meta_sel,
+                        "tiene_lab": tiene_lab,
+                        "lab_nombre": lab_nom,
+                        "lab_meta": lab_meta_sel,
+                        "lab_nota": lab_not_input if lab_meta_sel == "-- Escribir a mano --" else ev.get('lab_nota', '')
+                    })
             
-            if st.button("Añadir otra evaluación", key=f"add_ev_{mat_id}"):
+            c_add1, c_add2 = st.columns(2)
+            if c_add1.button("➕ Añadir otra evaluación", key=f"add_ev_{mat_id}"):
                 evaluaciones.append({"nombre": f"Evaluación {len(evaluaciones)+1}", "nota": "", "recuperatorio": "", "usa_recup": False})
                 mat['evaluaciones'] = evaluaciones
                 if guardar_datos(): st.rerun()
                 
-            if st.button("Guardar notas y fórmula parcial", key=f"save_evals_{mat_id}"):
+            if c_add2.button("💾 Guardar configuración parciales", key=f"save_evals_{mat_id}"):
                 mat['evaluaciones'] = nuevas_evals
                 if guardar_datos(): st.rerun()
 
-        formula_input = st.text_input("Fórmula de Nota Final", value=formula_str, help="Ej: (parcial 1 + parcial 2)/2 * 0.4 + global * 0.6", key=f"form_{mat_id}")
+        formula_input = st.text_input("Fórmula de Nota Final", value=formula_str, help="Podés usar comas o puntos. Ej: (0,4 * Parcial 1 + 0,6 * Laboratorio 1)", key=f"form_{mat_id}")
         
         val_formula = None
         try:
             env = {}
             for ev in evaluaciones:
+                # 1. Procesar la Evaluación Principal
                 key_name = ev['nombre'].strip().lower()
-                n_val = parse_float_nota(ev['nota']) or 0
-                if ev.get('usa_recup') and parse_float_nota(ev['recuperatorio']) is not None:
-                    n_val = parse_float_nota(ev['recuperatorio'])
-                env[key_name] = n_val
-            
-            f_eval = formula_input.lower()
-            for ev in evaluaciones:
-                k = ev['nombre'].strip().lower()
-                f_eval = f_eval.replace(k, str(env.get(k, 0)))
+                if key_name:
+                    n_val = parse_float_nota(ev['nota']) or 0
+                    if ev.get('meta_vinculada') and ev.get('meta_vinculada') != "-- Escribir a mano --":
+                        m_obj = next((m for m in metas_materia if m['nombre'] == ev['meta_vinculada']), None)
+                        if m_obj and m_obj.get('nota'):
+                            n_val = parse_float_nota(m_obj['nota']) or n_val
+
+                    if ev.get('usa_recup') and parse_float_nota(ev['recuperatorio']) is not None:
+                        n_val = parse_float_nota(ev['recuperatorio'])
+                        
+                    env[key_name] = n_val
                 
+                # 2. Procesar el Laboratorio vinculado
+                if ev.get('tiene_lab'):
+                    lab_key = ev.get('lab_nombre', '').strip().lower()
+                    if lab_key:
+                        n_lab = parse_float_nota(ev.get('lab_nota', '')) or 0
+                        if ev.get('lab_meta') and ev.get('lab_meta') != "-- Escribir a mano --":
+                            l_obj = next((m for m in metas_materia if m['nombre'] == ev.get('lab_meta')), None)
+                            if l_obj and l_obj.get('nota'):
+                                n_lab = parse_float_nota(l_obj['nota']) or n_lab
+                        env[lab_key] = n_lab
+            
+            # Reemplazamos las comas por puntos para que el motor matemático no se asuste
+            f_eval = formula_input.lower().replace(',', '.')
+            
+            # Reemplazamos variables de la más larga a la más corta
+            sorted_keys = sorted(env.keys(), key=len, reverse=True)
+            for k in sorted_keys:
+                f_eval = f_eval.replace(k, str(env[k]))
+                
+            # Validamos que queden solo números y signos matemáticos
             if re.match(r'^[\d\.\+\-\*\/\(\)\s]+$', f_eval):
                 val_formula = eval(f_eval)
-        except:
+        except Exception:
             val_formula = None
 
         c_f1, c_f2 = st.columns(2)
         if val_formula is not None:
             c_f1.metric("Nota por Fórmula", f"{val_formula:.2f}")
         else:
-            c_f1.info("Fórmula incompleta o inválida")
+            c_f1.error("Fórmula incompleta o inválida")
             
         nota_final_manual = c_f2.text_input("Nota Final Definitiva (Modificable)", value=nota_final_manual, key=f"not_man_{mat_id}")
         
         if st.button("Guardar Nota Final / Fórmula", key=f"btn_save_formula_{mat_id}"):
+            mat['evaluaciones'] = nuevas_evals 
             mat['formula'] = formula_input
             mat['nota_final_manual'] = nota_final_manual
             if nota_final_manual.strip():
@@ -911,7 +989,7 @@ def dialog_detalle_materia(mat_id):
                 st.success("¡Guardado exitosamente!")
                 st.rerun()
 
-        # Simulador de Nota Necesaria (Punto 3)
+        # Simulador de Nota Necesaria 
         with st.expander("🎯 Simulador de Nota Necesaria para Aprobar"):
             st.caption("Calcula cuánto necesitas en las evaluaciones pendientes para llegar a tu nota objetivo.")
             meta_aprob = st.number_input("Nota objetivo para aprobar", min_value=1.0, max_value=100.0, value=60.0, key=f"sim_apr_{mat_id}")

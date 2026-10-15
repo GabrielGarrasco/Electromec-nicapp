@@ -836,6 +836,339 @@ def dialog_detalle_materia(mat_id):
         st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color:#7498b6;'>Cálculo de Nota Final y Simulador</div>", unsafe_allow_html=True)
         
         evaluaciones = mat.get('evaluaciones', [
+            {"nombre": "Parcial 1", "nota": "", "recuperatorio": "", "meta_recup": "-- Sin Recuperatorio --"},
+            {"nombre": "Parcial 2", "nota": "", "recuperatorio": "", "meta_recup": "-- Sin Recuperatorio --"},
+            {"nombre": "Global", "nota": "", "recuperatorio": "", "meta_recup": "-- Sin Recuperatorio --"}
+        ])
+        formula_str = mat.get('formula', "(parcial 1 + parcial 2)/2 * 0.4 + global * 0.6")
+        nota_final_manual = mat.get('nota_final_manual', "")
+        
+        # Opciones para vincular a Metas
+        metas_materia = [m for m in st.session_state['metas'] if m['materia'] == mat['nombre']]
+        opciones_metas = ["-- Escribir a mano --"] + [m['nombre'] for m in metas_materia]
+        
+        with st.expander("Definir Parciales y Globales"):
+            nuevas_evals = []
+            idx_eliminar = None
+            
+            for idx, ev in enumerate(evaluaciones):
+                with st.container(border=True):
+                    c_head1, c_head2 = st.columns([10, 2])
+                    c_head1.markdown(f"**Instancia {idx+1}**")
+                    if c_head2.button("Eliminar", key=f"del_ev_{mat_id}_{idx}", help="Eliminar esta evaluación"):
+                        idx_eliminar = idx
+                        
+                    c_n, c_meta, c_meta_rec = st.columns(3)
+                    
+                    n_nom = c_n.text_input("Variable en fórmula", value=ev.get('nombre', f'Eval {idx+1}'), key=f"ev_nom_{mat_id}_{idx}")
+                    
+                    # Origen Parcial
+                    val_sel = ev.get('meta_vinculada', '-- Escribir a mano --')
+                    if val_sel not in opciones_metas: val_sel = '-- Escribir a mano --'
+                    meta_sel = c_meta.selectbox("Origen de Nota", opciones_metas, index=opciones_metas.index(val_sel), key=f"ev_meta_{mat_id}_{idx}")
+                    
+                    # Origen Recuperatorio
+                    opciones_recup = ["-- Sin Recuperatorio --", "-- Escribir a mano --"] + [m['nombre'] for m in metas_materia]
+                    val_rec = ev.get('meta_recup', '-- Sin Recuperatorio --')
+                    if val_rec not in opciones_recup: val_rec = '-- Sin Recuperatorio --'
+                    meta_rec_sel = c_meta_rec.selectbox("Origen Recup.", opciones_recup, index=opciones_recup.index(val_rec), key=f"ev_metarec_{mat_id}_{idx}")
+                    
+                    c_notp, c_notr, c_notmax = st.columns(3)
+                    
+                    # 1. Resolver Nota Parcial
+                    nota_p_mostrar = str(ev.get('nota', ''))
+                    if meta_sel != "-- Escribir a mano --":
+                        m_obj = next((m for m in metas_materia if m['nombre'] == meta_sel), None)
+                        if m_obj and m_obj.get('nota'):
+                            nota_p_mostrar = str(m_obj['nota'])
+                    n_not = c_notp.text_input("Nota Origen", value=nota_p_mostrar, disabled=(meta_sel != "-- Escribir a mano --"), key=f"ev_notp_{mat_id}_{idx}")
+                    
+                    # 2. Resolver Nota Recuperatorio
+                    nota_r_mostrar = str(ev.get('recuperatorio', ''))
+                    if meta_rec_sel == "-- Sin Recuperatorio --":
+                        n_rec = c_notr.text_input("Nota Recup.", value="", disabled=True, key=f"ev_notr_{mat_id}_{idx}")
+                    elif meta_rec_sel != "-- Escribir a mano --":
+                        m_obj_r = next((m for m in metas_materia if m['nombre'] == meta_rec_sel), None)
+                        if m_obj_r and m_obj_r.get('nota'):
+                            nota_r_mostrar = str(m_obj_r['nota'])
+                        n_rec = c_notr.text_input("Nota Recup.", value=nota_r_mostrar, disabled=True, key=f"ev_notr_{mat_id}_{idx}")
+                    else:
+                        n_rec = c_notr.text_input("Nota Recup.", value=nota_r_mostrar, disabled=False, key=f"ev_notr_{mat_id}_{idx}")
+                        
+                    # 3. Nota Definitiva (Cálculo de la más alta)
+                    num_p = parse_float_nota(n_not)
+                    num_r = parse_float_nota(n_rec) if meta_rec_sel != "-- Sin Recuperatorio --" else None
+                    
+                    max_val = None
+                    if num_p is not None and num_r is not None: max_val = max(num_p, num_r)
+                    elif num_p is not None: max_val = num_p
+                    elif num_r is not None: max_val = num_r
+                    
+                    nota_max_str = str(max_val) if max_val is not None else ""
+                    c_notmax.text_input("Nota (Definitiva)", value=nota_max_str, disabled=True, key=f"ev_notf_{mat_id}_{idx}")
+                    
+                    # Sección Laboratorio
+                    st.markdown("<div style='margin-top:-10px; margin-bottom:5px; font-size:12px; color:#7498b6;'>Laboratorio Vinculado</div>", unsafe_allow_html=True)
+                    c_l_check, c_l_nom, c_l_meta, c_l_not = st.columns([1.5, 1.5, 2, 2])
+                    
+                    tiene_lab = c_l_check.checkbox("Añadir Lab", value=ev.get('tiene_lab', False), key=f"ev_hlab_{mat_id}_{idx}")
+                    
+                    lab_nom = ev.get('lab_nombre', f"Laboratorio {idx+1}")
+                    lab_meta = ev.get('lab_meta', '-- Escribir a mano --')
+                    lab_not = str(ev.get('lab_nota', ''))
+                    
+                    if tiene_lab:
+                        lab_nom = c_l_nom.text_input("Variable Lab", value=lab_nom, key=f"ev_lnom_{mat_id}_{idx}")
+                        if lab_meta not in opciones_metas: lab_meta = '-- Escribir a mano --'
+                        lab_meta_sel = c_l_meta.selectbox("Origen Lab", opciones_metas, index=opciones_metas.index(lab_meta), key=f"ev_lmeta_{mat_id}_{idx}")
+                        
+                        if lab_meta_sel != "-- Escribir a mano --":
+                            l_obj = next((m for m in metas_materia if m['nombre'] == lab_meta_sel), None)
+                            if l_obj and l_obj.get('nota'):
+                                lab_not = str(l_obj['nota'])
+                                
+                        lab_not_input = c_l_not.text_input("Nota Lab", value=lab_not, disabled=(lab_meta_sel != "-- Escribir a mano --"), key=f"ev_lnot_{mat_id}_{idx}")
+                    else:
+                        lab_meta_sel = '-- Escribir a mano --'
+                        lab_not_input = ev.get('lab_nota', '')
+                    
+                    nuevas_evals.append({
+                        "nombre": n_nom, 
+                        "nota": n_not if meta_sel == "-- Escribir a mano --" else ev.get('nota', ''), 
+                        "recuperatorio": n_rec if meta_rec_sel == "-- Escribir a mano --" else ev.get('recuperatorio', ''),
+                        "meta_vinculada": meta_sel,
+                        "meta_recup": meta_rec_sel,
+                        "tiene_lab": tiene_lab,
+                        "lab_nombre": lab_nom,
+                        "lab_meta": lab_meta_sel,
+                        "lab_nota": lab_not_input if lab_meta_sel == "-- Escribir a mano --" else ev.get('lab_nota', '')
+                    })
+            
+            # Ejecutar eliminación si se clickeó el botón
+            if idx_eliminar is not None:
+                evaluaciones.pop(idx_eliminar)
+                mat['evaluaciones'] = evaluaciones
+                if guardar_datos(): st.rerun()
+                
+            c_add1, c_add2 = st.columns(2)
+            if c_add1.button("Añadir otra evaluación", key=f"add_ev_{mat_id}"):
+                evaluaciones.append({"nombre": f"Evaluación {len(evaluaciones)+1}", "nota": "", "recuperatorio": "", "meta_recup": "-- Sin Recuperatorio --"})
+                mat['evaluaciones'] = evaluaciones
+                if guardar_datos(): st.rerun()
+                
+            if c_add2.button("Guardar configuración parciales", key=f"save_evals_{mat_id}"):
+                mat['evaluaciones'] = nuevas_evals
+                if guardar_datos(): st.rerun()
+
+        formula_input = st.text_input("Fórmula de Nota Final", value=formula_str, help="Podés usar comas o puntos. Ej: (0,4 * Parcial 1 + 0,6 * Laboratorio 1)", key=f"form_{mat_id}")
+        
+        val_formula = None
+        try:
+            env = {}
+            for ev in evaluaciones:
+                # 1. Procesar la Evaluación Principal
+                key_name = ev['nombre'].strip().lower()
+                if key_name:
+                    n_val = parse_float_nota(ev.get('nota', '')) or 0
+                    if ev.get('meta_vinculada') and ev.get('meta_vinculada') != "-- Escribir a mano --":
+                        m_obj = next((m for m in metas_materia if m['nombre'] == ev['meta_vinculada']), None)
+                        if m_obj and m_obj.get('nota'):
+                            n_val = parse_float_nota(m_obj['nota']) or n_val
+
+                    # Lógica Recuperatorio (Toma siempre la nota más alta)
+                    if ev.get('meta_recup') and ev.get('meta_recup') not in ["-- Sin Recuperatorio --", "-- Escribir a mano --"]:
+                        m_obj_r = next((m for m in metas_materia if m['nombre'] == ev['meta_recup']), None)
+                        if m_obj_r and m_obj_r.get('nota'):
+                            n_recup = parse_float_nota(m_obj_r['nota']) or 0
+                            if n_recup > n_val:
+                                n_val = n_recup
+                    elif ev.get('meta_recup') == "-- Escribir a mano --":
+                        n_recup = parse_float_nota(ev.get('recuperatorio', '')) or 0
+                        if n_recup > n_val:
+                            n_val = n_recup
+                            
+                    env[key_name] = n_val
+                
+                # 2. Procesar el Laboratorio vinculado
+                if ev.get('tiene_lab'):
+                    lab_key = ev.get('lab_nombre', '').strip().lower()
+                    if lab_key:
+                        n_lab = parse_float_nota(ev.get('lab_nota', '')) or 0
+                        if ev.get('lab_meta') and ev.get('lab_meta') != "-- Escribir a mano --":
+                            l_obj = next((m for m in metas_materia if m['nombre'] == ev.get('lab_meta')), None)
+                            if l_obj and l_obj.get('nota'):
+                                n_lab = parse_float_nota(l_obj['nota']) or n_lab
+                        env[lab_key] = n_lab
+            
+            # Reemplazamos las comas por puntos para que el motor matemático no se asuste
+            f_eval = formula_input.lower().replace(',', '.')
+            
+            # Reemplazamos variables de la más larga a la más corta
+            sorted_keys = sorted(env.keys(), key=len, reverse=True)
+            for k in sorted_keys:
+                f_eval = f_eval.replace(k, str(env[k]))
+                
+            # Validamos que queden solo números y signos matemáticos
+            if re.match(r'^[\d\.\+\-\*\/\(\)\s]+$', f_eval):
+                val_formula = eval(f_eval)
+        except Exception:
+            val_formula = None
+
+        c_f1, c_f2 = st.columns(2)
+        if val_formula is not None:
+            c_f1.metric("Nota por Fórmula", f"{val_formula:.2f}")
+        else:
+            c_f1.error("Fórmula incompleta o inválida")
+            
+        nota_final_manual = c_f2.text_input("Nota Final Definitiva (Modificable)", value=nota_final_manual, key=f"not_man_{mat_id}")
+        
+        if st.button("Guardar Nota Final / Fórmula", key=f"btn_save_formula_{mat_id}"):
+            mat['evaluaciones'] = nuevas_evals 
+            mat['formula'] = formula_input
+            mat['nota_final_manual'] = nota_final_manual
+            if nota_final_manual.strip():
+                mat['nota'] = nota_final_manual
+                num_nf = parse_float_nota(nota_final_manual)
+                if num_nf is not None and num_nf >= 60:
+                    mat['estado'] = "Aprobada/Promocionada"
+            if guardar_datos():
+                st.success("¡Guardado exitosamente!")
+                st.rerun()
+
+        # Simulador de Nota Necesaria 
+        with st.expander("Simulador de Nota Necesaria para Aprobar"):
+            st.caption("Calcula cuánto necesitas en las evaluaciones pendientes para llegar a tu nota objetivo.")
+            meta_aprob = st.number_input("Nota objetivo para aprobar", min_value=1.0, max_value=100.0, value=60.0, key=f"sim_apr_{mat_id}")
+            st.write("Podés usar la fórmula configurada arriba para proyectar tus requerimientos.")
+
+        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+        
+        def is_met(m_name, req_type):
+            target = next((m for m in st.session_state['plan_carrera'] if m['nombre'] == m_name), None)
+            if not target: return False
+            if req_type == 'reg': return target['estado'] in ["Regular", "Aprobada/Promocionada"]
+            return target['estado'] == "Aprobada/Promocionada"
+
+        st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color:#7498b6;'>Correlatividades</div>", unsafe_allow_html=True)
+        if not mat.get('req_regulares') and not mat.get('req_aprobadas'):
+            st.caption("No tiene correlatividades previas.")
+            
+        if mat.get('req_regulares'):
+            st.write("**Para cursar requiere REGULAR:**")
+            for r in mat['req_regulares']:
+                cumple = is_met(r, 'reg')
+                st.markdown(f"<div style='font-size: 13px; color: {'#10b981' if cumple else '#7498b6'};'>{'[OK]' if cumple else '[ ]'} {r}</div>", unsafe_allow_html=True)
+                
+        if mat.get('req_aprobadas'):
+            st.write("**Para cursar requiere APROBADA:**")
+            for r in mat['req_aprobadas']:
+                cumple = is_met(r, 'apr')
+                st.markdown(f"<div style='font-size: 13px; color: {'#10b981' if cumple else '#7498b6'};'>{'[OK]' if cumple else '[ ]'} {r}</div>", unsafe_allow_html=True)
+                
+        destraba_reg = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_regulares', [])]
+        destraba_apr = [m['nombre'] for m in st.session_state['plan_carrera'] if mat['nombre'] in m.get('req_aprobadas', [])]
+        
+        if destraba_reg or destraba_apr:
+            st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+            st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color:#7498b6;'>Destraba</div>", unsafe_allow_html=True)
+            for d in destraba_reg: st.markdown(f"<div style='font-size: 13px; color: #94b8d7;'>- {d} (Para cursar)</div>", unsafe_allow_html=True)
+            for d in destraba_apr: st.markdown(f"<div style='font-size: 13px; color: #94b8d7;'>- {d} (Para rendir/cursar)</div>", unsafe_allow_html=True)
+
+        st.write("<br>", unsafe_allow_html=True)
+        c_del, c_edit = st.columns(2)
+        if c_del.button("Eliminar", type="secondary", use_container_width=True):
+            st.session_state['plan_carrera'] = [m for m in st.session_state['plan_carrera'] if m['id'] != mat_id]
+            if guardar_datos(): st.rerun()
+        if c_edit.button("Editar", type="primary", use_container_width=True):
+            st.session_state['editando_plan_mat_id'] = mat_id
+            st.rerun()
+        if c_btn2.button("Guardar Cambios", type="primary", use_container_width=True):
+            if nuevo_nombre:
+                estado_final = nuevo_estado
+                nota_definitiva = nueva_nota
+                if nuevo_estado == "Regular":
+                    last_val = None
+                    cant_intentos = 0
+                    for val in nuevos_intentos:
+                        if val.strip():
+                            last_val = val.strip()
+                            cant_intentos += 1
+                    if last_val:
+                        val_num = parse_float_nota(last_val)
+                        if val_num is not None:
+                            if val_num >= 6:
+                                estado_final = "Aprobada/Promocionada"
+                                nota_definitiva = last_val
+                            elif cant_intentos >= 4:
+                                estado_final = "Libre/Recursado"
+                
+                mat['nombre'] = nuevo_nombre
+                mat['año'] = nuevo_anio
+                mat['cuatrimestre'] = nuevo_cuatri
+                mat['estado'] = estado_final
+                mat['req_regulares'] = nuevas_reg
+                mat['req_aprobadas'] = nuevas_apr
+                mat['nota'] = nota_definitiva
+                mat['intentos'] = nuevos_intentos
+                mat['horarios_clase'] = nuevos_horarios
+                mat['dificultad'] = dificultad
+                
+                temas_raw = texto_temario_nuevo.split('\n')
+                temario_guardar = []
+                curr_u = "General"
+                for line in temas_raw:
+                    line = line.strip()
+                    if not line: continue
+                    if line.startswith('#'):
+                        curr_u = line
+                        continue
+                    
+                    tema_previo = next((t for t in temario_actual if t['tema'] == line), None)
+                    if tema_previo:
+                        tema_previo['unidad'] = curr_u
+                        temario_guardar.append(tema_previo)
+                    else:
+                        temario_guardar.append({'tema': line, 'nivel': 0, 'proximo_repaso': None, 'unidad': curr_u})
+                        
+                if nuevo_nombre != nombre_mat_actual and nombre_mat_actual in st.session_state['temarios']:
+                    del st.session_state['temarios'][nombre_mat_actual]
+                    
+                st.session_state['temarios'][nuevo_nombre] = temario_guardar
+                
+                st.session_state['editando_plan_mat_id'] = None
+                if guardar_datos(): st.rerun()
+            else:
+                st.error("⚠️ Falta el nombre.")
+                
+    else:
+        st.markdown(f"### {mat['nombre']}")
+        cuatri = mat.get('cuatrimestre', 'No definido')
+        
+        info_str = f"**Año:** {mat['año']} &nbsp;|&nbsp; **Cuatrimestre:** {cuatri} &nbsp;|&nbsp; **Estado:** {mat['estado']}"
+        if mat['estado'] == "Aprobada/Promocionada" and mat.get('nota'):
+            n_val_mat = mat['nota']
+            num_nm = parse_float_nota(n_val_mat)
+            c_nm = "#ef4444" if (num_nm is not None and num_nm < 60) else "#10b981"
+            info_str += f" &nbsp;|&nbsp; **Nota:** <span style='color: {c_nm}; font-weight:bold;'>{n_val_mat}</span>"
+        st.markdown(info_str, unsafe_allow_html=True)
+        
+        intentos_guardados = mat.get('intentos', [])
+        intentos_validos = [i for i in intentos_guardados if i.strip()]
+        if intentos_validos:
+            st.caption(f"Intentos registrados: {', '.join(intentos_validos)}")
+            
+        horarios = mat.get('horarios_clase', [])
+        if mat['estado'] == "Cursando" and horarios:
+            for hc in horarios:
+                rango = f"{hc['inicio']} a {hc['fin']}" if hc.get('fin') else hc['inicio']
+                st.markdown(f"<p style='margin-bottom: 2px; color:#94b8d7;'><b>{hc['dia']}:</b> {rango}</p>", unsafe_allow_html=True)
+            
+        st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
+        
+        # --- CÁLCULO DE NOTA FINAL Y SIMULADOR MEJORADO ---
+        st.markdown("<div style='font-size: 14px; font-weight: bold; margin-bottom: 5px; color:#7498b6;'>Cálculo de Nota Final y Simulador</div>", unsafe_allow_html=True)
+        
+        evaluaciones = mat.get('evaluaciones', [
             {"nombre": "Parcial 1", "nota": "", "recuperatorio": "", "usa_recup": False},
             {"nombre": "Parcial 2", "nota": "", "recuperatorio": "", "usa_recup": False},
             {"nombre": "Global", "nota": "", "recuperatorio": "", "usa_recup": False}

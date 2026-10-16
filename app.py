@@ -652,7 +652,8 @@ def renderizar_analitica():
     if not df_hist.empty:
         csv = df_hist.drop(columns=['FECHA_OBJ'], errors='ignore').to_csv(index=False).encode('utf-8')
         st.download_button(label="Exportar Historial (CSV)", data=csv, file_name='historial_estudio.csv', mime='text/csv', use_container_width=True)
-    @st.dialog("Detalle de la Materia", width="large")
+
+@st.dialog("Detalle de la Materia", width="large")
 def dialog_detalle_materia(mat_id):
     mat = next((m for m in st.session_state['plan_carrera'] if m['id'] == mat_id), None)
     if not mat: return
@@ -1341,7 +1342,8 @@ def dialog_nueva_actividad():
                     "fin": f_act.strip()
                 })
             if guardar_datos(): st.rerun()
-    # ==========================================
+
+# ==========================================
 # --- LAYOUT PRINCIPAL (MENÚ FIJO) ---
 # ==========================================
 col_menu, col_contenido = st.columns([1, 4], gap="large")

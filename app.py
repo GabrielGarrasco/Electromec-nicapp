@@ -359,7 +359,7 @@ def dialog_armar_sesion():
 def dialog_racha():
     st.markdown(f"""
     <div style='text-align: center;'>
-        <h1 style='font-size: 40px; margin-bottom: 0px; color: #f8fafc;'>{racha_actual} días</h1>
+        <h1 style='font-size: 40px; margin-bottom: 0px; color: #f8fafc;'>{racha_actual} days</h1>
         <p style='color: #7498b6; font-weight: bold; margin-top: 0px;'>Racha actual</p>
     </div>
     """, unsafe_allow_html=True)
@@ -1015,9 +1015,103 @@ def dialog_detalle_materia(mat_id):
                 st.rerun()
 
         with st.expander("Simulador de Nota Necesaria para Aprobar"):
-            st.caption("Calcula cuánto necesitas en las evaluaciones pendientes para llegar a tu nota objetivo.")
-            meta_aprob = st.number_input("Nota objetivo para aprobar", min_value=1.0, max_value=100.0, value=60.0, key=f"sim_apr_{mat_id}")
-            st.write("Podés usar la fórmula configurada arriba para proyectar tus requerimientos.")
+            st.caption("Proyecta automáticamente qué necesitas en las instancias vacías para alcanzar tu objetivo, usando la fórmula y las notas ya cargadas.")
+            meta_aprob = st.number_input("Nota objetivo para aprobar (ej: 60)", min_value=1.0, max_value=100.0, value=60.0, key=f"sim_apr_{mat_id}")
+            
+            # --- Lógica del Simulador Automático ---
+            evals_con_nota = {}
+            evals_sin_nota = []
+            
+            # 1. Identificar qué tenemos y qué nos falta
+            for ev in nuevas_evals:
+                key_name = ev['nombre'].strip().lower()
+                if not key_name: continue
+                
+                n_val = None
+                # Buscar si la nota ya viene de una meta vinculada
+                if ev.get('meta_vinculada') and ev.get('meta_vinculada') != "-- Escribir a mano --":
+                    m_obj = next((m for m in metas_materia if m['nombre'] == ev['meta_vinculada']), None)
+                    if m_obj and m_obj.get('nota'):
+                        n_val = parse_float_nota(m_obj['nota'])
+                # O si se escribió a mano
+                elif ev.get('nota'):
+                    n_val = parse_float_nota(ev.get('nota', ''))
+
+                # Revisar si hay un recuperatorio que pise la nota original
+                if ev.get('meta_recup') and ev.get('meta_recup') not in ["-- Sin Recuperatorio --", "-- Escribir a mano --"]:
+                    m_obj_r = next((m for m in metas_materia if m['nombre'] == ev['meta_recup']), None)
+                    if m_obj_r and m_obj_r.get('nota'):
+                        n_recup = parse_float_nota(m_obj_r['nota']) or 0
+                        if n_val is None or n_recup > n_val: n_val = n_recup
+                elif ev.get('meta_recup') == "-- Escribir a mano --":
+                    n_recup = parse_float_nota(ev.get('recuperatorio', '')) or 0
+                    if n_val is None or n_recup > (n_val or 0): n_val = n_recup
+
+                if n_val is not None:
+                    evals_con_nota[key_name] = n_val
+                else:
+                    evals_sin_nota.append(key_name)
+                    
+                # Hacemos lo mismo para el laboratorio si lo tiene
+                if ev.get('tiene_lab'):
+                    lab_key = ev.get('lab_nombre', '').strip().lower()
+                    if lab_key:
+                        n_lab = None
+                        if ev.get('lab_meta') and ev.get('lab_meta') != "-- Escribir a mano --":
+                            l_obj = next((m for m in metas_materia if m['nombre'] == ev.get('lab_meta')), None)
+                            if l_obj and l_obj.get('nota'):
+                                n_lab = parse_float_nota(l_obj['nota'])
+                        elif ev.get('lab_nota'):
+                            n_lab = parse_float_nota(ev.get('lab_nota', ''))
+                            
+                        if n_lab is not None:
+                            evals_con_nota[lab_key] = n_lab
+                        else:
+                            evals_sin_nota.append(lab_key)
+
+            if not evals_sin_nota:
+                st.info("Ya tenés notas cargadas en todas las instancias evaluativas de la fórmula.")
+            else:
+                st.markdown("**Tus notas actuales:**")
+                for k, v in evals_con_nota.items():
+                    st.markdown(f"- {k.title()}: **{v}**")
+                
+                st.markdown(f"**Te falta rendir:** {', '.join([k.title() for k in evals_sin_nota])}")
+                
+                if st.button("Calcular Proyección", key=f"btn_simular_{mat_id}"):
+                    nota_necesaria = None
+                    # Hacemos una búsqueda simple iterando de a 0.5 puntos
+                    for nota_prueba in [x * 0.5 for x in range(0, 201)]: # De 0 a 100
+                        env_simulacion = evals_con_nota.copy()
+                        for missing in evals_sin_nota:
+                            env_simulacion[missing] = nota_prueba
+                        
+                        f_eval_sim = formula_input.lower().replace(',', '.')
+                        # Ordenamos para reemplazar primero las palabras más largas y evitar errores
+                        sorted_keys_sim = sorted(env_simulacion.keys(), key=len, reverse=True)
+                        for k in sorted_keys_sim:
+                            f_eval_sim = f_eval_sim.replace(k, str(env_simulacion[k]))
+                        
+                        try:
+                            # Evaluamos la fórmula con las notas probadas
+                            if re.match(r'^[\d\.\+\-\*\/\(\)\s]+$', f_eval_sim):
+                                resultado_sim = eval(f_eval_sim)
+                                if resultado_sim >= meta_aprob:
+                                    nota_necesaria = nota_prueba
+                                    break
+                        except:
+                            pass
+                    
+                    if nota_necesaria is not None:
+                        if nota_necesaria <= 100:
+                            if len(evals_sin_nota) == 1:
+                                st.success(f"🎯 Necesitás sacarte al menos un **{nota_necesaria}** en **{evals_sin_nota[0].title()}** para llegar a {meta_aprob}.")
+                            else:
+                                st.success(f"🎯 Asumiendo un rendimiento parejo, necesitás promediar al menos un **{nota_necesaria}** en las instancias faltantes para llegar a {meta_aprob}.")
+                        else:
+                            st.error(f"❌ Aún sacándote 100 en lo que falta, no te da matemáticamente para llegar a {meta_aprob} con las notas que ya tenés.")
+                    else:
+                        st.warning("No se pudo calcular. Revisá que la fórmula esté bien escrita y que los nombres coincidan exactamente.")
 
         st.markdown("<hr class='custom-hr'>", unsafe_allow_html=True)
         

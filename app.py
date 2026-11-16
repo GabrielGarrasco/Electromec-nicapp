@@ -37,44 +37,33 @@ if 'editando_plan_mat_id' not in st.session_state: st.session_state['editando_pl
 if 'datos_cargados' not in st.session_state:
     datos_generales, temarios_guardados = cargar_datos_sheet()
     
-    if datos_generales:
-        st.session_state['materias'] = datos_generales.get('materias', [])
-        st.session_state['metodos'] = datos_generales.get('metodos', [])
-        st.session_state['distracciones'] = datos_generales.get('distracciones', [])
-        st.session_state['actividades_fijas'] = datos_generales.get('actividades_fijas', [])
-        st.session_state['historial'] = datos_generales.get('historial', [])
-        st.session_state['metas'] = datos_generales.get('metas', [])
-        st.session_state['plan_carrera'] = datos_generales.get('plan_carrera', [])
-        st.session_state['horarios'] = datos_generales.get('horarios', [])
-        st.session_state['calendario_manual'] = datos_generales.get('calendario_manual', "")
-        st.session_state['xp_total'] = datos_generales.get('xp_total', 0)
-        st.session_state['recompensas'] = datos_generales.get('recompensas', [
-            {"nombre": "Alfajor", "costo": 3000},
-            {"nombre": "Tarde libre sin culpa", "costo": 5000}
-        ])
-        st.session_state['logros_desbloqueados'] = datos_generales.get('logros_desbloqueados', [])
+    if not datos_generales:
+        st.error("⚠️ No se pudieron cargar los datos desde Google Sheets. La app se detuvo para proteger tu información y evitar sobrescribir la planilla en blanco.")
+        if st.button("Reintentar conexión"):
+            st.rerun()
+        st.stop()
         
-        if 'timer' in datos_generales:
-            st.session_state['timer'].update(datos_generales['timer'])
-            
-        for m in st.session_state['metas']:
-            if 'nota' not in m: m['nota'] = None
-    else:
-        st.session_state['materias'] = []
-        st.session_state['metodos'] = ["Resumir", "Leer", "Práctica", "Transcribir teoría", "De Todo"]
-        st.session_state['distracciones'] = ["Descanso", "Celular ☠️", "Llamada", "Comida"]
-        st.session_state['actividades_fijas'] = []
-        st.session_state['historial'] = []
-        st.session_state['metas'] = [] 
-        st.session_state['plan_carrera'] = []
-        st.session_state['horarios'] = []
-        st.session_state['calendario_manual'] = ""
-        st.session_state['xp_total'] = 0
-        st.session_state['recompensas'] = [
-            {"nombre": "Alfajor", "costo": 3000},
-            {"nombre": "Tarde libre sin culpa", "costo": 5000}
-        ]
-        st.session_state['logros_desbloqueados'] = []
+    st.session_state['materias'] = datos_generales.get('materias', [])
+    st.session_state['metodos'] = datos_generales.get('metodos', [])
+    st.session_state['distracciones'] = datos_generales.get('distracciones', [])
+    st.session_state['actividades_fijas'] = datos_generales.get('actividades_fijas', [])
+    st.session_state['historial'] = datos_generales.get('historial', [])
+    st.session_state['metas'] = datos_generales.get('metas', [])
+    st.session_state['plan_carrera'] = datos_generales.get('plan_carrera', [])
+    st.session_state['horarios'] = datos_generales.get('horarios', [])
+    st.session_state['calendario_manual'] = datos_generales.get('calendario_manual', "")
+    st.session_state['xp_total'] = datos_generales.get('xp_total', 0)
+    st.session_state['recompensas'] = datos_generales.get('recompensas', [
+        {"nombre": "Alfajor", "costo": 3000},
+        {"nombre": "Tarde libre sin culpa", "costo": 5000}
+    ])
+    st.session_state['logros_desbloqueados'] = datos_generales.get('logros_desbloqueados', [])
+    
+    if 'timer' in datos_generales:
+        st.session_state['timer'].update(datos_generales['timer'])
+        
+    for m in st.session_state['metas']:
+        if 'nota' not in m: m['nota'] = None
         
     st.session_state['temarios'] = temarios_guardados if temarios_guardados else {}
     st.session_state['datos_cargados'] = True

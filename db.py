@@ -3,13 +3,22 @@ import json
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
+MAX_CHARS = 45000
+
 def get_gspread_client():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     secret_str = st.secrets["google_credentials"]
-    try: creds_dict = json.loads(secret_str)
-    except: creds_dict = json.loads(secret_str, strict=False)
+    try:
+        creds_dict = json.loads(secret_str)
+    except:
+        creds_dict = json.loads(secret_str, strict=False)
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(creds)
+
+def _dividir_en_celdas(texto):
+    if not texto:
+        return [""]
+    return [texto[i:i + MAX_CHARS] for i in range(0, len(texto), MAX_CHARS)]
 
 @st.cache_data(ttl=600)
 def cargar_datos_sheet():
@@ -17,17 +26,25 @@ def cargar_datos_sheet():
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
         
-        # Traemos A2 (datos generales) y A3 (temarios)
-        valores = sheet.get('A2:A3')
+        # Leemos toda la fila 2 (datos generales, incluso si está dividida en varias columnas) y fila 3 (temarios)
+        fila_datos = sheet.row_values(2)
+        fila_temarios = sheet.row_values(3)
         
         datos_generales = None
         temarios = {}
         
-        if valores:
-            if len(valores) > 0 and len(valores[0]) > 0 and valores[0][0].strip(): 
-                datos_generales = json.loads(valores[0][0])
-            if len(valores) > 1 and len(valores[1]) > 0 and valores[1][0].strip(): 
-                temarios = json.loads(valores[1][0])
+        # Unimos todas las celdas consecutivas con texto de la fila 2 (ignorando la columna Z = índice 25)
+        if fila_datos:
+            partes_datos = [c for c in fila_datos[:24] if c and c.strip()]
+            if partes_datos:
+                texto_datos = "".join(partes_datos)
+                datos_generales = json.loads(texto_datos)
+                
+        if fila_temarios:
+            partes_temarios = [c for c in fila_temarios[:24] if c and c.strip()]
+            if partes_temarios:
+                texto_temarios = "".join(partes_temarios)
+                temarios = json.loads(texto_temarios)
                 
         # Traemos el calendario manual de la columna Z
         try:
@@ -40,10 +57,16 @@ def cargar_datos_sheet():
             pass
             
         return datos_generales, temarios
-    except: 
+    except Exception as e:
+        st.error(f"Detalle técnico del error al leer Google Sheets: {e}")
         return None, {}
 
 def guardar_datos(silencioso=False):
+    # Seguro extra: jamás permitir guardar si los datos iniciales no cargaron correctamente
+    if not st.session_state.get('datos_cargados', False):
+        st.error("Bloqueo de seguridad: no se guardaron cambios porque los datos iniciales no estaban cargados.")
+        return False
+
     try:
         datos = {
             'materias': st.session_state.get('materias', []), 
@@ -57,16 +80,21 @@ def guardar_datos(silencioso=False):
             'xp_total': st.session_state.get('xp_total', 0),
             'recompensas': st.session_state.get('recompensas', []),
             'logros_desbloqueados': st.session_state.get('logros_desbloqueados', []),
-            'timer': st.session_state.get('timer', {}) # <--- ACÁ ESTÁ LA MAGIA
+            'timer': st.session_state.get('timer', {})
         }
         temarios = st.session_state.get('temarios', {})
         
         client = get_gspread_client()
         sheet = client.open('StudyMeterDB').worksheet('database')
         
-        sheet.update_acell('A2', json.dumps(datos))
-        sheet.update_acell('A3', json.dumps(temarios))
-        sheet.update_acell('B2', '') 
+        # Dividimos en bloques de 45.000 caracteres para nunca chocar con el límite de 50.000 por celda
+        bloques_datos = _dividir_en_celdas(json.dumps(datos))
+        bloques_temarios = _dividir_en_celdas(json.dumps(temarios))
+        
+        # Limpiamos A2:X3 antes de escribir para no dejar restos viejos si antes ocupaba más columnas
+        sheet.batch_clear(["A2:X3"])
+        sheet.update("A2", [bloques_datos])
+        sheet.update("A3", [bloques_temarios])
         
         # Guardamos el calendario separado por filas en la columna Z para que no desborde
         eventos_lista = st.session_state.get('calendario_manual', '').split('\n')
